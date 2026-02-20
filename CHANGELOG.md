@@ -58,6 +58,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 1.2: Void Design System (2026-02-20)
+
+- Frontend scaffolding with Svelte 5 + Vite + TailwindCSS v4 + TypeScript
+- Void design tokens: color palette, shadows, radius, typography (Inter, JetBrains Mono)
+- TailwindCSS v4 @theme integration with Void CSS custom properties
+- 9 base UI components in `frontend/src/lib/components/ui/`:
+  - Button (solid/outline/ghost/danger variants, sm/md/lg sizes, loading state)
+  - Input (text/password/search, error state, password visibility toggle)
+  - Modal (dialog-based, focus trap, Escape key, backdrop click)
+  - Badge (default/success/warning/danger variants)
+  - Avatar (image/initials fallback, status indicator: online/idle/dnd/offline)
+  - Tooltip (top/bottom/left/right positioning, configurable delay)
+  - Toggle (switch role, accessible, keyboard navigation)
+  - Dropdown (keyboard navigation, click outside, highlighted state)
+  - Card (static and interactive variants with glow hover)
+- All components: Svelte 5 runes ($props, $state, $derived), ARIA attributes, CSS transitions
+- Barrel export from `frontend/src/lib/components/ui/index.ts`
+- Custom scrollbar styling for Void theme
+- Showcase App.svelte demonstrating all components
+
 ### Security
 
 - JWT secret validation (minimum 32 chars in production)

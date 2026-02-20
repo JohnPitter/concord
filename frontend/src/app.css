@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource-variable/jetbrains-mono';
+
+@theme {
+  /* Core backgrounds */
+  --color-void-bg-primary: #0a0a0f;
+  --color-void-bg-secondary: #12121a;
+  --color-void-bg-tertiary: #1a1a28;
+  --color-void-bg-hover: #22223a;
+
+  /* Accent */
+  --color-void-accent: #7c3aed;
+  --color-void-accent-hover: #8b5cf6;
+  --color-void-accent-glow: rgba(124, 58, 237, 0.3);
+
+  /* Text */
+  --color-void-text-primary: #e4e4e7;
+  --color-void-text-secondary: #a1a1aa;
+  --color-void-text-muted: #52525b;
+
+  /* Status */
+  --color-void-online: #22c55e;
+  --color-void-idle: #f59e0b;
+  --color-void-dnd: #ef4444;
+  --color-void-offline: #52525b;
+
+  /* Borders */
+  --color-void-border: #27272a;
+  --color-void-border-active: #7c3aed;
+
+  /* Danger */
+  --color-void-danger: #ef4444;
+  --color-void-danger-hover: #dc2626;
+
+  /* Success / Warning */
+  --color-void-success: #22c55e;
+  --color-void-warning: #f59e0b;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px var(--color-void-accent-glow);
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--color-void-text-primary);
+  background-color: var(--color-void-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-void-bg-hover);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-void-text-muted);
+}
