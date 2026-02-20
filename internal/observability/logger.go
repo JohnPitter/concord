@@ -265,12 +265,12 @@ func (pl *PerformanceLog) EndWithContext(ctx map[string]interface{}) {
 func SanitizeForLog(data map[string]interface{}) map[string]interface{} {
 	sanitized := make(map[string]interface{})
 	sensitiveKeys := map[string]bool{
-		"password":     true,
-		"token":        true,
-		"secret":       true,
-		"api_key":      true,
-		"private_key":  true,
-		"access_token": true,
+		"password":      true,
+		"token":         true,
+		"secret":        true,
+		"api_key":       true,
+		"private_key":   true,
+		"access_token":  true,
 		"refresh_token": true,
 	}
 

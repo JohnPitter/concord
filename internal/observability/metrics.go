@@ -8,62 +8,62 @@ import (
 // Metrics holds all Prometheus metrics for the application
 type Metrics struct {
 	// Voice metrics
-	VoiceChannelUsers      *prometheus.GaugeVec
-	VoiceConnectionsTotal  *prometheus.CounterVec
-	VoiceLatency           *prometheus.HistogramVec
-	VoicePacketsLost       *prometheus.CounterVec
-	VoiceJitterBuffer      *prometheus.HistogramVec
+	VoiceChannelUsers     *prometheus.GaugeVec
+	VoiceConnectionsTotal *prometheus.CounterVec
+	VoiceLatency          *prometheus.HistogramVec
+	VoicePacketsLost      *prometheus.CounterVec
+	VoiceJitterBuffer     *prometheus.HistogramVec
 
 	// Chat metrics
-	MessagesSent           *prometheus.CounterVec
-	MessagesReceived       *prometheus.CounterVec
-	MessageLatency         *prometheus.HistogramVec
+	MessagesSent     *prometheus.CounterVec
+	MessagesReceived *prometheus.CounterVec
+	MessageLatency   *prometheus.HistogramVec
 
 	// P2P metrics
-	P2PConnectionType      *prometheus.CounterVec
-	P2PConnectionDuration  *prometheus.HistogramVec
-	P2PActiveConnections   *prometheus.GaugeVec
-	P2PPeersDiscovered     *prometheus.CounterVec
-	P2PRelayUsage          *prometheus.CounterVec
+	P2PConnectionType     *prometheus.CounterVec
+	P2PConnectionDuration *prometheus.HistogramVec
+	P2PActiveConnections  *prometheus.GaugeVec
+	P2PPeersDiscovered    *prometheus.CounterVec
+	P2PRelayUsage         *prometheus.CounterVec
 
 	// File metrics
-	FilesUploaded          *prometheus.CounterVec
-	FilesDownloaded        *prometheus.CounterVec
-	FileTransferBytes      *prometheus.CounterVec
-	FileTransferDuration   *prometheus.HistogramVec
+	FilesUploaded        *prometheus.CounterVec
+	FilesDownloaded      *prometheus.CounterVec
+	FileTransferBytes    *prometheus.CounterVec
+	FileTransferDuration *prometheus.HistogramVec
 
 	// Translation metrics
-	TranslationRequests    *prometheus.CounterVec
-	TranslationLatency     *prometheus.HistogramVec
-	TranslationErrors      *prometheus.CounterVec
-	TranslationCacheHits   *prometheus.CounterVec
+	TranslationRequests  *prometheus.CounterVec
+	TranslationLatency   *prometheus.HistogramVec
+	TranslationErrors    *prometheus.CounterVec
+	TranslationCacheHits *prometheus.CounterVec
 
 	// Server metrics
-	ServersCreated         *prometheus.CounterVec
-	ServersActive          *prometheus.GaugeVec
-	ServerMembers          *prometheus.GaugeVec
+	ServersCreated *prometheus.CounterVec
+	ServersActive  *prometheus.GaugeVec
+	ServerMembers  *prometheus.GaugeVec
 
 	// Auth metrics
-	AuthAttempts           *prometheus.CounterVec
-	AuthSuccessful         *prometheus.CounterVec
-	AuthFailed             *prometheus.CounterVec
-	ActiveSessions         *prometheus.GaugeVec
+	AuthAttempts   *prometheus.CounterVec
+	AuthSuccessful *prometheus.CounterVec
+	AuthFailed     *prometheus.CounterVec
+	ActiveSessions *prometheus.GaugeVec
 
 	// Database metrics
-	DBQueryDuration        *prometheus.HistogramVec
-	DBConnections          *prometheus.GaugeVec
-	DBErrors               *prometheus.CounterVec
+	DBQueryDuration *prometheus.HistogramVec
+	DBConnections   *prometheus.GaugeVec
+	DBErrors        *prometheus.CounterVec
 
 	// Cache metrics
-	CacheHits              *prometheus.CounterVec
-	CacheMisses            *prometheus.CounterVec
-	CacheEvictions         *prometheus.CounterVec
-	CacheSize              *prometheus.GaugeVec
+	CacheHits      *prometheus.CounterVec
+	CacheMisses    *prometheus.CounterVec
+	CacheEvictions *prometheus.CounterVec
+	CacheSize      *prometheus.GaugeVec
 
 	// HTTP metrics (for server mode)
-	HTTPRequestsTotal      *prometheus.CounterVec
-	HTTPRequestDuration    *prometheus.HistogramVec
-	HTTPResponseSize       *prometheus.HistogramVec
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPResponseSize    *prometheus.HistogramVec
 }
 
 // NewMetrics creates and registers all Prometheus metrics

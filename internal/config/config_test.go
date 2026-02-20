@@ -231,7 +231,7 @@ func TestConfigDefaults(t *testing.T) {
 
 	// Verify voice defaults follow architecture specs
 	assert.Equal(t, 48000, cfg.Voice.SampleRate)
-	assert.Equal(t, 1, cfg.Voice.Channels) // mono
+	assert.Equal(t, 1, cfg.Voice.Channels)    // mono
 	assert.Equal(t, 960, cfg.Voice.FrameSize) // 20ms at 48kHz
 	assert.Equal(t, 64000, cfg.Voice.Bitrate)
 	assert.Equal(t, 50*time.Millisecond, cfg.Voice.JitterBufferSize)

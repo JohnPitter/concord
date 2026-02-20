@@ -108,10 +108,10 @@ func (db *DB) applyPragmas(cfg Config) error {
 
 	// Performance optimizations
 	pragmas = append(pragmas,
-		"PRAGMA temp_store=MEMORY",       // Store temp tables in memory
-		"PRAGMA mmap_size=30000000000",   // Use memory-mapped I/O (30GB)
-		"PRAGMA page_size=4096",          // 4KB page size
-		"PRAGMA cache_size=-64000",       // 64MB cache (negative means KB)
+		"PRAGMA temp_store=MEMORY",     // Store temp tables in memory
+		"PRAGMA mmap_size=30000000000", // Use memory-mapped I/O (30GB)
+		"PRAGMA page_size=4096",        // 4KB page size
+		"PRAGMA cache_size=-64000",     // 64MB cache (negative means KB)
 	)
 
 	// Execute pragmas

@@ -24,11 +24,11 @@ type HealthCheck func(ctx context.Context) error
 
 // ComponentHealth represents the health status of a single component
 type ComponentHealth struct {
-	Name      string       `json:"name"`
-	Status    HealthStatus `json:"status"`
-	Message   string       `json:"message,omitempty"`
-	Error     string       `json:"error,omitempty"`
-	Timestamp time.Time    `json:"timestamp"`
+	Name      string        `json:"name"`
+	Status    HealthStatus  `json:"status"`
+	Message   string        `json:"message,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Timestamp time.Time     `json:"timestamp"`
 	Duration  time.Duration `json:"duration_ms"`
 }
 
@@ -43,13 +43,13 @@ type Health struct {
 
 // HealthChecker manages health checks for various components
 type HealthChecker struct {
-	mu         sync.RWMutex
-	checks     map[string]HealthCheck
-	cache      map[string]ComponentHealth
-	cacheTTL   time.Duration
-	logger     zerolog.Logger
-	startTime  time.Time
-	version    string
+	mu        sync.RWMutex
+	checks    map[string]HealthCheck
+	cache     map[string]ComponentHealth
+	cacheTTL  time.Duration
+	logger    zerolog.Logger
+	startTime time.Time
+	version   string
 }
 
 // NewHealthChecker creates a new health checker
@@ -312,8 +312,15 @@ func VoiceEngineHealthCheck(statusFunc func() error) HealthCheck {
 // DiskSpaceHealthCheck creates a health check for available disk space
 func DiskSpaceHealthCheck(path string, minFreeBytes int64) HealthCheck {
 	return func(ctx context.Context) error {
-		// TODO: Implement disk space check using syscall
-		// For now, return healthy
+		available, err := getDiskSpace(path)
+		if err != nil {
+			return fmt.Errorf("failed to check disk space: %w", err)
+		}
+
+		if available < minFreeBytes {
+			return fmt.Errorf("insufficient disk space: %d bytes available, %d bytes required", available, minFreeBytes)
+		}
+
 		return nil
 	}
 }
@@ -321,8 +328,18 @@ func DiskSpaceHealthCheck(path string, minFreeBytes int64) HealthCheck {
 // MemoryHealthCheck creates a health check for memory usage
 func MemoryHealthCheck(maxMemoryBytes uint64) HealthCheck {
 	return func(ctx context.Context) error {
-		// TODO: Implement memory usage check using runtime.MemStats
-		// For now, return healthy
+		memStats := getMemoryStats()
+
+		// Check both heap allocation and system memory
+		if memStats.Alloc > maxMemoryBytes {
+			return fmt.Errorf("memory usage exceeded: %d bytes allocated, %d bytes max", memStats.Alloc, maxMemoryBytes)
+		}
+
+		// Also check if we're using too much system memory
+		if memStats.Sys > maxMemoryBytes*2 {
+			return fmt.Errorf("system memory usage high: %d bytes reserved", memStats.Sys)
+		}
+
 		return nil
 	}
 }

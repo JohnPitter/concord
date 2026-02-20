@@ -18,10 +18,10 @@ var migrationFiles embed.FS
 
 // Migration represents a single database migration
 type Migration struct {
-	Version     int
-	Name        string
-	SQL         string
-	AppliedAt   time.Time
+	Version   int
+	Name      string
+	SQL       string
+	AppliedAt time.Time
 }
 
 // Migrator handles database migrations

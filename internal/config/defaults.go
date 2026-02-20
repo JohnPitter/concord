@@ -108,11 +108,11 @@ func Default() *Config {
 			JWTRefreshExpiry: 30 * 24 * time.Hour,
 
 			RateLimitEnabled:  true,
-			RateLimitMessages: 10,  // 10 messages per second
-			RateLimitFiles:    5,   // 5 files per minute
-			RateLimitAPI:      60,  // 60 requests per minute
+			RateLimitMessages: 10, // 10 messages per second
+			RateLimitFiles:    5,  // 5 files per minute
+			RateLimitAPI:      60, // 60 requests per minute
 
-			MaxFileSize:      50 * 1024 * 1024, // 50MB
+			MaxFileSize: 50 * 1024 * 1024, // 50MB
 			AllowedFileTypes: []string{
 				"image/jpeg", "image/png", "image/gif", "image/webp",
 				"video/mp4", "video/webm",

@@ -119,60 +119,60 @@ type P2PConfig struct {
 
 // VoiceConfig contains voice chat settings
 type VoiceConfig struct {
-	SampleRate        int           `json:"sample_rate"`        // Hz (48000)
-	Channels          int           `json:"channels"`           // 1 = mono, 2 = stereo
-	FrameSize         int           `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
-	Bitrate           int           `json:"bitrate"`            // bps (64000)
-	JitterBufferSize  time.Duration `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
-	MaxJitterBuffer   time.Duration `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
-	EnableVAD         bool          `json:"enable_vad"`         // Voice Activity Detection
-	VADThreshold      float32       `json:"vad_threshold"`      // 0.0 - 1.0
-	EnableNoiseSuppression bool     `json:"enable_noise_suppression"`
-	MaxChannelUsers   int           `json:"max_channel_users"` // Max users per voice channel
+	SampleRate             int           `json:"sample_rate"`        // Hz (48000)
+	Channels               int           `json:"channels"`           // 1 = mono, 2 = stereo
+	FrameSize              int           `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
+	Bitrate                int           `json:"bitrate"`            // bps (64000)
+	JitterBufferSize       time.Duration `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
+	MaxJitterBuffer        time.Duration `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
+	EnableVAD              bool          `json:"enable_vad"`         // Voice Activity Detection
+	VADThreshold           float32       `json:"vad_threshold"`      // 0.0 - 1.0
+	EnableNoiseSuppression bool          `json:"enable_noise_suppression"`
+	MaxChannelUsers        int           `json:"max_channel_users"` // Max users per voice channel
 }
 
 // TranslationConfig contains voice translation settings
 type TranslationConfig struct {
-	Enabled         bool          `json:"enabled"`
-	PersonaPlexURL  string        `json:"personaplex_url"`
-	APIKey          string        `json:"api_key"`
-	DefaultLang     string        `json:"default_lang"`
-	CacheEnabled    bool          `json:"cache_enabled"`
-	CacheSize       int           `json:"cache_size"`       // Max cached translations
-	Timeout         time.Duration `json:"timeout"`          // Request timeout
-	MaxLatency      time.Duration `json:"max_latency"`      // Auto-disable if exceeded
-	CircuitBreaker  bool          `json:"circuit_breaker"`  // Auto-disable on failures
-	FailureThreshold int          `json:"failure_threshold"` // Failures before circuit breaks
+	Enabled          bool          `json:"enabled"`
+	PersonaPlexURL   string        `json:"personaplex_url"`
+	APIKey           string        `json:"api_key"`
+	DefaultLang      string        `json:"default_lang"`
+	CacheEnabled     bool          `json:"cache_enabled"`
+	CacheSize        int           `json:"cache_size"`        // Max cached translations
+	Timeout          time.Duration `json:"timeout"`           // Request timeout
+	MaxLatency       time.Duration `json:"max_latency"`       // Auto-disable if exceeded
+	CircuitBreaker   bool          `json:"circuit_breaker"`   // Auto-disable on failures
+	FailureThreshold int           `json:"failure_threshold"` // Failures before circuit breaks
 }
 
 // SecurityConfig contains security settings
 type SecurityConfig struct {
 	// JWT settings
-	JWTSecret           string        `json:"jwt_secret"`
-	JWTAccessExpiry     time.Duration `json:"jwt_access_expiry"`  // 15 minutes
-	JWTRefreshExpiry    time.Duration `json:"jwt_refresh_expiry"` // 30 days
+	JWTSecret        string        `json:"jwt_secret"`
+	JWTAccessExpiry  time.Duration `json:"jwt_access_expiry"`  // 15 minutes
+	JWTRefreshExpiry time.Duration `json:"jwt_refresh_expiry"` // 30 days
 
 	// Rate limiting
-	RateLimitEnabled    bool          `json:"rate_limit_enabled"`
-	RateLimitMessages   int           `json:"rate_limit_messages"`   // per minute
-	RateLimitFiles      int           `json:"rate_limit_files"`      // per hour
-	RateLimitAPI        int           `json:"rate_limit_api"`        // per minute
+	RateLimitEnabled  bool `json:"rate_limit_enabled"`
+	RateLimitMessages int  `json:"rate_limit_messages"` // per minute
+	RateLimitFiles    int  `json:"rate_limit_files"`    // per hour
+	RateLimitAPI      int  `json:"rate_limit_api"`      // per minute
 
 	// File upload limits
-	MaxFileSize         int64         `json:"max_file_size"`         // bytes (50MB)
-	AllowedFileTypes    []string      `json:"allowed_file_types"`
+	MaxFileSize      int64    `json:"max_file_size"` // bytes (50MB)
+	AllowedFileTypes []string `json:"allowed_file_types"`
 
 	// Encryption
-	EncryptLocalDB      bool          `json:"encrypt_local_db"`
-	E2EEEnabled         bool          `json:"e2ee_enabled"`
+	EncryptLocalDB bool `json:"encrypt_local_db"`
+	E2EEEnabled    bool `json:"e2ee_enabled"`
 }
 
 // LoggingConfig contains logging settings
 type LoggingConfig struct {
-	Level       string `json:"level"`        // debug, info, warn, error
-	Format      string `json:"format"`       // json, console
-	OutputPath  string `json:"output_path"`  // file path or stdout
-	ErrorPath   string `json:"error_path"`   // error log file
+	Level        string `json:"level"`         // debug, info, warn, error
+	Format       string `json:"format"`        // json, console
+	OutputPath   string `json:"output_path"`   // file path or stdout
+	ErrorPath    string `json:"error_path"`    // error log file
 	EnableCaller bool   `json:"enable_caller"` // Include caller in logs
 	EnableStack  bool   `json:"enable_stack"`  // Include stack trace for errors
 }
