@@ -58,6 +58,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 6: Voice Chat (2026-02-20)
+
+- Voice engine (internal/voice)
+  - Audio constants: 48kHz sample rate, mono, 20ms frame duration, 960 samples/frame
+  - PCM conversion utilities: int16↔float32 with clamping
+  - Adaptive jitter buffer with sequence-ordered insertion and uint16 wraparound
+  - Multi-stream audio mixer with per-stream volume and soft clipping (tanh-like saturation)
+  - Energy-based Voice Activity Detection (VAD)
+    - Adaptive noise floor estimation during silence
+    - Dynamic threshold: noise floor + 15 dB margin
+    - Configurable hangover frames to prevent speech cut-off
+  - Voice engine orchestrator
+    - State machine: disconnected → connecting → connected
+    - WebRTC peer connections with Opus audio tracks (Pion WebRTC v4)
+    - Mute/deafen toggle with deafen-implies-mute logic
+    - Active speaker tracking, peer management (add/remove)
+    - SDP offer/answer exchange, ICE candidate handling
+    - State change and speaker change callbacks
+- Wails bindings: 5 voice methods (JoinVoice, LeaveVoice, ToggleMute, ToggleDeafen, GetVoiceStatus)
+- Voice engine cleanup on application shutdown
+- Frontend voice store (voice.svelte.ts)
+  - Reactive state with Svelte 5 runes
+  - Join/leave, toggle mute/deafen, status refresh
+- Voice UI components
+  - VoiceControls: connected indicator, active speakers list, mute/deafen buttons, disconnect button
+  - ChannelSidebar updated: voice channel click to join/toggle, connected channel indicator, VoiceControls integration
+- App.svelte wired with voice store (join/leave handlers, mute/deafen controls)
+- 29 unit tests (codec 4, jitter buffer 5, mixer 5, VAD 4, engine 6, utilities 5)
+
 #### Phase 5: P2P Networking (2026-02-20)
 
 - Wire protocol (pkg/protocol)

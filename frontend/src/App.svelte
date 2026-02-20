@@ -8,6 +8,10 @@
     getChat, loadMessages, loadOlderMessages,
     sendMessage, editMessage, deleteMessage, resetChat,
   } from './lib/stores/chat.svelte'
+  import {
+    getVoice, joinVoice, leaveVoice,
+    toggleMute, toggleDeafen, resetVoice,
+  } from './lib/stores/voice.svelte'
   import Login from './lib/components/auth/Login.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
@@ -19,6 +23,7 @@
   const auth = getAuth()
   const srv = getServers()
   const chat = getChat()
+  const vc = getVoice()
 
   let showCreateServer = $state(false)
   let showJoinServer = $state(false)
@@ -60,6 +65,9 @@
   })
 
   const activeChannel = $derived(srv.channels.find(c => c.id === activeChannelId))
+  const voiceChannelName = $derived(
+    srv.channels.find(c => c.id === vc.channelId)?.name ?? ''
+  )
 
   // Map server data for ServerSidebar format
   const sidebarServers = $derived(
@@ -117,6 +125,15 @@
     const isManager = member?.role === 'owner' || member?.role === 'admin' || member?.role === 'moderator'
     await deleteMessage(messageId, auth.user.id, isManager)
   }
+
+  async function handleJoinVoice(channelId: string) {
+    if (vc.channelId === channelId) {
+      await leaveVoice()
+    } else {
+      if (vc.connected) await leaveVoice()
+      await joinVoice(channelId)
+    }
+  }
 </script>
 
 {#if auth.loading}
@@ -145,6 +162,16 @@
       channels={sidebarChannels}
       activeChannelId={activeChannelId ?? ''}
       onSelectChannel={(id) => activeChannelId = id}
+      voiceConnected={vc.connected}
+      voiceChannelName={voiceChannelName}
+      voiceMuted={vc.muted}
+      voiceDeafened={vc.deafened}
+      voiceSpeakers={vc.speakers}
+      voiceChannelId={vc.channelId}
+      onJoinVoice={handleJoinVoice}
+      onLeaveVoice={leaveVoice}
+      onToggleMute={toggleMute}
+      onToggleDeafen={toggleDeafen}
     />
     <MainContent
       channelName={activeChannel?.name ?? 'general'}

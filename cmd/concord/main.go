@@ -14,6 +14,7 @@ import (
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
+	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2"
@@ -35,6 +36,7 @@ type App struct {
 	authService   *auth.Service
 	serverService *server.Service
 	chatService   *chat.Service
+	voiceEngine   *voice.Engine
 }
 
 // NewApp creates a new application instance
@@ -136,12 +138,25 @@ func (a *App) startup(ctx context.Context) {
 	a.chatService = chat.NewService(chatRepo, a.logger)
 	a.logger.Info().Msg("chat service initialized")
 
+	// Initialize voice engine
+	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
+	a.logger.Info().Msg("voice engine initialized")
+
 	a.logger.Info().Msg("Concord started successfully")
 }
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
 	a.logger.Info().Msg("shutting down Concord")
+
+	// Leave voice channel if connected
+	if a.voiceEngine != nil {
+		if err := a.voiceEngine.LeaveChannel(); err != nil {
+			a.logger.Error().Err(err).Msg("failed to leave voice channel")
+		} else {
+			a.logger.Info().Msg("voice engine stopped")
+		}
+	}
 
 	// Close database
 	if a.db != nil {
@@ -293,6 +308,35 @@ func (a *App) DeleteMessage(messageID, actorID string, isManager bool) error {
 // SearchMessages performs full-text search in a channel.
 func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.SearchResult, error) {
 	return a.chatService.SearchMessages(a.ctx, channelID, query, limit)
+}
+
+// --- Voice Bindings ---
+
+// JoinVoice joins a voice channel.
+func (a *App) JoinVoice(channelID string) error {
+	return a.voiceEngine.JoinChannel(a.ctx, channelID)
+}
+
+// LeaveVoice leaves the current voice channel.
+func (a *App) LeaveVoice() error {
+	return a.voiceEngine.LeaveChannel()
+}
+
+// ToggleMute toggles the microphone mute state.
+func (a *App) ToggleMute() bool {
+	a.voiceEngine.Mute()
+	return a.voiceEngine.IsMuted()
+}
+
+// ToggleDeafen toggles the audio output deafen state.
+func (a *App) ToggleDeafen() bool {
+	a.voiceEngine.Deafen()
+	return a.voiceEngine.IsDeafened()
+}
+
+// GetVoiceStatus returns the current voice status.
+func (a *App) GetVoiceStatus() voice.VoiceStatus {
+	return a.voiceEngine.GetStatus()
 }
 
 func main() {
