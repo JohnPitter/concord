@@ -58,6 +58,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 7: File Sharing (2026-02-20)
+
+- File system backend (internal/files)
+  - Attachment model with SHA-256 hash for deduplication
+  - File chunker: O(n/c) splitting with per-chunk and full-file SHA-256 integrity verification
+  - File reassembly with chunk ordering validation and hash verification
+  - Local filesystem storage with path traversal prevention (filepath.Base)
+  - Unique path generation to avoid overwrites (numeric suffix)
+  - File scanner with MIME whitelist and extension blocklist
+    - Content-based MIME detection via http.DetectContentType (first 512 bytes)
+    - MIME parameter normalization (strips "; charset=utf-8")
+    - Blocked: .exe, .bat, .cmd, .com, .msi, .dll, .ps1, .scr, .pif, .vbs, .sys, .drv, .cpl, .inf, .reg
+    - Allowed: images, documents, archives, audio, video, code/text
+  - Service layer: upload (validate + hash + deduplicate + store), download, delete (ref-counted)
+  - P2P transfer support: PrepareOffer, ChunkAttachment, StartReceive, ReceiveChunk, CompleteReceive
+  - Repository: SQLite CRUD with GetByHash for deduplication
+- Database migration (005_attachments.sql)
+  - Attachments table with FK CASCADE to messages
+  - Indexes on message_id and hash
+- Wails bindings: 4 file methods (UploadFile, DownloadFile, GetAttachments, DeleteAttachment)
+- Frontend file store extensions (chat.svelte.ts)
+  - AttachmentData type and attachmentsByMessage reactive state
+  - uploadFile, downloadFile, deleteAttachment, loadAttachments functions
+- Frontend components
+  - FileAttachment.svelte: file type icons (image, audio, video, pdf, archive, text), size formatting, download/delete actions
+  - MessageInput updated: file selection via attach button, pending file preview with remove, combined text+file send
+  - MessageBubble updated: displays file attachments below message content
+  - MessageList/MainContent: attachment prop threading
+  - App.svelte: file upload handler, browser download trigger, attachment loading per message
+- 18 unit tests (chunker 6, scanner 6, storage 4, constants 2)
+- MaxFileSize: 50 MB, DefaultChunkSize: 256 KB
+
 #### Phase 6: Voice Chat (2026-02-20)
 
 - Voice engine (internal/voice)
@@ -274,7 +306,7 @@ Initial development release - in progress.
 - Phase 4: Real-time text chat with WebSocket
 - Phase 5: P2P networking with libp2p
 - Phase 6: Voice chat with WebRTC
-- Phase 7: File sharing
+- Phase 7: File sharing (DONE)
 - Phase 8: Voice translation with NVIDIA PersonaPlex
 - Phase 9: Central server (PostgreSQL, Redis, REST API)
 - Phase 10: Production hardening and release

@@ -3,6 +3,7 @@
 import {auth} from '../models';
 import {server} from '../models';
 import {chat} from '../models';
+import {files} from '../models';
 import {observability} from '../models';
 import {version} from '../models';
 import {voice} from '../models';
@@ -13,15 +14,21 @@ export function CreateChannel(arg1:string,arg2:string,arg3:string,arg4:string):P
 
 export function CreateServer(arg1:string,arg2:string):Promise<server.Server>;
 
+export function DeleteAttachment(arg1:string):Promise<void>;
+
 export function DeleteChannel(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DeleteMessage(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function DeleteServer(arg1:string,arg2:string):Promise<void>;
 
+export function DownloadFile(arg1:string):Promise<Array<number>>;
+
 export function EditMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
 
 export function GenerateInvite(arg1:string,arg2:string):Promise<string>;
+
+export function GetAttachments(arg1:string):Promise<Array<files.Attachment>>;
 
 export function GetHealth():Promise<observability.Health>;
 
@@ -68,3 +75,5 @@ export function ToggleMute():Promise<boolean>;
 export function UpdateMemberRole(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdateServer(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function UploadFile(arg1:string,arg2:string,arg3:Array<number>):Promise<files.Attachment>;

@@ -1,19 +1,26 @@
 <script lang="ts">
   import Avatar from '../ui/Avatar.svelte'
-  import type { MessageData } from '../../stores/chat.svelte'
+  import FileAttachment from './FileAttachment.svelte'
+  import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
 
   let {
     message,
     isOwn = false,
     showAvatar = true,
+    attachments = [],
     onEdit,
     onDelete,
+    onDownloadFile,
+    onDeleteFile,
   }: {
     message: MessageData
     isOwn?: boolean
     showAvatar?: boolean
+    attachments?: AttachmentData[]
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
+    onDownloadFile?: (id: string) => void
+    onDeleteFile?: (id: string) => void
   } = $props()
 
   let showActions = $state(false)
@@ -64,6 +71,19 @@
     {/if}
 
     <p class="text-sm leading-relaxed text-void-text-secondary break-words whitespace-pre-wrap">{message.content}</p>
+
+    {#if attachments.length > 0}
+      <div class="mt-1 flex flex-wrap gap-1">
+        {#each attachments as att (att.id)}
+          <FileAttachment
+            attachment={att}
+            onDownload={onDownloadFile}
+            onDelete={onDeleteFile}
+            canDelete={isOwn}
+          />
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <!-- Action buttons -->

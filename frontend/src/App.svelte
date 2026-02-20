@@ -7,6 +7,7 @@
   import {
     getChat, loadMessages, loadOlderMessages,
     sendMessage, editMessage, deleteMessage, resetChat,
+    uploadFile, downloadFile, deleteAttachment, loadAttachments,
   } from './lib/stores/chat.svelte'
   import {
     getVoice, joinVoice, leaveVoice,
@@ -126,6 +127,54 @@
     await deleteMessage(messageId, auth.user.id, isManager)
   }
 
+  // Load attachments for each message when messages change
+  $effect(() => {
+    for (const msg of chat.messages) {
+      if (!chat.attachmentsByMessage[msg.id]) {
+        loadAttachments(msg.id)
+      }
+    }
+  })
+
+  async function handleFileSelect(file: { name: string; data: number[] }) {
+    if (!auth.user || !activeChannelId) return
+    // Send a placeholder message first, then upload file to it
+    const msg = await sendMessage(activeChannelId, auth.user.id, `[file: ${file.name}]`)
+    if (msg) {
+      await uploadFile(msg.id, file.name, file.data)
+    }
+  }
+
+  async function handleDownloadFile(attachmentId: string) {
+    const data = await downloadFile(attachmentId)
+    if (!data) return
+
+    // Find the attachment info for filename
+    let filename = 'download'
+    for (const atts of Object.values(chat.attachmentsByMessage)) {
+      const att = atts.find(a => a.id === attachmentId)
+      if (att) {
+        filename = att.filename
+        break
+      }
+    }
+
+    // Trigger browser download
+    const blob = new Blob([new Uint8Array(data)])
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleDeleteFile(attachmentId: string) {
+    await deleteAttachment(attachmentId)
+  }
+
   async function handleJoinVoice(channelId: string) {
     if (vc.channelId === channelId) {
       await leaveVoice()
@@ -180,9 +229,13 @@
       loading={chat.loading}
       hasMore={chat.hasMore}
       sending={chat.sending}
+      attachmentsByMessage={chat.attachmentsByMessage}
       onSend={handleSendMessage}
       onLoadMore={loadOlderMessages}
       onDelete={handleDeleteMessage}
+      onFileSelect={handleFileSelect}
+      onDownloadFile={handleDownloadFile}
+      onDeleteFile={handleDeleteFile}
     />
     <MemberSidebar members={sidebarMembers} />
   </div>

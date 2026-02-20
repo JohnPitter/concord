@@ -14,6 +14,10 @@ export function CreateServer(arg1, arg2) {
   return window['go']['main']['App']['CreateServer'](arg1, arg2);
 }
 
+export function DeleteAttachment(arg1) {
+  return window['go']['main']['App']['DeleteAttachment'](arg1);
+}
+
 export function DeleteChannel(arg1, arg2, arg3) {
   return window['go']['main']['App']['DeleteChannel'](arg1, arg2, arg3);
 }
@@ -26,12 +30,20 @@ export function DeleteServer(arg1, arg2) {
   return window['go']['main']['App']['DeleteServer'](arg1, arg2);
 }
 
+export function DownloadFile(arg1) {
+  return window['go']['main']['App']['DownloadFile'](arg1);
+}
+
 export function EditMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['EditMessage'](arg1, arg2, arg3);
 }
 
 export function GenerateInvite(arg1, arg2) {
   return window['go']['main']['App']['GenerateInvite'](arg1, arg2);
+}
+
+export function GetAttachments(arg1) {
+  return window['go']['main']['App']['GetAttachments'](arg1);
 }
 
 export function GetHealth() {
@@ -124,4 +136,8 @@ export function UpdateMemberRole(arg1, arg2, arg3, arg4) {
 
 export function UpdateServer(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateServer'](arg1, arg2, arg3, arg4);
+}
+
+export function UploadFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UploadFile'](arg1, arg2, arg3);
 }

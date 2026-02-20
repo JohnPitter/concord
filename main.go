@@ -10,6 +10,7 @@ import (
 	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
+	"github.com/concord-chat/concord/internal/files"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
@@ -37,6 +38,7 @@ type App struct {
 	serverService *server.Service
 	chatService   *chat.Service
 	voiceEngine   *voice.Engine
+	fileService   *files.Service
 }
 
 // NewApp creates a new application instance
@@ -137,6 +139,16 @@ func (a *App) startup(ctx context.Context) {
 	chatRepo := chat.NewRepository(a.db, a.logger)
 	a.chatService = chat.NewService(chatRepo, a.logger)
 	a.logger.Info().Msg("chat service initialized")
+
+	// Initialize file service
+	storageDir := filepath.Join(filepath.Dir(cfg.Database.SQLite.Path), "files")
+	fileStorage, err := files.NewLocalStorage(storageDir, a.logger)
+	if err != nil {
+		a.logger.Fatal().Err(err).Msg("failed to initialize file storage")
+	}
+	fileRepo := files.NewRepository(a.db, a.logger)
+	a.fileService = files.NewService(fileRepo, fileStorage, a.logger)
+	a.logger.Info().Str("storage_dir", storageDir).Msg("file service initialized")
 
 	// Initialize voice engine
 	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
@@ -337,6 +349,29 @@ func (a *App) ToggleDeafen() bool {
 // GetVoiceStatus returns the current voice status.
 func (a *App) GetVoiceStatus() voice.VoiceStatus {
 	return a.voiceEngine.GetStatus()
+}
+
+// --- File Sharing Bindings ---
+
+// UploadFile validates and stores a file attached to a message.
+func (a *App) UploadFile(messageID, filename string, data []byte) (*files.Attachment, error) {
+	return a.fileService.Upload(a.ctx, messageID, filename, data)
+}
+
+// DownloadFile retrieves file data for an attachment.
+func (a *App) DownloadFile(attachmentID string) ([]byte, error) {
+	data, _, err := a.fileService.Download(a.ctx, attachmentID)
+	return data, err
+}
+
+// GetAttachments returns all attachments for a message.
+func (a *App) GetAttachments(messageID string) ([]*files.Attachment, error) {
+	return a.fileService.GetAttachments(a.ctx, messageID)
+}
+
+// DeleteAttachment removes an attachment.
+func (a *App) DeleteAttachment(attachmentID string) error {
+	return a.fileService.DeleteAttachment(a.ctx, attachmentID)
 }
 
 func main() {

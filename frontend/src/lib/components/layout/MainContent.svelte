@@ -1,7 +1,7 @@
 <script lang="ts">
   import MessageList from '../chat/MessageList.svelte'
   import MessageInput from '../chat/MessageInput.svelte'
-  import type { MessageData } from '../../stores/chat.svelte'
+  import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
 
   let {
     channelName = 'general',
@@ -10,10 +10,14 @@
     loading = false,
     hasMore = false,
     sending = false,
+    attachmentsByMessage = {},
     onSend,
     onLoadMore,
     onEdit,
     onDelete,
+    onFileSelect,
+    onDownloadFile,
+    onDeleteFile,
   }: {
     channelName?: string
     messages?: MessageData[]
@@ -21,10 +25,14 @@
     loading?: boolean
     hasMore?: boolean
     sending?: boolean
+    attachmentsByMessage?: Record<string, AttachmentData[]>
     onSend: (content: string) => void
     onLoadMore?: () => void
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
+    onFileSelect?: (file: { name: string; data: number[] }) => void
+    onDownloadFile?: (id: string) => void
+    onDeleteFile?: (id: string) => void
   } = $props()
 </script>
 
@@ -67,9 +75,12 @@
     {channelName}
     {loading}
     {hasMore}
+    {attachmentsByMessage}
     {onLoadMore}
     {onEdit}
     {onDelete}
+    {onDownloadFile}
+    {onDeleteFile}
   />
 
   <!-- Message input -->
@@ -77,5 +88,6 @@
     {channelName}
     disabled={sending}
     {onSend}
+    {onFileSelect}
   />
 </main>

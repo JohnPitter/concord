@@ -1,6 +1,6 @@
 <script lang="ts">
   import MessageBubble from './MessageBubble.svelte'
-  import type { MessageData } from '../../stores/chat.svelte'
+  import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
 
   let {
     messages,
@@ -8,18 +8,24 @@
     channelName = 'general',
     loading = false,
     hasMore = false,
+    attachmentsByMessage = {},
     onLoadMore,
     onEdit,
     onDelete,
+    onDownloadFile,
+    onDeleteFile,
   }: {
     messages: MessageData[]
     currentUserId: string
     channelName?: string
     loading?: boolean
     hasMore?: boolean
+    attachmentsByMessage?: Record<string, AttachmentData[]>
     onLoadMore?: () => void
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
+    onDownloadFile?: (id: string) => void
+    onDeleteFile?: (id: string) => void
   } = $props()
 
   let scrollContainer: HTMLDivElement | undefined = $state()
@@ -93,8 +99,11 @@
           {message}
           isOwn={message.author_id === currentUserId}
           showAvatar={shouldShowAvatar(message, index)}
+          attachments={attachmentsByMessage[message.id] ?? []}
           {onEdit}
           {onDelete}
+          {onDownloadFile}
+          {onDeleteFile}
         />
       {/each}
     </div>
