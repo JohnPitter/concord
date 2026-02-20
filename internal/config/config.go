@@ -31,6 +31,9 @@ type Config struct {
 	// Translation configuration
 	Translation TranslationConfig `json:"translation"`
 
+	// Auth configuration
+	Auth AuthConfig `json:"auth"`
+
 	// Security configuration
 	Security SecurityConfig `json:"security"`
 
@@ -143,6 +146,11 @@ type TranslationConfig struct {
 	MaxLatency       time.Duration `json:"max_latency"`       // Auto-disable if exceeded
 	CircuitBreaker   bool          `json:"circuit_breaker"`   // Auto-disable on failures
 	FailureThreshold int           `json:"failure_threshold"` // Failures before circuit breaks
+}
+
+// AuthConfig contains authentication settings
+type AuthConfig struct {
+	GitHubClientID string `json:"github_client_id"` // GitHub OAuth App Client ID
 }
 
 // SecurityConfig contains security settings
@@ -277,6 +285,11 @@ func (c *Config) loadFromEnv() {
 	// Server
 	if v := os.Getenv("CONCORD_SERVER_HOST"); v != "" {
 		c.Server.Host = v
+	}
+
+	// Auth
+	if v := os.Getenv("CONCORD_GITHUB_CLIENT_ID"); v != "" {
+		c.Auth.GitHubClientID = v
 	}
 
 	// Security

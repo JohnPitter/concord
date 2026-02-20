@@ -58,6 +58,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 2: GitHub OAuth Authentication (2026-02-20)
+
+- GitHub Device Flow (RFC 8628) for desktop app authentication
+  - No callback server needed — device code + user code flow
+  - Handles authorization_pending, slow_down, expired_token, access_denied
+- JWT token management (HS256)
+  - Access token (15 min) + refresh token (30 days) pair generation
+  - Token validation with issuer distinction (concord vs concord-refresh)
+  - Refresh token rotation on session restore
+- Encrypted session storage
+  - Refresh tokens encrypted at rest with AES-256-GCM
+  - SHA-256 token hash for lookup, base64 encoding for storage
+  - Automatic expired session cleanup
+- Auth repository with SQLite persistence
+  - User upsert from GitHub profile (ON CONFLICT DO UPDATE)
+  - Session CRUD with indexed queries on user_id and expires_at
+  - Database migration (002_auth.sql) for auth_sessions table
+- Auth service orchestration
+  - StartLogin → CompleteLogin → RestoreSession → Logout lifecycle
+  - Wails bindings exposed to frontend
+- Frontend authentication UI
+  - Login page with GitHub Device Flow (user code display, clipboard copy, browser open)
+  - Auth state management with Svelte 5 runes ($state, $derived, $effect)
+  - Session persistence via localStorage user ID + encrypted refresh token
+  - Loading splash, polling state, error display
+  - Conditional routing: Login view vs Layout Shell based on auth state
+- JWT unit tests (8 tests, all passing)
+  - Token generation, validation, refresh, wrong secret, issuer check
+- Config: `CONCORD_GITHUB_CLIENT_ID` environment variable support
+
 #### Phase 1.6: Layout Shell (2026-02-20)
 
 - Discord-like 4-panel layout (ServerSidebar, ChannelSidebar, MainContent, MemberSidebar)

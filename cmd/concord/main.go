@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/store/sqlite"
 	"github.com/concord-chat/concord/pkg/version"
 	"github.com/rs/zerolog"
@@ -21,12 +24,13 @@ import (
 
 // App struct holds the application state
 type App struct {
-	ctx     context.Context
-	cfg     *config.Config
-	db      *sqlite.DB
-	logger  zerolog.Logger
-	metrics *observability.Metrics
-	health  *observability.HealthChecker
+	ctx         context.Context
+	cfg         *config.Config
+	db          *sqlite.DB
+	logger      zerolog.Logger
+	metrics     *observability.Metrics
+	health      *observability.HealthChecker
+	authService *auth.Service
 }
 
 // NewApp creates a new application instance
@@ -101,6 +105,23 @@ func (a *App) startup(ctx context.Context) {
 		a.logger.Fatal().Err(err).Msg("failed to run migrations")
 	}
 
+	// Initialize auth service
+	githubOAuth := auth.NewGitHubOAuth(cfg.Auth.GitHubClientID, a.logger)
+
+	jwtManager, err := auth.NewJWTManager(cfg.Security.JWTSecret)
+	if err != nil {
+		a.logger.Fatal().Err(err).Msg("failed to initialize JWT manager")
+	}
+
+	authRepo := auth.NewRepository(a.db, a.logger)
+	cryptoManager := security.NewCryptoManager()
+
+	// Derive 32-byte encryption key from JWT secret for encrypting refresh tokens at rest
+	encryptKey := sha256.Sum256([]byte(cfg.Security.JWTSecret))
+
+	a.authService = auth.NewService(githubOAuth, jwtManager, authRepo, cryptoManager, encryptKey[:], a.logger)
+	a.logger.Info().Msg("auth service initialized")
+
 	a.logger.Info().Msg("Concord started successfully")
 }
 
@@ -134,6 +155,27 @@ func (a *App) GetVersion() version.Info {
 // GetHealth returns the health status of the application
 func (a *App) GetHealth() *observability.Health {
 	return a.health.Check(a.ctx)
+}
+
+// StartLogin initiates the GitHub Device Flow.
+// Returns the device code response for the frontend to display.
+func (a *App) StartLogin() (*auth.DeviceCodeResponse, error) {
+	return a.authService.StartLogin(a.ctx)
+}
+
+// CompleteLogin polls for the GitHub token and creates local user + session.
+func (a *App) CompleteLogin(deviceCode string, interval int) (*auth.AuthState, error) {
+	return a.authService.CompleteLogin(a.ctx, deviceCode, interval)
+}
+
+// RestoreSession attempts to restore an existing session for a user.
+func (a *App) RestoreSession(userID string) (*auth.AuthState, error) {
+	return a.authService.RestoreSession(a.ctx, userID)
+}
+
+// Logout removes all sessions for the current user.
+func (a *App) Logout(userID string) error {
+	return a.authService.Logout(a.ctx, userID)
 }
 
 func main() {

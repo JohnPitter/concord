@@ -1,8 +1,17 @@
 <script lang="ts">
+  import { getAuth, initAuth } from './lib/stores/auth.svelte'
+  import Login from './lib/components/auth/Login.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
   import ChannelSidebar from './lib/components/layout/ChannelSidebar.svelte'
   import MainContent from './lib/components/layout/MainContent.svelte'
   import MemberSidebar from './lib/components/layout/MemberSidebar.svelte'
+
+  const auth = getAuth()
+
+  // Attempt session restore on mount
+  $effect(() => {
+    initAuth()
+  })
 
   // Mock data
   const servers = [
@@ -34,18 +43,30 @@
   const activeChannel = $derived(channels.find(c => c.id === activeChannelId))
 </script>
 
-<div class="flex h-screen w-screen overflow-hidden">
-  <ServerSidebar
-    {servers}
-    {activeServerId}
-    onSelectServer={(id) => activeServerId = id}
-  />
-  <ChannelSidebar
-    serverName="Gaming Squad"
-    {channels}
-    {activeChannelId}
-    onSelectChannel={(id) => activeChannelId = id}
-  />
-  <MainContent channelName={activeChannel?.name ?? 'general'} />
-  <MemberSidebar {members} />
-</div>
+{#if auth.loading}
+  <!-- Loading splash -->
+  <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
+    <div class="text-center">
+      <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
+      <p class="text-sm text-void-text-muted">Loading Concord...</p>
+    </div>
+  </div>
+{:else if !auth.authenticated}
+  <Login />
+{:else}
+  <div class="flex h-screen w-screen overflow-hidden">
+    <ServerSidebar
+      {servers}
+      {activeServerId}
+      onSelectServer={(id) => activeServerId = id}
+    />
+    <ChannelSidebar
+      serverName="Gaming Squad"
+      {channels}
+      {activeChannelId}
+      onSelectChannel={(id) => activeChannelId = id}
+    />
+    <MainContent channelName={activeChannel?.name ?? 'general'} />
+    <MemberSidebar {members} />
+  </div>
+{/if}

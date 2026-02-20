@@ -102,6 +102,10 @@ func Default() *Config {
 			FailureThreshold: 5,
 		},
 
+		Auth: AuthConfig{
+			GitHubClientID: "", // Set via CONCORD_GITHUB_CLIENT_ID env var
+		},
+
 		Security: SecurityConfig{
 			JWTSecret:        generateDefaultJWTSecret(),
 			JWTAccessExpiry:  15 * time.Minute,
