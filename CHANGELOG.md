@@ -58,6 +58,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 5: P2P Networking (2026-02-20)
+
+- Wire protocol (pkg/protocol)
+  - Binary wire format: [1 byte type][4 bytes length (big-endian)][payload (msgpack)]
+  - 17 message types: text (send/edit/delete), voice (join/leave/data/mute), file (offer/accept/chunk/complete), server sync, presence, typing, ping/pong
+  - Encode/Decode with msgpack serialization, 1 MB max payload
+  - 7 unit tests (round-trip, all types, payload size limit, edge cases)
+- End-to-end encryption (pkg/crypto)
+  - X25519 key exchange for peer key agreement
+  - HKDF-SHA256 key derivation with "concord-e2ee-v1" info
+  - AES-256-GCM symmetric encryption (nonce || ciphertext format)
+  - E2EEManager: AddPeerKey, RemovePeer, Encrypt, Decrypt, thread-safe
+  - 7 unit tests (key generation, bidirectional encrypt/decrypt, tamper detection, third-party cannot decrypt)
+- libp2p P2P host (internal/network/p2p)
+  - QUIC + TCP dual transport with Noise security
+  - NAT port mapping + hole punching + relay enabled
+  - mDNS for LAN peer discovery (auto-connect)
+  - Kademlia DHT for internet peer discovery with bootstrap peers
+  - Stream-based message handler (/concord/1.0.0 protocol)
+  - Connect, SendData, Peers, PeerCount operations
+  - FindPeers via DHT routing discovery + advertise
+  - 5 integration tests (host lifecycle, connect, send/receive, peer info)
+- WebSocket signaling (internal/network/signaling)
+  - Signal types: join, leave, offer, answer, peer_list, peer_joined, peer_left, error
+  - Signaling server: HTTP handler with WebSocket upgrade, channel-based peer tracking
+  - Per-connection mutex for concurrent write safety (gorilla/websocket)
+  - Broadcast to channel peers, forward offers to specific peers
+  - Signaling client: connect, on(handler), join/leave channel, send offers
+  - 11 unit tests (signal encode/decode, server-client integration, peer join/leave, offer forwarding, multiple channels)
+
 #### Phase 4: Text Chat (2026-02-20)
 
 - Chat domain layer (internal/chat)
