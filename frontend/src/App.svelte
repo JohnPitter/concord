@@ -4,6 +4,10 @@
     getServers, loadUserServers, selectServer,
     createServer, redeemInvite, generateInvite,
   } from './lib/stores/servers.svelte'
+  import {
+    getChat, loadMessages, loadOlderMessages,
+    sendMessage, editMessage, deleteMessage, resetChat,
+  } from './lib/stores/chat.svelte'
   import Login from './lib/components/auth/Login.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
@@ -14,6 +18,7 @@
 
   const auth = getAuth()
   const srv = getServers()
+  const chat = getChat()
 
   let showCreateServer = $state(false)
   let showJoinServer = $state(false)
@@ -42,6 +47,15 @@
   $effect(() => {
     if (srv.textChannels.length > 0 && !activeChannelId) {
       activeChannelId = srv.textChannels[0].id
+    }
+  })
+
+  // Load messages when active channel changes
+  $effect(() => {
+    if (activeChannelId) {
+      loadMessages(activeChannelId)
+    } else {
+      resetChat()
     }
   })
 
@@ -91,6 +105,18 @@
       await selectServer(joined.id)
     }
   }
+
+  async function handleSendMessage(content: string) {
+    if (!auth.user || !activeChannelId) return
+    await sendMessage(activeChannelId, auth.user.id, content)
+  }
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!auth.user) return
+    const member = srv.members.find(m => m.user_id === auth.user!.id)
+    const isManager = member?.role === 'owner' || member?.role === 'admin' || member?.role === 'moderator'
+    await deleteMessage(messageId, auth.user.id, isManager)
+  }
 </script>
 
 {#if auth.loading}
@@ -120,7 +146,17 @@
       activeChannelId={activeChannelId ?? ''}
       onSelectChannel={(id) => activeChannelId = id}
     />
-    <MainContent channelName={activeChannel?.name ?? 'general'} />
+    <MainContent
+      channelName={activeChannel?.name ?? 'general'}
+      messages={chat.messages}
+      currentUserId={auth.user?.id ?? ''}
+      loading={chat.loading}
+      hasMore={chat.hasMore}
+      sending={chat.sending}
+      onSend={handleSendMessage}
+      onLoadMore={loadOlderMessages}
+      onDelete={handleDeleteMessage}
+    />
     <MemberSidebar members={sidebarMembers} />
   </div>
 

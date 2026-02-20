@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/concord-chat/concord/internal/auth"
+	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
@@ -33,6 +34,7 @@ type App struct {
 	health        *observability.HealthChecker
 	authService   *auth.Service
 	serverService *server.Service
+	chatService   *chat.Service
 }
 
 // NewApp creates a new application instance
@@ -128,6 +130,11 @@ func (a *App) startup(ctx context.Context) {
 	serverRepo := server.NewRepository(a.db, a.logger)
 	a.serverService = server.NewService(serverRepo, a.logger)
 	a.logger.Info().Msg("server service initialized")
+
+	// Initialize chat service
+	chatRepo := chat.NewRepository(a.db, a.logger)
+	a.chatService = chat.NewService(chatRepo, a.logger)
+	a.logger.Info().Msg("chat service initialized")
 
 	a.logger.Info().Msg("Concord started successfully")
 }
@@ -255,6 +262,37 @@ func (a *App) RedeemInvite(code, userID string) (*server.Server, error) {
 // GetInviteInfo returns info about a server from an invite code.
 func (a *App) GetInviteInfo(code string) (*server.InviteInfo, error) {
 	return a.serverService.GetInviteInfo(a.ctx, code)
+}
+
+// --- Chat Bindings ---
+
+// SendMessage sends a text message to a channel.
+func (a *App) SendMessage(channelID, authorID, content string) (*chat.Message, error) {
+	return a.chatService.SendMessage(a.ctx, channelID, authorID, content)
+}
+
+// GetMessages retrieves messages for a channel with cursor-based pagination.
+func (a *App) GetMessages(channelID string, before string, after string, limit int) ([]*chat.Message, error) {
+	return a.chatService.GetMessages(a.ctx, channelID, chat.PaginationOpts{
+		Before: before,
+		After:  after,
+		Limit:  limit,
+	})
+}
+
+// EditMessage updates the content of a message.
+func (a *App) EditMessage(messageID, authorID, content string) (*chat.Message, error) {
+	return a.chatService.EditMessage(a.ctx, messageID, authorID, content)
+}
+
+// DeleteMessage removes a message.
+func (a *App) DeleteMessage(messageID, actorID string, isManager bool) error {
+	return a.chatService.DeleteMessage(a.ctx, messageID, actorID, isManager)
+}
+
+// SearchMessages performs full-text search in a channel.
+func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.SearchResult, error) {
+	return a.chatService.SearchMessages(a.ctx, channelID, query, limit)
 }
 
 func main() {

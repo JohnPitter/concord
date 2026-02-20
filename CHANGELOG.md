@@ -58,6 +58,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 4: Text Chat (2026-02-20)
+
+- Chat domain layer (internal/chat)
+  - Message model with author JOIN (author_name, author_avatar)
+  - Cursor-based pagination (before/after message ID, configurable limit)
+  - Full-text search via FTS5 with snippet extraction and ranking
+  - Content validation (max 4000 chars, no empty/whitespace-only)
+- Chat repository
+  - Save, GetByID, GetByChannel (3 query modes: before/after/latest)
+  - Update with automatic edited_at timestamp
+  - Delete, Search with FTS5 snippet() and rank ordering
+  - CountByChannel for stats
+- Chat service
+  - SendMessage, GetMessages, EditMessage (author-only), DeleteMessage (author or manager)
+  - SearchMessages with configurable result limit
+- Database migration (004_messages.sql)
+  - messages table with channel_id, author_id FK, type CHECK constraint
+  - Composite index on (channel_id, created_at DESC) for O(log n) pagination
+  - FTS5 virtual table with auto-sync triggers (INSERT/UPDATE/DELETE)
+- Wails bindings: 5 chat methods (SendMessage, GetMessages, EditMessage, DeleteMessage, SearchMessages)
+- Frontend chat store (chat.svelte.ts)
+  - Reactive message list with Svelte 5 runes
+  - Auto-reverse API response (newest-first → oldest-first for display)
+  - Cursor-based load-older-messages support
+  - Search with results and query state
+- Chat UI components
+  - MessageBubble: avatar grouping, timestamp formatting (today/yesterday/date), edit/delete hover actions, (edited) indicator
+  - MessageList: auto-scroll to bottom, load-older on scroll-to-top, 5-minute avatar grouping, welcome message for empty channels
+  - MessageInput: Enter-to-send (Shift+Enter for newline), attach/emoji buttons, conditional send button, disabled while sending
+- MainContent updated with real MessageList + MessageInput (replaced mock messages)
+- App.svelte wired with chat store (loadMessages on channel select, send/delete handlers, manager role detection)
+- Unit tests: 4 tests (max length, content validation, pagination defaults, pagination limit)
+
 #### Phase 3: Server Management (2026-02-20)
 
 - Server CRUD operations
