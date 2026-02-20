@@ -1,0 +1,32 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Concord",
+  "outputfilename": "concord",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Concord Team",
+    "email": "team@concord-chat.dev"
+  },
+  "info": {
+    "companyName": "Concord",
+    "productName": "Concord",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 Concord Team",
+    "comments": "Open-source, privacy-first voice & text chat platform"
+  },
+  "wailsjsdir": "./frontend",
+  "assetdir": "./frontend/dist",
+  "reloaddirs": "./frontend/src,./internal,./cmd",
+  "build:dir": "./build",
+  "appargs": "",
+  "runNonNativeBuildScript": false,
+  "preBuildHooks": {
+    "generate": "go generate ./..."
+  },
+  "debounceMS": 750,
+  "devServer": "http://localhost:5173",
+  "frontendDevServerUrl": "http://localhost:5173"
+}
