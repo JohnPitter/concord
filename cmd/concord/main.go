@@ -11,6 +11,7 @@ import (
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
+	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
 	"github.com/concord-chat/concord/pkg/version"
 	"github.com/rs/zerolog"
@@ -24,13 +25,14 @@ import (
 
 // App struct holds the application state
 type App struct {
-	ctx         context.Context
-	cfg         *config.Config
-	db          *sqlite.DB
-	logger      zerolog.Logger
-	metrics     *observability.Metrics
-	health      *observability.HealthChecker
-	authService *auth.Service
+	ctx           context.Context
+	cfg           *config.Config
+	db            *sqlite.DB
+	logger        zerolog.Logger
+	metrics       *observability.Metrics
+	health        *observability.HealthChecker
+	authService   *auth.Service
+	serverService *server.Service
 }
 
 // NewApp creates a new application instance
@@ -122,6 +124,11 @@ func (a *App) startup(ctx context.Context) {
 	a.authService = auth.NewService(githubOAuth, jwtManager, authRepo, cryptoManager, encryptKey[:], a.logger)
 	a.logger.Info().Msg("auth service initialized")
 
+	// Initialize server service
+	serverRepo := server.NewRepository(a.db, a.logger)
+	a.serverService = server.NewService(serverRepo, a.logger)
+	a.logger.Info().Msg("server service initialized")
+
 	a.logger.Info().Msg("Concord started successfully")
 }
 
@@ -176,6 +183,78 @@ func (a *App) RestoreSession(userID string) (*auth.AuthState, error) {
 // Logout removes all sessions for the current user.
 func (a *App) Logout(userID string) error {
 	return a.authService.Logout(a.ctx, userID)
+}
+
+// --- Server Management Bindings ---
+
+// CreateServer creates a new server. Returns the created server.
+func (a *App) CreateServer(name, ownerID string) (*server.Server, error) {
+	return a.serverService.CreateServer(a.ctx, name, ownerID)
+}
+
+// GetServer retrieves a server by ID.
+func (a *App) GetServer(serverID string) (*server.Server, error) {
+	return a.serverService.GetServer(a.ctx, serverID)
+}
+
+// ListUserServers returns all servers the user belongs to.
+func (a *App) ListUserServers(userID string) ([]*server.Server, error) {
+	return a.serverService.ListUserServers(a.ctx, userID)
+}
+
+// UpdateServer updates a server's name and icon.
+func (a *App) UpdateServer(serverID, userID, name, iconURL string) error {
+	return a.serverService.UpdateServer(a.ctx, serverID, userID, name, iconURL)
+}
+
+// DeleteServer removes a server. Only the owner can delete.
+func (a *App) DeleteServer(serverID, userID string) error {
+	return a.serverService.DeleteServer(a.ctx, serverID, userID)
+}
+
+// CreateChannel creates a new channel within a server.
+func (a *App) CreateChannel(serverID, userID, name, chType string) (*server.Channel, error) {
+	return a.serverService.CreateChannel(a.ctx, serverID, userID, name, chType)
+}
+
+// ListChannels returns all channels for a server.
+func (a *App) ListChannels(serverID string) ([]*server.Channel, error) {
+	return a.serverService.ListChannels(a.ctx, serverID)
+}
+
+// DeleteChannel removes a channel from a server.
+func (a *App) DeleteChannel(serverID, userID, channelID string) error {
+	return a.serverService.DeleteChannel(a.ctx, serverID, userID, channelID)
+}
+
+// ListMembers returns all members of a server.
+func (a *App) ListMembers(serverID string) ([]*server.Member, error) {
+	return a.serverService.ListMembers(a.ctx, serverID)
+}
+
+// KickMember removes a member from a server.
+func (a *App) KickMember(serverID, actorID, targetID string) error {
+	return a.serverService.KickMember(a.ctx, serverID, actorID, targetID)
+}
+
+// UpdateMemberRole changes a member's role in a server.
+func (a *App) UpdateMemberRole(serverID, actorID, targetID string, role string) error {
+	return a.serverService.UpdateMemberRole(a.ctx, serverID, actorID, targetID, server.Role(role))
+}
+
+// GenerateInvite creates a new invite code for a server.
+func (a *App) GenerateInvite(serverID, userID string) (string, error) {
+	return a.serverService.GenerateInvite(a.ctx, serverID, userID)
+}
+
+// RedeemInvite joins a server using an invite code.
+func (a *App) RedeemInvite(code, userID string) (*server.Server, error) {
+	return a.serverService.RedeemInvite(a.ctx, code, userID)
+}
+
+// GetInviteInfo returns info about a server from an invite code.
+func (a *App) GetInviteInfo(code string) (*server.InviteInfo, error) {
+	return a.serverService.GetInviteInfo(a.ctx, code)
 }
 
 func main() {

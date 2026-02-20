@@ -6,13 +6,15 @@
     id: string
     name: string
     icon?: string
+    iconUrl?: string
     hasNotification?: boolean
   }
 
-  let { servers, activeServerId, onSelectServer }: {
+  let { servers, activeServerId, onSelectServer, onAddServer }: {
     servers: Server[]
     activeServerId: string
     onSelectServer: (id: string) => void
+    onAddServer?: () => void
   } = $props()
 </script>
 
@@ -59,7 +61,7 @@
 
   <!-- Add server button -->
   <Tooltip text="Add Server" position="right">
-    <button aria-label="Add Server" class="flex h-12 w-12 items-center justify-center rounded-2xl bg-void-bg-tertiary text-void-online transition-all duration-200 hover:rounded-xl hover:bg-void-online hover:text-white cursor-pointer">
+    <button aria-label="Add Server" class="flex h-12 w-12 items-center justify-center rounded-2xl bg-void-bg-tertiary text-void-online transition-all duration-200 hover:rounded-xl hover:bg-void-online hover:text-white cursor-pointer" onclick={() => onAddServer?.()}>
       <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />

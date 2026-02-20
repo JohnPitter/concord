@@ -1,46 +1,96 @@
 <script lang="ts">
-  import { getAuth, initAuth } from './lib/stores/auth.svelte'
+  import { getAuth, initAuth, logout } from './lib/stores/auth.svelte'
+  import {
+    getServers, loadUserServers, selectServer,
+    createServer, redeemInvite, generateInvite,
+  } from './lib/stores/servers.svelte'
   import Login from './lib/components/auth/Login.svelte'
+  import CreateServerModal from './lib/components/server/CreateServer.svelte'
+  import JoinServerModal from './lib/components/server/JoinServer.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
   import ChannelSidebar from './lib/components/layout/ChannelSidebar.svelte'
   import MainContent from './lib/components/layout/MainContent.svelte'
   import MemberSidebar from './lib/components/layout/MemberSidebar.svelte'
 
   const auth = getAuth()
+  const srv = getServers()
 
-  // Attempt session restore on mount
+  let showCreateServer = $state(false)
+  let showJoinServer = $state(false)
+  let activeChannelId = $state<string | null>(null)
+
+  // Initialize auth + load servers on mount
   $effect(() => {
     initAuth()
   })
 
-  // Mock data
-  const servers = [
-    { id: '1', name: 'Gaming Squad', hasNotification: true },
-    { id: '2', name: 'Dev Team' },
-    { id: '3', name: 'Music' },
-  ]
+  // Load servers when authenticated
+  $effect(() => {
+    if (auth.authenticated && auth.user) {
+      loadUserServers(auth.user.id)
+    }
+  })
 
-  const channels = [
-    { id: 'general', name: 'general', type: 'text' as const, unreadCount: 3 },
-    { id: 'gaming', name: 'gaming', type: 'text' as const },
-    { id: 'memes', name: 'memes', type: 'text' as const },
-    { id: 'voice-1', name: 'Voice Chat', type: 'voice' as const },
-    { id: 'voice-2', name: 'AFK', type: 'voice' as const },
-  ]
+  // Auto-select first server when servers load
+  $effect(() => {
+    if (srv.list.length > 0 && !srv.activeId) {
+      selectServer(srv.list[0].id)
+    }
+  })
 
-  const members = [
-    { id: '1', name: 'Alice', status: 'online' as const, role: 'Admin' },
-    { id: '2', name: 'Bob', status: 'online' as const },
-    { id: '3', name: 'Eve', status: 'idle' as const },
-    { id: '4', name: 'Charlie', status: 'dnd' as const, role: 'Moderator' },
-    { id: '5', name: 'Dave', status: 'offline' as const },
-    { id: '6', name: 'Frank', status: 'offline' as const },
-  ]
+  // Auto-select first text channel when channels change
+  $effect(() => {
+    if (srv.textChannels.length > 0 && !activeChannelId) {
+      activeChannelId = srv.textChannels[0].id
+    }
+  })
 
-  let activeServerId = $state('1')
-  let activeChannelId = $state('general')
+  const activeChannel = $derived(srv.channels.find(c => c.id === activeChannelId))
 
-  const activeChannel = $derived(channels.find(c => c.id === activeChannelId))
+  // Map server data for ServerSidebar format
+  const sidebarServers = $derived(
+    srv.list.map(s => ({
+      id: s.id,
+      name: s.name,
+      iconUrl: s.icon_url || undefined,
+    }))
+  )
+
+  // Map channel data for ChannelSidebar format
+  const sidebarChannels = $derived(
+    srv.channels.map(c => ({
+      id: c.id,
+      name: c.name,
+      type: c.type as 'text' | 'voice',
+    }))
+  )
+
+  // Map member data for MemberSidebar format
+  const sidebarMembers = $derived(
+    srv.members.map(m => ({
+      id: m.user_id,
+      name: m.username,
+      status: 'online' as const, // TODO: real presence in Phase 5
+      role: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : m.role === 'moderator' ? 'Moderator' : undefined,
+    }))
+  )
+
+  async function handleCreateServer(name: string) {
+    if (!auth.user) return
+    const created = await createServer(name, auth.user.id)
+    if (created) {
+      await selectServer(created.id)
+    }
+  }
+
+  async function handleJoinServer(code: string) {
+    if (!auth.user) return
+    const joined = await redeemInvite(code, auth.user.id)
+    if (joined) {
+      await loadUserServers(auth.user.id)
+      await selectServer(joined.id)
+    }
+  }
 </script>
 
 {#if auth.loading}
@@ -56,17 +106,31 @@
 {:else}
   <div class="flex h-screen w-screen overflow-hidden">
     <ServerSidebar
-      {servers}
-      {activeServerId}
-      onSelectServer={(id) => activeServerId = id}
+      servers={sidebarServers}
+      activeServerId={srv.activeId ?? ''}
+      onSelectServer={(id) => {
+        selectServer(id)
+        activeChannelId = null
+      }}
+      onAddServer={() => showCreateServer = true}
     />
     <ChannelSidebar
-      serverName="Gaming Squad"
-      {channels}
-      {activeChannelId}
+      serverName={srv.active?.name ?? 'Server'}
+      channels={sidebarChannels}
+      activeChannelId={activeChannelId ?? ''}
       onSelectChannel={(id) => activeChannelId = id}
     />
     <MainContent channelName={activeChannel?.name ?? 'general'} />
-    <MemberSidebar {members} />
+    <MemberSidebar members={sidebarMembers} />
   </div>
+
+  <CreateServerModal
+    bind:open={showCreateServer}
+    onCreate={handleCreateServer}
+  />
+
+  <JoinServerModal
+    bind:open={showJoinServer}
+    onJoin={handleJoinServer}
+  />
 {/if}

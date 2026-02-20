@@ -58,6 +58,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 3: Server Management (2026-02-20)
+
+- Server CRUD operations
+  - Create server with auto-generated invite code and default channels (#general text + General voice)
+  - Update server name/icon (requires PermManageServer)
+  - Delete server (owner only, cascades to channels + members)
+  - List user's servers via JOIN on server_members
+- Channel management
+  - Create text/voice channels (requires PermManageChannels)
+  - List channels ordered by position
+  - Update channel name/type/position
+  - Delete channels (requires PermManageChannels)
+- Member management with RBAC permissions
+  - 4 roles: owner > admin > moderator > member
+  - 6 permissions: ManageServer, ManageChannels, ManageMembers, CreateInvite, SendMessages, ManageMessages
+  - Role hierarchy enforcement: cannot kick/modify equal or higher roles
+  - Cannot promote above own role or assign owner directly
+- Invite system
+  - Generate 8-character random invite codes (base32, cryptographically random)
+  - Redeem invite to join server (idempotent — returns server if already member)
+  - Inspect invite for server name + member count
+- Database migration (003_servers.sql)
+  - servers, channels, server_members tables
+  - Indexes on owner_id, invite_code (unique), server_id, user_id
+- Wails bindings: 14 server management methods exposed to frontend
+- Frontend server store with Svelte 5 runes
+  - Reactive server/channel/member lists
+  - Auto-load channels + members on server selection
+- UI: CreateServer modal and JoinServer modal
+- ServerSidebar updated with onAddServer callback
+- App.svelte wired with real server data (servers, channels, members from Go backend)
+- Unit tests: 6 tests (permissions, role hierarchy, invite code generation)
+
 #### Phase 2: GitHub OAuth Authentication (2026-02-20)
 
 - GitHub Device Flow (RFC 8628) for desktop app authentication
