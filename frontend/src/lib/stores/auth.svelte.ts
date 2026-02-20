@@ -1,6 +1,8 @@
 // Auth store using Svelte 5 runes
 // Manages authentication state and communicates with Go backend via Wails bindings
 
+import * as App from '../../../wailsjs/go/main/App'
+
 interface User {
   id: string
   github_id: number
@@ -60,8 +62,7 @@ export async function initAuth(): Promise<void> {
       return
     }
 
-    // @ts-ignore - Wails runtime binding
-    const state: AuthState = await window.go.main.App.RestoreSession(savedUserID)
+    const state: AuthState = await App.RestoreSession(savedUserID)
     if (state.authenticated && state.user) {
       authenticated = true
       user = state.user
@@ -82,8 +83,7 @@ export async function startLogin(): Promise<void> {
   polling = false
 
   try {
-    // @ts-ignore - Wails runtime binding
-    const response: DeviceCodeResponse = await window.go.main.App.StartLogin()
+    const response: DeviceCodeResponse = await App.StartLogin()
     deviceCode = response
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to start login'
@@ -96,8 +96,7 @@ export async function pollForCompletion(): Promise<void> {
   error = null
 
   try {
-    // @ts-ignore - Wails runtime binding
-    const state: AuthState = await window.go.main.App.CompleteLogin(
+    const state: AuthState = await App.CompleteLogin(
       deviceCode.device_code,
       deviceCode.interval
     )
@@ -119,8 +118,7 @@ export async function pollForCompletion(): Promise<void> {
 export async function logout(): Promise<void> {
   try {
     if (user) {
-      // @ts-ignore - Wails runtime binding
-      await window.go.main.App.Logout(user.id)
+      await App.Logout(user.id)
     }
   } catch (e) {
     console.error('Logout error:', e)

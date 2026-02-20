@@ -1,6 +1,8 @@
 // Server store using Svelte 5 runes
 // Manages server, channel, and member state via Wails bindings
 
+import * as App from '../../../wailsjs/go/main/App'
+
 export interface ServerData {
   id: string
   name: string
@@ -60,9 +62,8 @@ export async function loadUserServers(userID: string): Promise<void> {
   loading = true
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const result: ServerData[] = await window.go.main.App.ListUserServers(userID)
-    servers = result ?? []
+    const result = await App.ListUserServers(userID)
+    servers = (result ?? []) as unknown as ServerData[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load servers'
   } finally {
@@ -78,10 +79,10 @@ export async function selectServer(serverID: string): Promise<void> {
 export async function createServer(name: string, ownerID: string): Promise<ServerData | null> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const srv: ServerData = await window.go.main.App.CreateServer(name, ownerID)
-    servers = [...servers, srv]
-    return srv
+    const srv = await App.CreateServer(name, ownerID)
+    const data = srv as unknown as ServerData
+    servers = [...servers, data]
+    return data
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to create server'
     return null
@@ -91,8 +92,7 @@ export async function createServer(name: string, ownerID: string): Promise<Serve
 export async function updateServer(serverID: string, userID: string, name: string, iconURL: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.UpdateServer(serverID, userID, name, iconURL)
+    await App.UpdateServer(serverID, userID, name, iconURL)
     servers = servers.map(s => s.id === serverID ? { ...s, name, icon_url: iconURL } : s)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to update server'
@@ -102,8 +102,7 @@ export async function updateServer(serverID: string, userID: string, name: strin
 export async function deleteServer(serverID: string, userID: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.DeleteServer(serverID, userID)
+    await App.DeleteServer(serverID, userID)
     servers = servers.filter(s => s.id !== serverID)
     if (activeServerId === serverID) {
       activeServerId = servers[0]?.id ?? null
@@ -118,9 +117,8 @@ export async function deleteServer(serverID: string, userID: string): Promise<vo
 
 async function loadChannels(serverID: string): Promise<void> {
   try {
-    // @ts-ignore - Wails binding
-    const result: ChannelData[] = await window.go.main.App.ListChannels(serverID)
-    channels = result ?? []
+    const result = await App.ListChannels(serverID)
+    channels = (result ?? []) as unknown as ChannelData[]
   } catch (e) {
     console.error('Failed to load channels:', e)
     channels = []
@@ -130,10 +128,10 @@ async function loadChannels(serverID: string): Promise<void> {
 export async function createChannel(serverID: string, userID: string, name: string, type: 'text' | 'voice'): Promise<ChannelData | null> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const ch: ChannelData = await window.go.main.App.CreateChannel(serverID, userID, name, type)
-    channels = [...channels, ch]
-    return ch
+    const ch = await App.CreateChannel(serverID, userID, name, type)
+    const data = ch as unknown as ChannelData
+    channels = [...channels, data]
+    return data
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to create channel'
     return null
@@ -143,8 +141,7 @@ export async function createChannel(serverID: string, userID: string, name: stri
 export async function deleteChannel(serverID: string, userID: string, channelID: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.DeleteChannel(serverID, userID, channelID)
+    await App.DeleteChannel(serverID, userID, channelID)
     channels = channels.filter(c => c.id !== channelID)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to delete channel'
@@ -155,9 +152,8 @@ export async function deleteChannel(serverID: string, userID: string, channelID:
 
 async function loadMembers(serverID: string): Promise<void> {
   try {
-    // @ts-ignore - Wails binding
-    const result: MemberData[] = await window.go.main.App.ListMembers(serverID)
-    members = result ?? []
+    const result = await App.ListMembers(serverID)
+    members = (result ?? []) as unknown as MemberData[]
   } catch (e) {
     console.error('Failed to load members:', e)
     members = []
@@ -167,8 +163,7 @@ async function loadMembers(serverID: string): Promise<void> {
 export async function kickMember(serverID: string, actorID: string, targetID: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.KickMember(serverID, actorID, targetID)
+    await App.KickMember(serverID, actorID, targetID)
     members = members.filter(m => m.user_id !== targetID)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to kick member'
@@ -178,8 +173,7 @@ export async function kickMember(serverID: string, actorID: string, targetID: st
 export async function updateMemberRole(serverID: string, actorID: string, targetID: string, role: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.UpdateMemberRole(serverID, actorID, targetID, role)
+    await App.UpdateMemberRole(serverID, actorID, targetID, role)
     members = members.map(m => m.user_id === targetID ? { ...m, role: role as MemberData['role'] } : m)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to update role'
@@ -191,8 +185,7 @@ export async function updateMemberRole(serverID: string, actorID: string, target
 export async function generateInvite(serverID: string, userID: string): Promise<string | null> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const code: string = await window.go.main.App.GenerateInvite(serverID, userID)
+    const code: string = await App.GenerateInvite(serverID, userID)
     // Update local server's invite code
     servers = servers.map(s => s.id === serverID ? { ...s, invite_code: code } : s)
     return code
@@ -205,12 +198,12 @@ export async function generateInvite(serverID: string, userID: string): Promise<
 export async function redeemInvite(code: string, userID: string): Promise<ServerData | null> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const srv: ServerData = await window.go.main.App.RedeemInvite(code, userID)
-    if (!servers.find(s => s.id === srv.id)) {
-      servers = [...servers, srv]
+    const srv = await App.RedeemInvite(code, userID)
+    const data = srv as unknown as ServerData
+    if (!servers.find(s => s.id === data.id)) {
+      servers = [...servers, data]
     }
-    return srv
+    return data
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to join server'
     return null
@@ -219,8 +212,7 @@ export async function redeemInvite(code: string, userID: string): Promise<Server
 
 export async function getInviteInfo(code: string): Promise<InviteInfoData | null> {
   try {
-    // @ts-ignore - Wails binding
-    return await window.go.main.App.GetInviteInfo(code)
+    return await App.GetInviteInfo(code) as unknown as InviteInfoData
   } catch {
     return null
   }

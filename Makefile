@@ -123,12 +123,12 @@ generate: ## Generate code (bindings, mocks, etc.)
 
 migrate-up: ## Run database migrations up
 	@echo "$(BLUE)Running migrations...$(NC)"
-	go run cmd/concord/main.go migrate up
+	go run main.go migrate up
 	@echo "$(GREEN)Migrations complete$(NC)"
 
 migrate-down: ## Run database migrations down
 	@echo "$(BLUE)Rolling back migrations...$(NC)"
-	go run cmd/concord/main.go migrate down
+	go run main.go migrate down
 	@echo "$(GREEN)Rollback complete$(NC)"
 
 # Default target

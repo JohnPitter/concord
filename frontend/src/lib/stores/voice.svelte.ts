@@ -1,6 +1,8 @@
 // Voice store using Svelte 5 runes
 // Manages voice channel state via Wails bindings
 
+import * as App from '../../../wailsjs/go/main/App'
+
 export interface SpeakerData {
   peer_id: string
   user_id: string
@@ -44,8 +46,7 @@ export async function joinVoice(voiceChannelId: string): Promise<void> {
   error = null
 
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.JoinVoice(voiceChannelId)
+    await App.JoinVoice(voiceChannelId)
     state = 'connected'
     channelId = voiceChannelId
   } catch (e) {
@@ -58,8 +59,7 @@ export async function leaveVoice(): Promise<void> {
   if (state === 'disconnected') return
 
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.LeaveVoice()
+    await App.LeaveVoice()
   } catch (e) {
     console.error('Failed to leave voice channel:', e)
   } finally {
@@ -73,8 +73,7 @@ export async function leaveVoice(): Promise<void> {
 
 export async function toggleMute(): Promise<void> {
   try {
-    // @ts-ignore - Wails binding
-    const isMuted: boolean = await window.go.main.App.ToggleMute()
+    const isMuted: boolean = await App.ToggleMute()
     muted = isMuted
   } catch (e) {
     console.error('Failed to toggle mute:', e)
@@ -83,8 +82,7 @@ export async function toggleMute(): Promise<void> {
 
 export async function toggleDeafen(): Promise<void> {
   try {
-    // @ts-ignore - Wails binding
-    const isDeafened: boolean = await window.go.main.App.ToggleDeafen()
+    const isDeafened: boolean = await App.ToggleDeafen()
     deafened = isDeafened
     if (isDeafened) muted = true
   } catch (e) {
@@ -94,13 +92,12 @@ export async function toggleDeafen(): Promise<void> {
 
 export async function refreshVoiceStatus(): Promise<void> {
   try {
-    // @ts-ignore - Wails binding
-    const status: VoiceStatusData = await window.go.main.App.GetVoiceStatus()
-    state = status.state
+    const status = await App.GetVoiceStatus()
+    state = status.state as VoiceStatusData['state']
     channelId = status.channel_id || null
     muted = status.muted
     deafened = status.deafened
-    speakers = status.speakers ?? []
+    speakers = (status.speakers ?? []) as unknown as SpeakerData[]
   } catch (e) {
     console.error('Failed to refresh voice status:', e)
   }

@@ -1,6 +1,8 @@
 // Chat store using Svelte 5 runes
 // Manages messages for the active channel via Wails bindings
 
+import * as App from '../../../wailsjs/go/main/App'
+
 export interface MessageData {
   id: string
   channel_id: string
@@ -49,11 +51,11 @@ export async function loadMessages(channelID: string): Promise<void> {
   searchQuery = ''
 
   try {
-    // @ts-ignore - Wails binding
-    const result: MessageData[] = await window.go.main.App.GetMessages(channelID, '', '', 50)
+    const result = await App.GetMessages(channelID, '', '', 50)
     // API returns newest first, reverse for display (oldest at top)
-    messages = (result ?? []).reverse()
-    hasMore = (result?.length ?? 0) >= 50
+    const msgs = (result ?? []) as unknown as MessageData[]
+    messages = msgs.reverse()
+    hasMore = msgs.length >= 50
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load messages'
     messages = []
@@ -70,11 +72,10 @@ export async function loadOlderMessages(): Promise<void> {
 
   loading = true
   try {
-    // @ts-ignore - Wails binding
-    const result: MessageData[] = await window.go.main.App.GetMessages(
+    const result = await App.GetMessages(
       activeChannelId, oldestMessage.id, '', 50
     )
-    const older = (result ?? []).reverse()
+    const older = ((result ?? []) as unknown as MessageData[]).reverse()
     messages = [...older, ...messages]
     hasMore = (result?.length ?? 0) >= 50
   } catch (e) {
@@ -89,10 +90,10 @@ export async function sendMessage(channelID: string, authorID: string, content: 
   error = null
 
   try {
-    // @ts-ignore - Wails binding
-    const msg: MessageData = await window.go.main.App.SendMessage(channelID, authorID, content)
-    messages = [...messages, msg]
-    return msg
+    const msg = await App.SendMessage(channelID, authorID, content)
+    const data = msg as unknown as MessageData
+    messages = [...messages, data]
+    return data
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to send message'
     return null
@@ -104,9 +105,9 @@ export async function sendMessage(channelID: string, authorID: string, content: 
 export async function editMessage(messageID: string, authorID: string, content: string): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    const updated: MessageData = await window.go.main.App.EditMessage(messageID, authorID, content)
-    messages = messages.map(m => m.id === messageID ? updated : m)
+    const updated = await App.EditMessage(messageID, authorID, content)
+    const data = updated as unknown as MessageData
+    messages = messages.map(m => m.id === messageID ? data : m)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to edit message'
   }
@@ -115,8 +116,7 @@ export async function editMessage(messageID: string, authorID: string, content: 
 export async function deleteMessage(messageID: string, actorID: string, isManager: boolean): Promise<void> {
   error = null
   try {
-    // @ts-ignore - Wails binding
-    await window.go.main.App.DeleteMessage(messageID, actorID, isManager)
+    await App.DeleteMessage(messageID, actorID, isManager)
     messages = messages.filter(m => m.id !== messageID)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to delete message'
@@ -134,9 +134,8 @@ export async function searchMessages(channelID: string, query: string): Promise<
   error = null
 
   try {
-    // @ts-ignore - Wails binding
-    const results: SearchResultData[] = await window.go.main.App.SearchMessages(channelID, query, 20)
-    searchResults = results ?? []
+    const results = await App.SearchMessages(channelID, query, 20)
+    searchResults = (results ?? []) as unknown as SearchResultData[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'Search failed'
     searchResults = []
