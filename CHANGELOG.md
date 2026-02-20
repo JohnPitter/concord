@@ -58,6 +58,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ARCHITECTURE.md (comprehensive technical specification)
   - LICENSE (MIT)
 
+#### Phase 1.6: Layout Shell (2026-02-20)
+
+- Discord-like 4-panel layout (ServerSidebar, ChannelSidebar, MainContent, MemberSidebar)
+- ServerSidebar: server icons with active indicator, notification dots, home/add buttons
+- ChannelSidebar: server name header, text/voice channel list with unread badges, user panel with mic/deafen/settings
+- MainContent: channel header with search/members actions, welcome message, mock chat messages, message input bar
+- MemberSidebar: online/offline member groups with avatar, status, and role display
+- All layout components in `frontend/src/lib/components/layout/`
+- Mock data for servers, channels, members, and messages
+
 #### Phase 1.2: Void Design System (2026-02-20)
 
 - Frontend scaffolding with Svelte 5 + Vite + TailwindCSS v4 + TypeScript
