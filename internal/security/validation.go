@@ -23,8 +23,8 @@ type Validator struct {
 // Complexity: O(1)
 func NewValidator() *Validator {
 	return &Validator{
-		MaxInputLength: 10000,   // 10KB
-		MaxURLLength:   2048,    // Standard URL max length
+		MaxInputLength: 10000, // 10KB
+		MaxURLLength:   2048,  // Standard URL max length
 		AllowedSchemes: []string{"http", "https"},
 	}
 }

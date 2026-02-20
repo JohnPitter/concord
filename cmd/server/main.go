@@ -53,9 +53,14 @@ func main() {
 
 	// TODO: Expose metrics endpoint on :9090/metrics
 	// TODO: Expose health endpoint on :9090/health
-	// For now, just log that they're tracked
-	_ = metrics // Will be used when HTTP server is implemented
-	_ = health  // Will be used when health endpoint is implemented
+	// These will be integrated in Phase 9 when HTTP server is implemented
+
+	// Register health checks for infrastructure components
+	// More checks will be added as components are implemented (DB, Redis, P2P, etc.)
+	logger.Debug().
+		Str("metrics_component", fmt.Sprintf("%T", metrics)).
+		Str("health_component", fmt.Sprintf("%T", health)).
+		Msg("observability components initialized")
 
 	// TODO: Initialize database (PostgreSQL)
 	// TODO: Initialize Redis

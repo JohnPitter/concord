@@ -190,10 +190,10 @@ type BruteForceProtector struct {
 
 // attemptTracker tracks failed attempts for a specific key
 type attemptTracker struct {
-	count       int
+	count        int
 	firstAttempt time.Time
-	lockUntil   time.Time
-	mu          sync.Mutex
+	lockUntil    time.Time
+	mu           sync.Mutex
 }
 
 // NewBruteForceProtector creates a new brute force protector

@@ -1,13 +1,29 @@
 package observability
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	testMetrics     *Metrics
+	testMetricsOnce sync.Once
+)
+
+// getTestMetrics returns a singleton metrics instance for all tests
+// This prevents duplicate Prometheus registration errors since metrics
+// are registered globally
+func getTestMetrics() *Metrics {
+	testMetricsOnce.Do(func() {
+		testMetrics = NewMetrics()
+	})
+	return testMetrics
+}
+
 func TestNewMetrics(t *testing.T) {
-	metrics := NewMetrics()
+	metrics := getTestMetrics()
 	assert.NotNil(t, metrics)
 	assert.NotNil(t, metrics.MessagesSent)
 	assert.NotNil(t, metrics.MessagesReceived)
@@ -21,28 +37,28 @@ func TestNewMetrics(t *testing.T) {
 }
 
 func TestMetrics_IncrementMessagesSent(t *testing.T) {
-	metrics := NewMetrics()
+	metrics := getTestMetrics()
 
 	metrics.MessagesSent.WithLabelValues("server-1", "channel-1", "text").Inc()
 	metrics.MessagesSent.WithLabelValues("server-1", "channel-2", "text").Inc()
 }
 
 func TestMetrics_RecordVoiceLatency(t *testing.T) {
-	metrics := NewMetrics()
+	metrics := getTestMetrics()
 
 	metrics.VoiceLatency.WithLabelValues("channel-1").Observe(50.0)
 	metrics.VoiceLatency.WithLabelValues("channel-2").Observe(25.0)
 }
 
 func TestMetrics_SetActiveP2PConnections(t *testing.T) {
-	metrics := NewMetrics()
+	metrics := getTestMetrics()
 
 	metrics.P2PActiveConnections.WithLabelValues("direct").Set(42)
 	metrics.P2PActiveConnections.WithLabelValues("relay").Set(15)
 }
 
 func TestMetrics_RecordHTTPRequest(t *testing.T) {
-	metrics := NewMetrics()
+	metrics := getTestMetrics()
 
 	metrics.HTTPRequestsTotal.WithLabelValues("POST", "/api/messages", "200").Inc()
 	metrics.HTTPRequestDuration.WithLabelValues("POST", "/api/messages").Observe(100.0)

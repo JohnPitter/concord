@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -120,6 +119,10 @@ func (m *Migrator) Rollback(ctx context.Context) error {
 
 // Status returns the current migration status
 func (m *Migrator) Status(ctx context.Context) ([]Migration, error) {
+	// Ensure migrations table exists before querying
+	if err := m.ensureMigrationsTable(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ensure migrations table: %w", err)
+	}
 	return m.getAppliedMigrations(ctx)
 }
 
@@ -193,7 +196,8 @@ func (m *Migrator) loadMigrations() ([]Migration, error) {
 		}
 
 		// Read migration SQL
-		sql, err := migrationFiles.ReadFile(filepath.Join("migrations", entry.Name()))
+		// Note: embed.FS always uses forward slashes, not filepath.Join which uses OS separators
+		sql, err := migrationFiles.ReadFile("migrations/" + entry.Name())
 		if err != nil {
 			return nil, fmt.Errorf("failed to read migration %s: %w", entry.Name(), err)
 		}

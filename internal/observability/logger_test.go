@@ -43,7 +43,10 @@ func TestNewLogger(t *testing.T) {
 	})
 
 	t.Run("creates logger with file output", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		// Note: Using a persistent temp directory instead of t.TempDir()
+		// because NewLogger keeps the file open and Windows can't clean up open files
+		tmpDir, err := os.MkdirTemp("", "concord_logger_test_*")
+		require.NoError(t, err)
 		logFile := filepath.Join(tmpDir, "test.log")
 
 		cfg := LoggerConfig{
@@ -62,9 +65,16 @@ func TestNewLogger(t *testing.T) {
 		// Write a log message
 		logger.Info().Msg("test message")
 
-		// Verify file was created
-		_, err := os.Stat(logFile)
+		// Verify file was created (but don't immediately clean up due to open file handle)
+		_, err = os.Stat(logFile)
 		assert.NoError(t, err)
+
+		// Clean up is deferred - the OS will clean up temp dirs eventually
+		// In production, log files stay open for the lifetime of the application
+		t.Cleanup(func() {
+			// Best-effort cleanup - may fail on Windows if file is still open
+			os.RemoveAll(tmpDir)
+		})
 	})
 }
 

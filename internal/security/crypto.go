@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -25,10 +26,10 @@ type CryptoManager struct {
 // NewCryptoManager creates a new crypto manager with secure defaults
 func NewCryptoManager() *CryptoManager {
 	return &CryptoManager{
-		argon2Time:    1,      // Number of iterations
-		argon2Memory:  64*1024, // 64 MB
-		argon2Threads: 4,      // Number of threads
-		argon2KeyLen:  32,     // 256-bit key
+		argon2Time:    1,         // Number of iterations
+		argon2Memory:  64 * 1024, // 64 MB
+		argon2Threads: 4,         // Number of threads
+		argon2KeyLen:  32,        // 256-bit key
 	}
 }
 
@@ -68,17 +69,23 @@ func (cm *CryptoManager) HashPassword(password string) (string, error) {
 // VerifyPassword verifies a password against its hash
 // Complexity: O(memory * time) - same as hashing
 func (cm *CryptoManager) VerifyPassword(password, encodedHash string) (bool, error) {
-	// Parse the encoded hash
+	// Parse the encoded hash by splitting on $
+	// Format: $argon2id$v=19$m=65536,t=1,p=4$salt$hash
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 {
+		return false, fmt.Errorf("invalid hash format: expected 6 parts, got %d", len(parts))
+	}
+
+	// Parse parameters from parts[3]: "m=65536,t=1,p=4"
 	var memory, time uint32
 	var threads uint8
-	var saltEncoded, hashEncoded string
-
-	_, err := fmt.Sscanf(encodedHash, "$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
-		&memory, &time, &threads, &saltEncoded, &hashEncoded,
-	)
+	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
 	if err != nil {
-		return false, fmt.Errorf("invalid hash format: %w", err)
+		return false, fmt.Errorf("invalid hash parameters: %w", err)
 	}
+
+	saltEncoded := parts[4]
+	hashEncoded := parts[5]
 
 	// Decode salt and hash
 	salt, err := base64.RawStdEncoding.DecodeString(saltEncoded)
