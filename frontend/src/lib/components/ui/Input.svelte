@@ -8,11 +8,12 @@
 
   let {
     type = 'text',
+    value = $bindable(''),
     error,
     label,
     disabled = false,
     ...rest
-  }: Props = $props()
+  }: Props & { value?: string } = $props()
 
   let showPassword = $state(false)
   const inputType = $derived(type === 'password' && showPassword ? 'text' : type)
@@ -26,6 +27,7 @@
   <div class="relative">
     <input
       type={inputType}
+      bind:value
       class="w-full rounded-md border bg-void-bg-secondary px-3 py-2 text-sm text-void-text-primary placeholder:text-void-text-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-void-accent disabled:pointer-events-none disabled:opacity-50
         {error ? 'border-void-danger focus:ring-void-danger' : 'border-void-border hover:border-void-text-muted focus:border-void-accent'}"
       {disabled}
