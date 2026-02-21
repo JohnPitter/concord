@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-21
+
+### Added
+
+#### P2P Onboarding — Seleção de Modo no Boot
+
+- **Mode selector screen** (`ModeSelector.svelte`): primeira tela ao abrir o app, permite escolher entre modo P2P e Servidor Oficial
+- **P2P profile screen** (`P2PProfile.svelte`): criação de identidade local (nome + avatar) para modo P2P sem conta
+- **Boot routing** (`App.svelte`): roteamento de boot por `networkMode` — `null→ModeSelector`, `p2p+sem-perfil→P2PProfile`, `p2p+perfil→P2P placeholder`, `server→fluxo GitHub OAuth`
+- **Settings store** (`settings.svelte.ts`): novos campos `networkMode: 'p2p'|'server'|null` e `p2pProfile: {displayName, avatarDataUrl?}`, persistidos no localStorage
+- **`SelectAvatarFile` Wails binding** (`main.go`): diálogo nativo de seleção de imagem que retorna data URL base64
+- **`RoomCode()` e `RoomRendezvous()`** (`internal/network/p2p/room.go`): código de sala determinístico e legível gerado do peer ID (e.g. `"amber-4271"`)
+- **P2P Wails bindings** (`main.go`): `GetP2PRoomCode`, `JoinP2PRoom`, `GetP2PPeers` expostos ao frontend
+- Testes unitários para `RoomCode` (determinismo e formato)
+
 ## [1.0.0] - 2026-02-20
 
 ### Added
