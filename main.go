@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -410,6 +413,30 @@ func (a *App) DisableTranslation() error {
 // GetTranslationStatus returns the current translation service status.
 func (a *App) GetTranslationStatus() translation.Status {
 	return a.translationService.GetStatus()
+}
+
+// SelectAvatarFile abre diálogo de seleção de arquivo de imagem e retorna
+// o conteúdo como data URL base64 para armazenamento local.
+// Complexity: O(n) onde n é o tamanho do arquivo de imagem.
+func (a *App) SelectAvatarFile() (string, error) {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Escolha seu avatar",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Imagens", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp"},
+		},
+	})
+	if err != nil || path == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read avatar file: %w", err)
+	}
+
+	mimeType := http.DetectContentType(data)
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
 
 func main() {

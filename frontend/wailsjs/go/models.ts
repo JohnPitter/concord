@@ -111,10 +111,8 @@ export namespace chat {
 	    author_id: string;
 	    content: string;
 	    type: string;
-	    // Go type: time
-	    edited_at?: any;
-	    // Go type: time
-	    created_at: any;
+	    edited_at?: string;
+	    created_at: string;
 	    author_name?: string;
 	    author_avatar?: string;
 	
@@ -129,29 +127,11 @@ export namespace chat {
 	        this.author_id = source["author_id"];
 	        this.content = source["content"];
 	        this.type = source["type"];
-	        this.edited_at = this.convertValues(source["edited_at"], null);
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.edited_at = source["edited_at"];
+	        this.created_at = source["created_at"];
 	        this.author_name = source["author_name"];
 	        this.author_avatar = source["author_avatar"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class SearchResult {
 	    id: string;
@@ -159,10 +139,8 @@ export namespace chat {
 	    author_id: string;
 	    content: string;
 	    type: string;
-	    // Go type: time
-	    edited_at?: any;
-	    // Go type: time
-	    created_at: any;
+	    edited_at?: string;
+	    created_at: string;
 	    author_name?: string;
 	    author_avatar?: string;
 	    snippet: string;
@@ -178,30 +156,12 @@ export namespace chat {
 	        this.author_id = source["author_id"];
 	        this.content = source["content"];
 	        this.type = source["type"];
-	        this.edited_at = this.convertValues(source["edited_at"], null);
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.edited_at = source["edited_at"];
+	        this.created_at = source["created_at"];
 	        this.author_name = source["author_name"];
 	        this.author_avatar = source["author_avatar"];
 	        this.snippet = source["snippet"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 
 }
@@ -216,8 +176,7 @@ export namespace files {
 	    mime_type: string;
 	    hash: string;
 	    local_path?: string;
-	    // Go type: time
-	    created_at: any;
+	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Attachment(source);
@@ -232,26 +191,8 @@ export namespace files {
 	        this.mime_type = source["mime_type"];
 	        this.hash = source["hash"];
 	        this.local_path = source["local_path"];
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.created_at = source["created_at"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 
 }
@@ -263,8 +204,7 @@ export namespace observability {
 	    status: string;
 	    message?: string;
 	    error?: string;
-	    // Go type: time
-	    timestamp: any;
+	    timestamp: string;
 	    duration_ms: number;
 	
 	    static createFrom(source: any = {}) {
@@ -277,32 +217,13 @@ export namespace observability {
 	        this.status = source["status"];
 	        this.message = source["message"];
 	        this.error = source["error"];
-	        this.timestamp = this.convertValues(source["timestamp"], null);
+	        this.timestamp = source["timestamp"];
 	        this.duration_ms = source["duration_ms"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class Health {
 	    status: string;
-	    // Go type: time
-	    timestamp: any;
+	    timestamp: string;
 	    components: Record<string, ComponentHealth>;
 	    version: string;
 	    uptime_seconds: number;
@@ -314,7 +235,7 @@ export namespace observability {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.status = source["status"];
-	        this.timestamp = this.convertValues(source["timestamp"], null);
+	        this.timestamp = source["timestamp"];
 	        this.components = this.convertValues(source["components"], ComponentHealth, true);
 	        this.version = source["version"];
 	        this.uptime_seconds = source["uptime_seconds"];
@@ -349,8 +270,7 @@ export namespace server {
 	    name: string;
 	    type: string;
 	    position: number;
-	    // Go type: time
-	    created_at: any;
+	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Channel(source);
@@ -363,26 +283,8 @@ export namespace server {
 	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.position = source["position"];
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.created_at = source["created_at"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class InviteInfo {
 	    server_id: string;
@@ -408,8 +310,7 @@ export namespace server {
 	    username: string;
 	    avatar_url: string;
 	    role: string;
-	    // Go type: time
-	    joined_at: any;
+	    joined_at: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Member(source);
@@ -422,26 +323,8 @@ export namespace server {
 	        this.username = source["username"];
 	        this.avatar_url = source["avatar_url"];
 	        this.role = source["role"];
-	        this.joined_at = this.convertValues(source["joined_at"], null);
+	        this.joined_at = source["joined_at"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class Server {
 	    id: string;
@@ -449,8 +332,7 @@ export namespace server {
 	    icon_url: string;
 	    owner_id: string;
 	    invite_code: string;
-	    // Go type: time
-	    created_at: any;
+	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
@@ -463,26 +345,8 @@ export namespace server {
 	        this.icon_url = source["icon_url"];
 	        this.owner_id = source["owner_id"];
 	        this.invite_code = source["invite_code"];
-	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.created_at = source["created_at"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 
 }

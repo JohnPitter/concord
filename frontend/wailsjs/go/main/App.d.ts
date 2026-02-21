@@ -71,6 +71,8 @@ export function RestoreSession(arg1:string):Promise<auth.AuthState>;
 
 export function SearchMessages(arg1:string,arg2:string,arg3:number):Promise<Array<chat.SearchResult>>;
 
+export function SelectAvatarFile():Promise<string>;
+
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
 
 export function StartLogin():Promise<auth.DeviceCodeResponse>;

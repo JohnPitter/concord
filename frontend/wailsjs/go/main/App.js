@@ -126,6 +126,10 @@ export function SearchMessages(arg1, arg2, arg3) {
   return window['go']['main']['App']['SearchMessages'](arg1, arg2, arg3);
 }
 
+export function SelectAvatarFile() {
+  return window['go']['main']['App']['SelectAvatarFile']();
+}
+
 export function SendMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendMessage'](arg1, arg2, arg3);
 }
