@@ -114,8 +114,10 @@
 
     <!-- DM list -->
     {#each dms as dm}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div class="px-2">
-        <button
+        <div
           class="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer
             {activeDMId === dm.id
               ? 'bg-void-bg-hover text-void-text-primary'
@@ -158,7 +160,7 @@
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-        </button>
+        </div>
       </div>
     {/each}
   </div>
