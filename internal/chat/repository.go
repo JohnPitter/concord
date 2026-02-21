@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -70,7 +71,8 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Message, error) {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
 	if editedAt.Valid {
-		msg.EditedAt = &editedAt.Time
+		s := editedAt.Time.UTC().Format(time.RFC3339)
+		msg.EditedAt = &s
 	}
 	return &msg, nil
 }
@@ -136,7 +138,8 @@ func (r *Repository) GetByChannel(ctx context.Context, channelID string, opts Pa
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 		if editedAt.Valid {
-			msg.EditedAt = &editedAt.Time
+			s := editedAt.Time.UTC().Format(time.RFC3339)
+			msg.EditedAt = &s
 		}
 		messages = append(messages, &msg)
 	}
@@ -215,7 +218,8 @@ func (r *Repository) Search(ctx context.Context, channelID, query string, limit 
 			return nil, fmt.Errorf("failed to scan search result: %w", err)
 		}
 		if editedAt.Valid {
-			sr.EditedAt = &editedAt.Time
+			s := editedAt.Time.UTC().Format(time.RFC3339)
+			sr.EditedAt = &s
 		}
 		results = append(results, &sr)
 	}

@@ -67,7 +67,7 @@ func (s *Service) Upload(ctx context.Context, messageID, filename string, data [
 			MimeType:  result.MimeType,
 			Hash:      hash,
 			LocalPath: existing.LocalPath,
-			CreatedAt: time.Now().UTC(),
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		}
 		if err := s.repo.Save(ctx, att); err != nil {
 			return nil, err
@@ -99,7 +99,7 @@ func (s *Service) Upload(ctx context.Context, messageID, filename string, data [
 		MimeType:  result.MimeType,
 		Hash:      hash,
 		LocalPath: localPath,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
 	if err := s.repo.Save(ctx, att); err != nil {

@@ -24,21 +24,21 @@ type HealthCheck func(ctx context.Context) error
 
 // ComponentHealth represents the health status of a single component
 type ComponentHealth struct {
-	Name      string        `json:"name"`
-	Status    HealthStatus  `json:"status"`
-	Message   string        `json:"message,omitempty"`
-	Error     string        `json:"error,omitempty"`
-	Timestamp time.Time     `json:"timestamp"`
-	Duration  time.Duration `json:"duration_ms"`
+	Name      string       `json:"name"`
+	Status    HealthStatus `json:"status"`
+	Message   string       `json:"message,omitempty"`
+	Error     string       `json:"error,omitempty"`
+	Timestamp string       `json:"timestamp"`   // ISO 8601
+	Duration  int64        `json:"duration_ms"` // milliseconds
 }
 
 // Health represents the overall health status of the application
 type Health struct {
 	Status     HealthStatus               `json:"status"`
-	Timestamp  time.Time                  `json:"timestamp"`
+	Timestamp  string                     `json:"timestamp"` // ISO 8601
 	Components map[string]ComponentHealth `json:"components"`
 	Version    string                     `json:"version"`
-	Uptime     time.Duration              `json:"uptime_seconds"`
+	Uptime     int64                      `json:"uptime_seconds"` // seconds
 }
 
 // HealthChecker manages health checks for various components
@@ -141,10 +141,10 @@ func (hc *HealthChecker) Check(ctx context.Context) *Health {
 
 	return &Health{
 		Status:     overallStatus,
-		Timestamp:  time.Now(),
+		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
 		Components: components,
 		Version:    hc.version,
-		Uptime:     time.Since(hc.startTime),
+		Uptime:     int64(time.Since(hc.startTime).Seconds()),
 	}
 }
 
@@ -167,8 +167,8 @@ func (hc *HealthChecker) runCheck(ctx context.Context, name string, check Health
 
 	health := ComponentHealth{
 		Name:      name,
-		Timestamp: time.Now(),
-		Duration:  duration,
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		Duration:  duration.Milliseconds(),
 	}
 
 	if err != nil {
@@ -205,7 +205,7 @@ func (hc *HealthChecker) getCachedHealth(name string) (ComponentHealth, bool) {
 	}
 
 	// Check if cache is still valid
-	if time.Since(cached.Timestamp) > hc.cacheTTL {
+	if t, err := time.Parse(time.RFC3339Nano, cached.Timestamp); err != nil || time.Since(t) > hc.cacheTTL {
 		return ComponentHealth{}, false
 	}
 

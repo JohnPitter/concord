@@ -1,17 +1,15 @@
 package files
 
-import "time"
-
 // Attachment represents a file attached to a chat message.
 type Attachment struct {
-	ID        string    `json:"id"`
-	MessageID string    `json:"message_id"`
-	Filename  string    `json:"filename"`
-	SizeBytes int64     `json:"size_bytes"`
-	MimeType  string    `json:"mime_type"`
-	Hash      string    `json:"hash"`
-	LocalPath string    `json:"local_path,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string `json:"id"`
+	MessageID string `json:"message_id"`
+	Filename  string `json:"filename"`
+	SizeBytes int64  `json:"size_bytes"`
+	MimeType  string `json:"mime_type"`
+	Hash      string `json:"hash"`
+	LocalPath string `json:"local_path,omitempty"`
+	CreatedAt string `json:"created_at"` // ISO 8601
 }
 
 // FileOffer is sent to a peer to initiate a file transfer.

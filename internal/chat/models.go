@@ -1,16 +1,14 @@
 package chat
 
-import "time"
-
 // Message represents a text message in a channel.
 type Message struct {
-	ID        string     `json:"id"`
-	ChannelID string     `json:"channel_id"`
-	AuthorID  string     `json:"author_id"`
-	Content   string     `json:"content"`
-	Type      string     `json:"type"` // "text", "file", "system"
-	EditedAt  *time.Time `json:"edited_at,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        string  `json:"id"`
+	ChannelID string  `json:"channel_id"`
+	AuthorID  string  `json:"author_id"`
+	Content   string  `json:"content"`
+	Type      string  `json:"type"` // "text", "file", "system"
+	EditedAt  *string `json:"edited_at,omitempty"` // ISO 8601
+	CreatedAt string  `json:"created_at"`          // ISO 8601
 	// Joined fields (from users table)
 	AuthorName   string `json:"author_name,omitempty"`
 	AuthorAvatar string `json:"author_avatar,omitempty"`
