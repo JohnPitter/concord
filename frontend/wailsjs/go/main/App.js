@@ -30,12 +30,20 @@ export function DeleteServer(arg1, arg2) {
   return window['go']['main']['App']['DeleteServer'](arg1, arg2);
 }
 
+export function DisableTranslation() {
+  return window['go']['main']['App']['DisableTranslation']();
+}
+
 export function DownloadFile(arg1) {
   return window['go']['main']['App']['DownloadFile'](arg1);
 }
 
 export function EditMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['EditMessage'](arg1, arg2, arg3);
+}
+
+export function EnableTranslation(arg1, arg2) {
+  return window['go']['main']['App']['EnableTranslation'](arg1, arg2);
 }
 
 export function GenerateInvite(arg1, arg2) {
@@ -60,6 +68,10 @@ export function GetMessages(arg1, arg2, arg3, arg4) {
 
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
+}
+
+export function GetTranslationStatus() {
+  return window['go']['main']['App']['GetTranslationStatus']();
 }
 
 export function GetVersion() {

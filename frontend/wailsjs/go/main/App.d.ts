@@ -5,6 +5,7 @@ import {server} from '../models';
 import {chat} from '../models';
 import {files} from '../models';
 import {observability} from '../models';
+import {translation} from '../models';
 import {version} from '../models';
 import {voice} from '../models';
 
@@ -22,9 +23,13 @@ export function DeleteMessage(arg1:string,arg2:string,arg3:boolean):Promise<void
 
 export function DeleteServer(arg1:string,arg2:string):Promise<void>;
 
+export function DisableTranslation():Promise<void>;
+
 export function DownloadFile(arg1:string):Promise<Array<number>>;
 
 export function EditMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
+
+export function EnableTranslation(arg1:string,arg2:string):Promise<void>;
 
 export function GenerateInvite(arg1:string,arg2:string):Promise<string>;
 
@@ -37,6 +42,8 @@ export function GetInviteInfo(arg1:string):Promise<server.InviteInfo>;
 export function GetMessages(arg1:string,arg2:string,arg3:string,arg4:number):Promise<Array<chat.Message>>;
 
 export function GetServer(arg1:string):Promise<server.Server>;
+
+export function GetTranslationStatus():Promise<translation.Status>;
 
 export function GetVersion():Promise<version.Info>;
 

@@ -487,6 +487,33 @@ export namespace server {
 
 }
 
+export namespace translation {
+	
+	export class Status {
+	    enabled: boolean;
+	    source_lang: string;
+	    target_lang: string;
+	    circuit_breaker_open: boolean;
+	    cache_entries: number;
+	    pipeline_active: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.source_lang = source["source_lang"];
+	        this.target_lang = source["target_lang"];
+	        this.circuit_breaker_open = source["circuit_breaker_open"];
+	        this.cache_entries = source["cache_entries"];
+	        this.pipeline_active = source["pipeline_active"];
+	    }
+	}
+
+}
+
 export namespace version {
 	
 	export class Info {
