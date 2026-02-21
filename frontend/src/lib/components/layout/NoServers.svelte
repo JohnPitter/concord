@@ -1,4 +1,6 @@
 <script lang="ts">
+  import logoSvg from '../../../assets/logo.svg'
+
   let {
     onCreateServer,
     onJoinServer,
@@ -11,18 +13,7 @@
 <div class="flex flex-1 flex-col items-center justify-center gap-6 bg-void-bg-tertiary select-none">
   <!-- Logo mark -->
   <div class="flex h-20 w-20 items-center justify-center rounded-3xl bg-void-bg-secondary shadow-lg">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="52" height="52">
-      <defs>
-        <linearGradient id="g-ns" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#4ade80"/>
-          <stop offset="100%" stop-color="#16a34a"/>
-        </linearGradient>
-      </defs>
-      <path fill="url(#g-ns)" d="M 58,6 C 89,6 114,22 120,48 C 121,52 118,56 114,56 C 110,56 107,53 106,50 C 102,30 82,18 58,18 C 28,18 10,38 10,59 C 10,80 28,100 58,100 C 82,100 102,88 106,68 C 107,65 110,62 114,62 C 118,62 121,66 120,70 C 114,96 89,112 58,112 L 42,112 L 16,126 L 22,108 C 8,100 -2,82 -2,59 C -2,28 22,6 58,6 Z"/>
-      <path d="M 40,47 A 17,17 0 0 1 40,71" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.95"/>
-      <path d="M 54,39 A 26,26 0 0 1 54,79" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" opacity="0.6"/>
-      <path d="M 68,32 A 34,34 0 0 1 68,86" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity="0.3"/>
-    </svg>
+    <img src={logoSvg} alt="Concord" width="52" height="52" />
   </div>
 
   <div class="text-center">

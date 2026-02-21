@@ -2,6 +2,7 @@
   import Avatar from '../ui/Avatar.svelte'
   import FileAttachment from './FileAttachment.svelte'
   import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
+  import { getSettings } from '../../stores/settings.svelte'
 
   let {
     message,
@@ -23,7 +24,32 @@
     onDeleteFile?: (id: string) => void
   } = $props()
 
+  const settings = getSettings()
+
   let showActions = $state(false)
+  let translatedText = $state<string | null>(null)
+  let translating = $state(false)
+
+  async function translateMessage() {
+    if (translatedText) {
+      // Toggle off
+      translatedText = null
+      return
+    }
+    translating = true
+    try {
+      const src = settings.translationSourceLang
+      const tgt = settings.translationTargetLang
+      const text = encodeURIComponent(message.content)
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${text}&langpair=${src}|${tgt}`)
+      const data = await res.json()
+      translatedText = data?.responseData?.translatedText ?? null
+    } catch {
+      translatedText = '[Erro na tradução]'
+    } finally {
+      translating = false
+    }
+  }
 
   function formatTime(dateStr: string): string {
     const date = new Date(dateStr)
@@ -72,6 +98,13 @@
 
     <p class="text-sm leading-relaxed text-void-text-secondary break-words whitespace-pre-wrap">{message.content}</p>
 
+    {#if translatedText}
+      <div class="mt-1 rounded border-l-2 border-void-accent pl-2">
+        <p class="text-xs text-void-text-muted mb-0.5">Tradução ({settings.translationTargetLang.toUpperCase()})</p>
+        <p class="text-sm text-void-text-secondary break-words whitespace-pre-wrap">{translatedText}</p>
+      </div>
+    {/if}
+
     {#if attachments.length > 0}
       <div class="mt-1 flex flex-wrap gap-1">
         {#each attachments as att (att.id)}
@@ -87,8 +120,23 @@
   </div>
 
   <!-- Action buttons -->
-  {#if showActions && (isOwn || onDelete)}
+  {#if showActions}
     <div class="flex shrink-0 items-start gap-1 pt-0.5">
+      <!-- Translate button -->
+      <button
+        class="rounded p-1 transition-colors {translatedText ? 'text-void-accent' : 'text-void-text-muted hover:bg-void-bg-tertiary hover:text-void-text-primary'}"
+        onclick={translateMessage}
+        aria-label="Translate message"
+        disabled={translating}
+      >
+        {#if translating}
+          <div class="h-4 w-4 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
+        {:else}
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12.913 17H20.087M12.913 17L11 21M12.913 17L16.5 9L20.087 17M2 5H12M7 2V5M11 5C9.72 8.33 7.5 11.17 5 13.5M8 17C6.18 15.27 4.56 13.42 3.18 11.36" />
+          </svg>
+        {/if}
+      </button>
       {#if isOwn && onEdit}
         <button
           class="rounded p-1 text-void-text-muted transition-colors hover:bg-void-bg-tertiary hover:text-void-text-primary"

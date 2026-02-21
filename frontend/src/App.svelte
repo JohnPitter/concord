@@ -3,19 +3,26 @@
   import {
     getServers, loadUserServers, selectServer,
     createServer, redeemInvite, generateInvite,
+    createChannel, deleteChannel, updateServer, deleteServer,
+    updateMemberRole, kickMember,
   } from './lib/stores/servers.svelte'
   import {
     getChat, loadMessages, loadOlderMessages,
     sendMessage, editMessage, deleteMessage, resetChat,
     uploadFile, downloadFile, deleteAttachment, loadAttachments,
+    searchMessages, clearSearch,
   } from './lib/stores/chat.svelte'
   import {
     getVoice, joinVoice, leaveVoice,
     toggleMute, toggleDeafen, resetVoice,
+    toggleNoiseSuppression, toggleScreenSharing,
+    setLocalUsername,
   } from './lib/stores/voice.svelte'
-  import { getSettings, loadSettings, setNetworkMode, setP2PProfile } from './lib/stores/settings.svelte'
+  import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode } from './lib/stores/settings.svelte'
   import {
     getFriends, loadFriends, setFriendsTab, openDM,
+    sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
+    removeFriend, blockUser, unblockUser,
   } from './lib/stores/friends.svelte'
 
   import Login from './lib/components/auth/Login.svelte'
@@ -32,6 +39,7 @@
   import FriendsList from './lib/components/layout/FriendsList.svelte'
   import ActiveNow from './lib/components/layout/ActiveNow.svelte'
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
+  import ServerInfoModal from './lib/components/server/ServerInfoModal.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
 
   const auth = getAuth()
@@ -54,6 +62,7 @@
   let showJoinServer = $state(false)
   let showSettings = $state(false)
   let showMembers = $state(false)
+  let showServerInfo = $state(false)
   let activeChannelId = $state<string | null>(null)
 
   const isHome = $derived(activeServerId === 'home')
@@ -69,6 +78,7 @@
     if (auth.authenticated && auth.user) {
       loadUserServers(auth.user.id)
       loadFriends()
+      setLocalUsername(auth.user.username)
     }
   })
 
@@ -142,7 +152,7 @@
       name: m.username,
       avatarUrl: m.avatar_url || undefined,
       status: 'online' as const,
-      role: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : m.role === 'moderator' ? 'Moderator' : undefined,
+      role: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : m.role === 'moderator' ? 'Moderator' : 'Member',
     }))
   )
 
@@ -227,6 +237,10 @@
       ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url }
       : null
   )
+
+  const currentUserRole = $derived(
+    auth.user ? (srv.members.find(m => m.user_id === auth.user!.id)?.role ?? 'member') : 'member'
+  )
 </script>
 
 {#if needsModeSelection}
@@ -236,7 +250,11 @@
   <P2PProfile onConfirm={handleP2PProfileConfirm} />
 
 {:else if isP2PMode}
-  <P2PApp profile={settings.p2pProfile} />
+  <P2PApp
+    profile={settings.p2pProfile}
+    onLogout={async () => { await leaveVoice(); resetMode() }}
+    onSwitchMode={async () => { await leaveVoice(); resetMode() }}
+  />
 
 {:else if auth.loading}
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
@@ -276,21 +294,70 @@
         voiceMuted={vc.muted}
         voiceDeafened={vc.deafened}
         voiceSpeakers={vc.speakers}
+        voiceNoiseSuppression={vc.noiseSuppression}
+        voiceScreenSharing={vc.screenSharing}
         onToggleMute={toggleMute}
         onToggleDeafen={toggleDeafen}
+        onToggleNoiseSuppression={toggleNoiseSuppression}
+        onToggleScreenShare={toggleScreenSharing}
         onLeaveVoice={leaveVoice}
         onOpenSettings={() => showSettings = true}
       />
 
-      <!-- Col 3: Friends list (flex-1) -->
-      <FriendsList
-        friends={friends.friends}
-        tab={friends.tab}
-        onTabChange={(t) => setFriendsTab(t)}
-      />
+      {#if friends.activeDMId && friends.activeDM}
+        <!-- DM conversation view -->
+        <div class="flex flex-1 flex-col bg-void-bg-tertiary overflow-hidden animate-fade-in">
+          <header class="flex h-12 items-center gap-2 border-b border-void-border px-4 shrink-0">
+            <div class="h-6 w-6 rounded-full bg-void-accent flex items-center justify-center text-[10px] font-bold text-white">
+              {friends.activeDM.display_name.slice(0, 2).toUpperCase()}
+            </div>
+            <span class="font-bold text-void-text-primary text-sm">{friends.activeDM.display_name}</span>
+          </header>
+          <div class="flex-1 flex items-center justify-center">
+            <div class="text-center px-6">
+              <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-void-accent/20 flex items-center justify-center">
+                <span class="text-xl font-bold text-void-accent">{friends.activeDM.display_name.slice(0, 2).toUpperCase()}</span>
+              </div>
+              <h3 class="text-lg font-bold text-void-text-primary mb-1">{friends.activeDM.display_name}</h3>
+              <p class="text-sm text-void-text-muted">Este e o inicio da conversa com <strong class="text-void-text-secondary">{friends.activeDM.display_name}</strong>.</p>
+            </div>
+          </div>
+          <div class="border-t border-void-border p-4 shrink-0">
+            <div class="flex items-center gap-2 rounded-lg bg-void-bg-primary px-3 py-2.5">
+              <input
+                type="text"
+                placeholder="Enviar mensagem para {friends.activeDM.display_name}"
+                class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      {:else}
+        <!-- Col 3: Friends list (flex-1) -->
+        <FriendsList
+          friends={friends.friends}
+          pendingRequests={friends.pendingRequests}
+          tab={friends.tab}
+          addFriendError={friends.addFriendError}
+          addFriendSuccess={friends.addFriendSuccess}
+          onTabChange={(t) => setFriendsTab(t)}
+          onAddFriend={(username) => sendFriendRequest(username)}
+          onAcceptRequest={(id) => acceptFriendRequest(id)}
+          onRejectRequest={(id) => rejectFriendRequest(id)}
+          onRemoveFriend={(id) => removeFriend(id)}
+          onBlockUser={(id) => blockUser(id)}
+          onUnblockUser={(username) => unblockUser(username)}
+          onMessage={(friendId) => openDM(`dm-${friendId}`)}
+        />
 
-      <!-- Col 4: Active Now (340px) -->
-      <ActiveNow friends={friends.friends} />
+        <!-- Col 4: Active Now (340px) -->
+        <ActiveNow
+          friends={friends.friends}
+          voiceSpeakers={vc.speakers}
+          voiceConnected={vc.connected}
+          currentServerName={srv.active?.name ?? ''}
+        />
+      {/if}
 
     {:else}
       <!-- ══ SERVER VIEW (Channels + Chat + Members) ═════════════════════ -->
@@ -301,17 +368,28 @@
         channels={sidebarChannels}
         activeChannelId={activeChannelId ?? ''}
         onSelectChannel={(id) => activeChannelId = id}
+        onCreateChannel={(name, type) => srv.activeId && auth.user && createChannel(srv.activeId, auth.user.id, name, type)}
+        onDeleteChannel={(channelId) => srv.activeId && auth.user && deleteChannel(srv.activeId, auth.user.id, channelId)}
+        onServerInfo={() => showServerInfo = true}
         currentUser={currentUserProp}
+        serverMembers={srv.members}
+        currentUserRole={currentUserRole}
         voiceConnected={vc.connected}
         voiceChannelName={voiceChannelName}
         voiceMuted={vc.muted}
         voiceDeafened={vc.deafened}
         voiceSpeakers={vc.speakers}
         voiceChannelId={vc.channelId}
+        voiceElapsed={vc.elapsed}
+        voiceNoiseSuppression={vc.noiseSuppression}
+        voiceScreenSharing={vc.screenSharing}
+        voiceLocalSpeaking={vc.localSpeaking}
         onJoinVoice={handleJoinVoice}
         onLeaveVoice={leaveVoice}
         onToggleMute={toggleMute}
         onToggleDeafen={toggleDeafen}
+        onToggleNoiseSuppression={toggleNoiseSuppression}
+        onToggleScreenShare={toggleScreenSharing}
         onOpenSettings={() => showSettings = true}
       />
 
@@ -325,6 +403,8 @@
         sending={chat.sending}
         attachmentsByMessage={chat.attachmentsByMessage}
         membersVisible={showMembers}
+        searchResults={chat.searchResults}
+        searchQuery={chat.searchQuery}
         onSend={handleSendMessage}
         onLoadMore={loadOlderMessages}
         onDelete={handleDeleteMessage}
@@ -332,11 +412,19 @@
         onDownloadFile={handleDownloadFile}
         onDeleteFile={handleDeleteFile}
         onToggleMembers={() => showMembers = !showMembers}
+        onSearch={(q) => activeChannelId && searchMessages(activeChannelId, q)}
+        onClearSearch={clearSearch}
       />
 
       <!-- Col 4: Member sidebar (240px, toggle) -->
       {#if showMembers}
-        <MemberSidebar members={sidebarMembers} />
+        <MemberSidebar
+          members={sidebarMembers}
+          currentUserId={auth.user?.id ?? ''}
+          currentUserRole={currentUserRole}
+          onUpdateRole={(memberId, role) => srv.activeId && auth.user && updateMemberRole(srv.activeId, auth.user.id, memberId, role)}
+          onKickMember={(memberId) => srv.activeId && auth.user && kickMember(srv.activeId, auth.user.id, memberId)}
+        />
       {/if}
     {/if}
 
@@ -355,7 +443,46 @@
   <SettingsPanel
     bind:open={showSettings}
     currentUser={currentUserProp}
-    onLogout={() => { logout() }}
+    onLogout={async () => {
+      await leaveVoice()
+      resetChat()
+      resetVoice()
+      activeServerId = 'home'
+      activeChannelId = null
+      showSettings = false
+      logout()
+    }}
+    onSwitchMode={async () => {
+      await leaveVoice()
+      resetChat()
+      resetVoice()
+      activeServerId = 'home'
+      activeChannelId = null
+      showSettings = false
+      showMembers = false
+      showCreateServer = false
+      showJoinServer = false
+      showServerInfo = false
+      resetMode()
+    }}
+  />
+
+  <ServerInfoModal
+    bind:open={showServerInfo}
+    serverName={srv.active?.name ?? ''}
+    memberCount={srv.members.length}
+    inviteCode={srv.active?.invite_code ?? ''}
+    isOwner={srv.active?.owner_id === auth.user?.id}
+    onClose={() => showServerInfo = false}
+    onGenerateInvite={async () => {
+      if (srv.activeId && auth.user) await generateInvite(srv.activeId, auth.user.id)
+    }}
+    onDeleteServer={async () => {
+      if (srv.activeId && auth.user) {
+        await deleteServer(srv.activeId, auth.user.id)
+        activeServerId = 'home'
+      }
+    }}
   />
 {/if}
 

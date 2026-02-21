@@ -1,0 +1,5 @@
+{
+  "public_url": "",
+  "server_port": 8080,
+  "_comment": "Set public_url to your Cloudflare Tunnel URL (e.g. https://concord.your-domain.com). Leave empty to use localhost. Also set env CONCORD_PUBLIC_URL for the Go server to pick up."
+}

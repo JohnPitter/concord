@@ -7,18 +7,26 @@
     channelName,
     muted,
     deafened,
+    noiseSuppression = true,
+    screenSharing = false,
     speakers,
     onToggleMute,
     onToggleDeafen,
+    onToggleNoiseSuppression,
+    onToggleScreenShare,
     onDisconnect,
   }: {
     connected: boolean
     channelName: string
     muted: boolean
     deafened: boolean
+    noiseSuppression?: boolean
+    screenSharing?: boolean
     speakers: SpeakerData[]
     onToggleMute: () => void
     onToggleDeafen: () => void
+    onToggleNoiseSuppression?: () => void
+    onToggleScreenShare?: () => void
     onDisconnect: () => void
   } = $props()
 </script>
@@ -53,7 +61,7 @@
       <div class="px-3 pb-1">
         {#each speakers as speaker}
           <div class="flex items-center gap-2 py-0.5">
-            <div class="h-5 w-5 shrink-0 rounded-full bg-void-accent/30 flex items-center justify-center">
+            <div class="h-5 w-5 shrink-0 rounded-full bg-void-accent/20 flex items-center justify-center">
               <span class="text-[9px] font-bold text-void-accent">
                 {speaker.username.slice(0, 2).toUpperCase()}
               </span>
@@ -69,6 +77,39 @@
 
     <!-- Controls -->
     <div class="flex items-center justify-center gap-1 border-t border-void-border px-3 py-1.5">
+      <Tooltip text={noiseSuppression ? 'Desativar supressão de ruído' : 'Ativar supressão de ruído'} position="top">
+        <button
+          aria-label={noiseSuppression ? 'Disable noise suppression' : 'Enable noise suppression'}
+          class="rounded-md p-2 transition-colors cursor-pointer
+            {noiseSuppression
+              ? 'text-void-online hover:bg-void-online/10'
+              : 'text-void-text-muted hover:bg-void-bg-hover hover:text-void-text-primary'}"
+          onclick={() => onToggleNoiseSuppression?.()}
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 16s1-1 3-1 3 1 5 1 3-1 5-1 3 1 5 1 3-1 3-1"/>
+            <path d="M2 12s1-1 3-1 3 1 5 1 3-1 5-1 3 1 5 1 3-1 3-1"/>
+            <path d="M2 8s1-1 3-1 3 1 5 1 3-1 5-1 3 1 5 1 3-1 3-1"/>
+          </svg>
+        </button>
+      </Tooltip>
+      <Tooltip text={screenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} position="top">
+        <button
+          aria-label={screenSharing ? 'Stop screen share' : 'Share screen'}
+          class="rounded-md p-2 transition-colors cursor-pointer
+            {screenSharing
+              ? 'bg-void-online/20 text-void-online hover:bg-void-online/30'
+              : 'text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary'}"
+          onclick={() => onToggleScreenShare?.()}
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </button>
+      </Tooltip>
+      <div class="w-px h-5 bg-void-border mx-0.5"></div>
       <Tooltip text={muted ? 'Unmute' : 'Mute'} position="top">
         <button
           aria-label={muted ? 'Unmute' : 'Mute'}

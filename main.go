@@ -229,6 +229,11 @@ func (a *App) GetHealth() *observability.Health {
 	return a.health.Check(a.ctx)
 }
 
+// GetPublicURL returns the configured public URL (Cloudflare tunnel or local).
+func (a *App) GetPublicURL() string {
+	return a.cfg.GetPublicURL()
+}
+
 // StartLogin initiates the GitHub Device Flow.
 // Returns the device code response for the frontend to display.
 func (a *App) StartLogin() (*auth.DeviceCodeResponse, error) {
@@ -624,6 +629,8 @@ func main() {
 		Title:            "Concord",
 		Width:            1200,
 		Height:           800,
+		MinWidth:         960,
+		MinHeight:        640,
 		BackgroundColour: &options.RGBA{R: 10, G: 10, B: 15, A: 255}, // Void theme background
 		AssetServer: &assetserver.Options{
 			Assets: assets,

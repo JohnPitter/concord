@@ -14,6 +14,7 @@
     profile,
     onSelectPeer,
     onJoinRoom,
+    onCreateRoom,
     onOpenSettings,
   }: {
     peers: P2PPeer[]
@@ -22,6 +23,7 @@
     profile: { displayName: string; avatarDataUrl?: string } | null
     onSelectPeer: (id: string) => void
     onJoinRoom: (code: string) => void
+    onCreateRoom: () => void
     onOpenSettings: () => void
   } = $props()
 
@@ -83,24 +85,49 @@
   <div class="mx-2 my-3 rounded-lg bg-void-bg-tertiary p-3">
     <div class="flex items-center justify-between mb-2">
       <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">Sala</span>
-      <button
-        class="rounded p-1 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
-        onclick={copyRoomCode}
-        aria-label="Copiar codigo da sala"
-      >
-        {#if copied}
-          <svg class="h-3.5 w-3.5 text-void-online" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        {:else}
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg>
-        {/if}
-      </button>
+      {#if roomCode}
+        <div class="flex items-center gap-1">
+          <button
+            class="rounded p-1 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
+            onclick={onCreateRoom}
+            aria-label="Criar nova sala"
+            title="Nova Sala"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          <button
+            class="rounded p-1 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
+            onclick={copyRoomCode}
+            aria-label="Copiar codigo da sala"
+          >
+          {#if copied}
+            <svg class="h-3.5 w-3.5 text-void-online" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          {:else}
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          {/if}
+          </button>
+        </div>
+      {/if}
     </div>
-    <p class="font-mono text-sm text-void-accent select-all mb-3">{roomCode}</p>
+
+    {#if roomCode}
+      <p class="font-mono text-sm text-void-accent select-all mb-3">{roomCode}</p>
+    {:else}
+      <button
+        class="w-full rounded-md bg-void-accent px-3 py-2 text-xs font-medium text-white hover:bg-void-accent-hover transition-colors cursor-pointer mb-3"
+        onclick={onCreateRoom}
+      >
+        Criar Sala
+      </button>
+    {/if}
 
     <div class="flex gap-1.5">
       <input

@@ -6,16 +6,17 @@
   import {
     getSettings, setAudioInput, setAudioOutput,
     setNotifications, setNotificationSounds,
-    setTranslationLangs,
+    setTranslationLangs, setTheme,
   } from '../../stores/settings.svelte'
 
   interface Props {
     open: boolean
     currentUser: { username: string; display_name: string; avatar_url: string } | null
     onLogout: () => void
+    onSwitchMode?: () => void
   }
 
-  let { open = $bindable(false), currentUser, onLogout }: Props = $props()
+  let { open = $bindable(false), currentUser, onLogout, onSwitchMode }: Props = $props()
 
   const settings = getSettings()
 
@@ -245,6 +246,28 @@
                   Log Out
                 </Button>
               </div>
+
+              {#if onSwitchMode}
+                <div class="border-t border-void-border pt-4">
+                  <h4 class="mb-3 text-sm font-semibold text-void-text-primary">Connection Mode</h4>
+                  <div class="flex items-center gap-3 mb-3">
+                    <span class="text-sm text-void-text-secondary">Modo atual:</span>
+                    {#if settings.networkMode === 'p2p'}
+                      <span class="rounded-full bg-void-online/20 px-2.5 py-0.5 text-xs font-bold text-void-online">P2P</span>
+                    {:else}
+                      <span class="rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-bold text-blue-400">Servidor</span>
+                    {/if}
+                  </div>
+                  <p class="mb-3 text-xs text-void-text-muted">Voce sera redirecionado para a selecao de modo.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onclick={() => { onSwitchMode(); close() }}
+                  >
+                    Trocar modo
+                  </Button>
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -288,24 +311,27 @@
                 <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Theme</h4>
                 <p class="mb-3 text-xs text-void-text-muted">Choose the visual theme for Concord.</p>
                 <div class="flex gap-3">
-                  <!-- Dark theme (active) -->
+                  <!-- Dark theme -->
                   <button
-                    class="flex flex-col items-center gap-2 rounded-lg border-2 border-void-accent bg-void-bg-secondary p-4 cursor-pointer"
+                    class="flex flex-col items-center gap-2 rounded-lg border-2 bg-void-bg-secondary p-4 cursor-pointer transition-colors
+                      {settings.theme === 'dark' ? 'border-void-accent' : 'border-void-border hover:border-void-text-muted'}"
+                    onclick={() => setTheme('dark')}
                   >
                     <div class="flex h-10 w-16 items-center justify-center rounded-md bg-void-bg-primary">
-                      <svg class="h-5 w-5 text-void-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg class="h-5 w-5 {settings.theme === 'dark' ? 'text-void-accent' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                       </svg>
                     </div>
-                    <span class="text-xs font-medium text-void-accent">Dark</span>
+                    <span class="text-xs font-medium {settings.theme === 'dark' ? 'text-void-accent' : 'text-void-text-muted'}">Dark</span>
                   </button>
-                  <!-- Light theme (disabled) -->
+                  <!-- Light theme -->
                   <button
-                    class="flex flex-col items-center gap-2 rounded-lg border border-void-border bg-void-bg-secondary p-4 opacity-40 cursor-not-allowed"
-                    disabled
+                    class="flex flex-col items-center gap-2 rounded-lg border-2 bg-void-bg-secondary p-4 cursor-pointer transition-colors
+                      {settings.theme === 'light' ? 'border-void-accent' : 'border-void-border hover:border-void-text-muted'}"
+                    onclick={() => setTheme('light')}
                   >
                     <div class="flex h-10 w-16 items-center justify-center rounded-md bg-void-bg-tertiary">
-                      <svg class="h-5 w-5 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg class="h-5 w-5 {settings.theme === 'light' ? 'text-void-accent' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="5" />
                         <line x1="12" y1="1" x2="12" y2="3" />
                         <line x1="12" y1="21" x2="12" y2="23" />
@@ -317,10 +343,9 @@
                         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                       </svg>
                     </div>
-                    <span class="text-xs font-medium text-void-text-muted">Light</span>
+                    <span class="text-xs font-medium {settings.theme === 'light' ? 'text-void-accent' : 'text-void-text-muted'}">Light</span>
                   </button>
                 </div>
-                <p class="mt-2 text-xs text-void-text-muted">Light theme is coming soon.</p>
               </div>
             </div>
           {/if}
@@ -348,8 +373,8 @@
               <div>
                 <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Translation</h4>
                 <p class="mb-3 text-xs text-void-text-muted">
-                  Configure automatic translation for voice chat and messages.
-                  Translation will convert speech from the source language to the target language.
+                  Configure os idiomas de tradução. Para traduzir uma mensagem, passe o mouse sobre ela
+                  e clique no ícone de tradução (<svg class="inline h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.913 17H20.087M12.913 17L11 21M12.913 17L16.5 9L20.087 17M2 5H12M7 2V5M11 5C9.72 8.33 7.5 11.17 5 13.5M8 17C6.18 15.27 4.56 13.42 3.18 11.36" /></svg>).
                 </p>
               </div>
 

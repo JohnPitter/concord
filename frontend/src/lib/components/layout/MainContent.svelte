@@ -1,7 +1,7 @@
 <script lang="ts">
   import MessageList from '../chat/MessageList.svelte'
   import MessageInput from '../chat/MessageInput.svelte'
-  import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
+  import type { MessageData, AttachmentData, SearchResultData } from '../../stores/chat.svelte'
 
   let {
     channelName = 'general',
@@ -12,6 +12,8 @@
     sending = false,
     attachmentsByMessage = {},
     membersVisible = false,
+    searchResults = [],
+    searchQuery = '',
     onSend,
     onLoadMore,
     onEdit,
@@ -20,6 +22,8 @@
     onDownloadFile,
     onDeleteFile,
     onToggleMembers,
+    onSearch,
+    onClearSearch,
   }: {
     channelName?: string
     messages?: MessageData[]
@@ -29,6 +33,8 @@
     sending?: boolean
     attachmentsByMessage?: Record<string, AttachmentData[]>
     membersVisible?: boolean
+    searchResults?: SearchResultData[]
+    searchQuery?: string
     onSend: (content: string) => void
     onLoadMore?: () => void
     onEdit?: (id: string) => void
@@ -37,7 +43,29 @@
     onDownloadFile?: (id: string) => void
     onDeleteFile?: (id: string) => void
     onToggleMembers?: () => void
+    onSearch?: (query: string) => void
+    onClearSearch?: () => void
   } = $props()
+
+  let showSearch = $state(false)
+  let searchInput = $state('')
+  let searchInputEl: HTMLInputElement | undefined = $state()
+
+  function toggleSearch() {
+    showSearch = !showSearch
+    if (showSearch) {
+      setTimeout(() => searchInputEl?.focus(), 50)
+    } else {
+      searchInput = ''
+      onClearSearch?.()
+    }
+  }
+
+  function handleSearch() {
+    const q = searchInput.trim()
+    if (!q) return
+    onSearch?.(q)
+  }
 </script>
 
 <main class="flex h-full flex-1 flex-col bg-void-bg-tertiary">
@@ -55,7 +83,11 @@
 
     <!-- Header actions -->
     <div class="ml-auto flex items-center gap-2">
-      <button aria-label="Search" class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:text-void-text-primary cursor-pointer">
+      <button
+        aria-label="Search"
+        class="rounded-md p-1.5 transition-colors cursor-pointer {showSearch ? 'text-void-text-primary bg-void-bg-hover' : 'text-void-text-secondary hover:text-void-text-primary'}"
+        onclick={toggleSearch}
+      >
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -75,6 +107,69 @@
       </button>
     </div>
   </header>
+
+  <!-- Search bar (slides down when active) -->
+  {#if showSearch}
+    <div class="flex items-center gap-2 border-b border-void-border px-4 py-2 bg-void-bg-secondary shrink-0 animate-fade-in-down">
+      <svg class="h-4 w-4 text-void-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+      <input
+        bind:this={searchInputEl}
+        bind:value={searchInput}
+        type="text"
+        placeholder="Pesquisar mensagens..."
+        class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
+        onkeydown={(e) => { if (e.key === 'Enter') handleSearch(); if (e.key === 'Escape') toggleSearch() }}
+      />
+      {#if searchInput}
+        <button
+          class="text-xs text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
+          onclick={() => { searchInput = ''; onClearSearch?.() }}
+        >
+          Limpar
+        </button>
+      {/if}
+      <button
+        class="rounded-md px-2.5 py-1 text-xs font-medium bg-void-accent text-white hover:bg-void-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+        onclick={handleSearch}
+        disabled={!searchInput.trim()}
+      >
+        Buscar
+      </button>
+    </div>
+  {/if}
+
+  <!-- Search results overlay -->
+  {#if showSearch && searchQuery}
+    <div class="border-b border-void-border bg-void-bg-secondary px-4 py-2 max-h-60 overflow-y-auto shrink-0 animate-fade-in">
+      {#if searchResults.length > 0}
+        <p class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted mb-2">
+          {searchResults.length} resultado{searchResults.length !== 1 ? 's' : ''}
+          para "{searchQuery}"
+        </p>
+        {#each searchResults as result}
+          <div class="rounded-md px-3 py-2 mb-1 bg-void-bg-tertiary hover:bg-void-bg-hover transition-colors cursor-pointer">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-semibold text-void-text-primary">{result.author_name}</span>
+              <span class="text-[10px] text-void-text-muted">{new Date(result.created_at).toLocaleString()}</span>
+            </div>
+            <p class="text-sm text-void-text-secondary">{result.snippet || result.content}</p>
+          </div>
+        {/each}
+      {:else}
+        <div class="flex flex-col items-center gap-2 py-4 text-center">
+          <svg class="h-10 w-10 text-void-text-muted opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <p class="text-sm text-void-text-muted">Nenhum resultado encontrado para "{searchQuery}"</p>
+          <p class="text-xs text-void-text-muted">Tente pesquisar com outros termos.</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Messages area -->
   <MessageList

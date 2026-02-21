@@ -11,7 +11,7 @@ export interface P2PProfile {
 export interface SettingsData {
   audioInputDevice: string
   audioOutputDevice: string
-  theme: 'dark'
+  theme: 'dark' | 'light'
   notificationsEnabled: boolean
   notificationSounds: boolean
   translationSourceLang: string
@@ -34,7 +34,7 @@ const defaults: SettingsData = {
 
 let audioInputDevice = $state<string>(defaults.audioInputDevice)
 let audioOutputDevice = $state<string>(defaults.audioOutputDevice)
-let theme = $state<'dark'>(defaults.theme)
+let theme = $state<'dark' | 'light'>(defaults.theme)
 let notificationsEnabled = $state(defaults.notificationsEnabled)
 let notificationSounds = $state(defaults.notificationSounds)
 let translationSourceLang = $state(defaults.translationSourceLang)
@@ -92,6 +92,7 @@ export function loadSettings(): void {
     if (data.translationTargetLang !== undefined) translationTargetLang = data.translationTargetLang
     if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
     if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
+    applyTheme(theme)
   } catch (e) {
     console.error('Failed to load settings:', e)
   }
@@ -156,5 +157,21 @@ export function setNetworkMode(mode: NetworkMode): void {
 
 export function setP2PProfile(profile: P2PProfile): void {
   p2pProfile = profile
+  persist()
+}
+
+export function resetMode(): void {
+  networkMode = null
+  p2pProfile = null
+  persist()
+}
+
+function applyTheme(t: 'dark' | 'light'): void {
+  document.documentElement.classList.toggle('light', t === 'light')
+}
+
+export function setTheme(t: 'dark' | 'light'): void {
+  theme = t
+  applyTheme(t)
   persist()
 }

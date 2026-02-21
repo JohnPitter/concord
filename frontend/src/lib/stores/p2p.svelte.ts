@@ -46,8 +46,6 @@ export async function initP2PStore(profile: { displayName: string; avatarDataUrl
   if (initialized) return
   try {
     await App.InitP2PHost()
-    const code = await App.GetP2PRoomCode()
-    roomCode = code
     if (profile) {
       await App.SendP2PProfile(profile.displayName, profile.avatarDataUrl ?? '')
     }
@@ -55,8 +53,7 @@ export async function initP2PStore(profile: { displayName: string; avatarDataUrl
     startPeerPolling()
     listenMessages()
   } catch {
-    // fora do Wails runtime (dev/E2E) — usar mock
-    roomCode = 'amber-4271'
+    // fora do Wails runtime (dev/E2E)
     initialized = true
     peers = []
   }
@@ -151,6 +148,23 @@ export async function joinRoom(code: string) {
     console.error('p2p: join room failed', e)
   } finally {
     joining = false
+  }
+}
+
+function generateRoomCode(): string {
+  const words = ['amber', 'coral', 'delta', 'echo', 'frost', 'glow', 'haze', 'iris', 'jade', 'kite',
+    'luna', 'mesa', 'nova', 'opal', 'peak', 'quartz', 'reef', 'sage', 'tide', 'vale']
+  const word = words[Math.floor(Math.random() * words.length)]
+  const num = Math.floor(1000 + Math.random() * 9000)
+  return `${word}-${num}`
+}
+
+export async function createRoom() {
+  try {
+    const code = await App.GetP2PRoomCode()
+    roomCode = code
+  } catch {
+    roomCode = generateRoomCode()
   }
 }
 

@@ -1,16 +1,40 @@
 <script lang="ts">
   import type { Friend } from '../../stores/friends.svelte'
+  import type { SpeakerData } from '../../stores/voice.svelte'
 
   let {
     friends,
+    voiceSpeakers = [],
+    voiceConnected = false,
+    currentServerName = '',
   }: {
     friends: Friend[]
+    voiceSpeakers?: SpeakerData[]
+    voiceConnected?: boolean
+    currentServerName?: string
   } = $props()
 
-  // Only show friends with activities or streaming
-  const active = $derived(
-    friends.filter(f => f.status !== 'offline' && (f.game || f.streaming || f.activity))
+  // Friends who are in the same voice channel (match by username)
+  const friendsInVoice = $derived(
+    voiceConnected
+      ? friends.filter(f => voiceSpeakers.some(s => s.username === f.username))
+      : []
   )
+
+  // Friends with activities, streaming, or in voice
+  const active = $derived(
+    friends.filter(f => {
+      if (f.status === 'offline') return false
+      if (f.game || f.streaming || f.activity) return true
+      // Also show if they're in the same voice channel
+      if (friendsInVoice.some(fv => fv.id === f.id)) return true
+      return false
+    })
+  )
+
+  function isFriendInVoice(friend: Friend): boolean {
+    return friendsInVoice.some(fv => fv.id === friend.id)
+  }
 </script>
 
 <aside class="flex h-full w-[340px] shrink-0 flex-col border-l border-void-border bg-void-bg-secondary overflow-y-auto">
@@ -33,31 +57,53 @@
     <div class="flex flex-col gap-3 px-3 pb-4">
       {#each active as friend}
         <div class="rounded-xl overflow-hidden bg-void-bg-tertiary">
-          {#if friend.streaming}
+          {#if isFriendInVoice(friend) && !friend.streaming}
+            <!-- Voice channel card - friend is in same voice -->
+            <div class="p-3">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="relative shrink-0">
+                  {#if friend.avatar_url}
+                    <img src={friend.avatar_url} alt={friend.display_name} class="h-8 w-8 rounded-full object-cover" />
+                  {:else}
+                    <div class="h-8 w-8 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
+                      {friend.display_name.slice(0, 2).toUpperCase()}
+                    </div>
+                  {/if}
+                  <span class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-void-bg-tertiary bg-void-online"></span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-semibold text-void-text-primary truncate">{friend.display_name}</p>
+                  <p class="text-[11px] text-void-text-muted truncate">Em canal de voz</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 rounded-lg bg-void-bg-primary px-3 py-2">
+                <svg class="h-4 w-4 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+                </svg>
+                <span class="text-xs text-void-text-secondary flex-1 min-w-0 truncate">
+                  {currentServerName || 'Servidor'}
+                </span>
+              </div>
+            </div>
+          {:else if friend.streaming}
             <!-- Streaming card with preview placeholder -->
             <div class="relative h-36 bg-void-bg-primary flex items-center justify-center overflow-hidden">
-              <!-- Stream preview placeholder (dark gradient) -->
               <div class="absolute inset-0 bg-gradient-to-br from-void-bg-primary via-void-bg-hover to-void-bg-secondary"></div>
-              <!-- Game/stream art placeholder -->
               <div class="relative z-10 flex flex-col items-center gap-2 text-void-text-muted">
                 <svg class="h-10 w-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <polygon points="23 7 16 12 23 17 23 7"/>
                   <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                 </svg>
               </div>
-              <!-- Live badge -->
               <div class="absolute top-2 left-2 flex items-center gap-1 rounded-md bg-red-600 px-1.5 py-0.5">
                 <span class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
                 <span class="text-[10px] font-bold text-white uppercase tracking-wide">Ao vivo</span>
               </div>
-              <!-- User count badge -->
               <div class="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5">
                 <svg class="h-3 w-3 text-white" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                 </svg>
-                <span class="text-[10px] font-bold text-white">
-                  {Math.floor(Math.random() * 50) + 2}
-                </span>
+                <span class="text-[10px] font-bold text-white">—</span>
               </div>
             </div>
             <div class="p-3">

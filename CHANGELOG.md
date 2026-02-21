@@ -9,6 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### UX Improvements Round 6 (2026-02-21)
+
+- **Mode switch cleanup** (`App.svelte`): ao trocar de modo (P2P/Server) ou fazer logout, o app sai do voice channel, reseta chat, reseta voice, fecha modais e limpa navegacao antes de redirecionar ao ModeSelector
+- **Badge "AO VIVO"** (`ChannelSidebar.svelte`, `voice.svelte.ts`): badge vermelho pulsante "AO VIVO" aparece ao lado do username de quem esta compartilhando tela no voice channel; `SpeakerData` agora inclui campo `screenSharing`
+- **Traducao inline de mensagens** (`MessageBubble.svelte`, `settings.svelte.ts`): botao de traducao (icone globe) aparece ao hover em cada mensagem; usa API MyMemory (gratuita, sem API key) para traduzir entre 11 idiomas configurados em Settings > Language; resultado exibido abaixo da mensagem com borda verde
+- **Limpeza de arquivos do git** (`.gitignore`): removidos `*.exe`, `coverage.out`, `frontend/dist/`, `frontend/package.json.md5` do tracking; adicionados ao `.gitignore`
+- **Logo mascote Concord** (`frontend/src/assets/logo.svg`, `logo-full.svg`): novo logo com mascote fofo (criatura tipo raposa com headphones e coracao, dentro de balao de chat verde); aplicado em Login, ModeSelector, NoServers e favicon
+- **GitHub Pages landing page** (`docs/site/index.html`): pagina de divulgacao com hero animado, secoes de features, modos P2P/Servidor, download multi-plataforma; design sofisticado com micro-interacoes, glow effects e tipografia hierarquica
+- **GitHub Pages deploy workflow** (`.github/workflows/pages.yml`): deploy automatico ao push em `docs/site/` na branch main
+
+#### UX Improvements Round 5 (2026-02-21)
+
+- **Supressao de ruido e compartilhamento de tela** (`VoiceControls.svelte`, `voice.svelte.ts`): botoes de toggle para noise suppression (ativado por padrao, icone de ondas) e screen share (icone de monitor) no painel de controles de voz, com separador visual entre controles extras e mute/deafen
+- **Avatar do GitHub no voice channel** (`ChannelSidebar.svelte`, `voice.svelte.ts`): imagem de perfil do GitHub exibida no voice channel, com fallback para iniciais; cross-reference com membros do servidor para obter avatar_url
+- **Deteccao de atividade de voz (VAD)** (`voice.svelte.ts`): deteccao client-side de volume via Web Audio API — icone wifi pulsa verde quando o usuario fala, sem depender do backend; threshold de volume configurado para deteccao precisa
+- **Gerenciamento de canais por admin** (`ChannelSidebar.svelte`, `App.svelte`): botao de delete (lixeira) aparece ao hover em text/voice channels para owner, admin e moderator; usa binding `DeleteChannel` existente
+- **Gerenciamento de membros** (`MemberSidebar.svelte`, `App.svelte`): admin/owner pode clicar em membros para abrir popover com opcoes de alterar cargo (Admin/Moderator/Member) ou expulsar; usa `UpdateMemberRole` e `KickMember` bindings existentes
+- **Amigos no voice no ActiveNow** (`ActiveNow.svelte`): amigos que estao no mesmo canal de voz aparecem no painel "Ativo agora" com card de voice mostrando icone wifi e nome do servidor
+
+#### UX Improvements Round 4 (2026-02-21)
+
+- **Paleta de cores verde** (`app.css`): accent trocado de roxo (#7c3aed) para verde (#16a34a) e backgrounds com undertone verde — contraste visual ao Discord
+- **@ do GitHub no voice channel** (`ChannelSidebar.svelte`): usuarios conectados ao voice exibem `@github-username` (username real do GitHub OAuth)
+- **Timer de voice channel** (`voice.svelte.ts`, `ChannelSidebar.svelte`): cronometro ao lado do nome do canal mostra tempo conectado (formato `mm:ss` ou `h:mm:ss`)
+- **Icone de sinal de voz** (`ChannelSidebar.svelte`): cada usuario no voice channel tem icone wifi/sinal verde (speaking) ou cinza (mudo) ao lado direito, estilo Discord
+- **Instrucoes de invite** (`FriendsList.svelte`): secao explicativa na aba "Pendente" com passo-a-passo de como adicionar amigos via @username do GitHub
+
+#### UX Improvements (2026-02-21)
+
+- **P2P: Create New Room** (`P2PPeerSidebar.svelte`, `p2p.svelte.ts`): botao "+" ao lado do label "Sala" permite criar nova sala, gerando novo room code via Wails binding (com fallback local). Sala inicia vazia e so aparece apos criar
+- **Mode Switch** (`SettingsPanel.svelte`, `settings.svelte.ts`): secao "Connection Mode" na tab Account mostra modo atual (P2P/Servidor) com botao "Trocar modo" que redireciona ao ModeSelector
+- **Light Theme** (`app.css`, `settings.svelte.ts`, `SettingsPanel.svelte`): tema claro completo via CSS custom properties em `html.light`, botoes Dark/Light funcionais em Appearance, tema persistido no localStorage
+- **Message Search** (`MainContent.svelte`): botao de busca no header abre barra de pesquisa que chama `SearchMessages` via Wails binding e exibe resultados inline
+- **Create Channels** (`ChannelSidebar.svelte`): botoes "+" nos headers de Text e Voice Channels com input inline para criar novos canais
+- **Voice Channel Users** (`ChannelSidebar.svelte`, `voice.svelte.ts`): usuarios conectados aparecem abaixo do voice channel ativo com indicador verde de speaking, polling de status a cada 2s
+- **Server Info Modal** (`ServerInfoModal.svelte`): clicar no nome do servidor abre modal com contagem de membros, convite (gerar/copiar) e opcao de excluir para owners
+- **Home Page Funcional** (`FriendsList.svelte`, `DMSidebar.svelte`, `App.svelte`): clicar "Mensagem" em um amigo abre a DM, busca no sidebar DM filtra conversas, selecionar DM mostra area de conversa
+
+#### UX Improvements Round 3 (2026-02-21)
+
+- **Voice Channel @ Username** (`ChannelSidebar.svelte`): usuarios conectados ao voice channel exibem `@username` e indicador verde (bolinha sobre avatar, estilo Discord)
+- **Animacoes globais** (`app.css`): adicionados keyframes fade-in, fade-in-up, fade-in-down, slide-in-left, slide-in-right, scale-in com classes utilitarias; aplicados em search bar, formularios, friend rows, DM view
+- **Tooltip posicao fixa** (`Tooltip.svelte`): reescrito para usar `position: fixed` calculando coordenadas via getBoundingClientRect, eliminando overflow lateral no ServerSidebar
+- **Pesquisa sem resultados** (`MainContent.svelte`): exibe mensagem "Nenhum resultado encontrado" com icone quando busca de mensagens retorna vazio
+- **Sistema de amigos funcional** (`friends.svelte.ts`, `FriendsList.svelte`, `App.svelte`): substituido mock por sistema real com persistencia localStorage — adicionar amigo, pedidos pendentes (enviados/recebidos), aceitar/rejeitar, bloquear/desbloquear, busca de amigos
+- **ActiveNow sem mock** (`ActiveNow.svelte`): removido viewer count aleatorio, componente mostra estado vazio quando nao ha amigos com atividade
+- **Removido Concord Premium** (`DMSidebar.svelte`): botao decorativo "Concord Premium" removido do sidebar de DMs
+
+### Fixed
+
+- **P2P Logout** (`P2PApp.svelte`, `App.svelte`): botao "Log Out" no modo P2P agora para o P2P store e reseta o modo, voltando ao ModeSelector (antes era noop)
+- **P2P Room Auto-creation** (`p2p.svelte.ts`): modo P2P nao cria sala automaticamente ao entrar; usuario deve clicar "Criar Sala" explicitamente
+- **Status Icon Movement** (`ServerSidebar.svelte`): icone de status do usuario no final da sidebar nao se mexe mais ao passar o mouse sobre servidores
+
 #### Phase 9: Central Server Online (2026-02-21)
 
 - **PostgreSQL stdlib bridge** (`postgres.StdlibDB()`): bridges `pgxpool.Pool` to `database/sql` interface via `pgx/v5/stdlib`, enabling existing repositories to work with PostgreSQL

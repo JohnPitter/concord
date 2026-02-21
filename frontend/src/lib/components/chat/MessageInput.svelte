@@ -14,6 +14,28 @@
   let content = $state('')
   let pendingFile = $state<{ name: string; data: number[] } | null>(null)
   let fileInput: HTMLInputElement | undefined = $state()
+  let showEmoji = $state(false)
+
+  const emojiCategories = [
+    { label: 'Carinhas', emojis: ['😀','😂','😍','🥺','😎','🤔','😅','😢','😡','🥳','😱','🤩','😴','🤗','😏','🙄','😬','🤯','🥴','😈'] },
+    { label: 'Gestos', emojis: ['👍','👎','👏','🙏','✌️','🤞','🤟','👌','🤙','💪','👀','🫡','🫶','🤝','👋','✋','🖐️','🤚','🫰','🫳'] },
+    { label: 'Objetos', emojis: ['❤️','🔥','⭐','💯','🎉','🎮','💀','✅','❌','⚡','💡','🚀','🏆','🎯','💎','🔔','📌','💬','🎵','🎶'] },
+    { label: 'Animais', emojis: ['🐱','🐶','🐻','🦊','🐼','🐸','🦁','🐧','🐵','🐝','🦋','🐙','🐰','🐮','🐔','🦄','🐺','🦇','🐍','🐠'] },
+  ]
+
+  function insertEmoji(emoji: string) {
+    content += emoji
+    showEmoji = false
+  }
+
+  function handleWindowClick(e: MouseEvent) {
+    if (showEmoji) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.emoji-picker-container')) {
+        showEmoji = false
+      }
+    }
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -58,6 +80,8 @@
     pendingFile = null
   }
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <div class="border-t border-void-border px-4 py-4">
   <!-- Hidden file input -->
@@ -111,14 +135,39 @@
     ></textarea>
 
     <!-- Emoji button -->
-    <button
-      class="shrink-0 rounded p-1 text-void-text-muted transition-colors hover:text-void-text-primary"
-      aria-label="Emoji"
-    >
-      <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    </button>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="relative emoji-picker-container">
+      <button
+        class="shrink-0 rounded p-1 transition-colors cursor-pointer {showEmoji ? 'text-void-accent' : 'text-void-text-muted hover:text-void-text-primary'}"
+        aria-label="Emoji"
+        onclick={() => showEmoji = !showEmoji}
+      >
+        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
+      {#if showEmoji}
+        <div class="absolute bottom-full right-0 mb-2 w-72 rounded-lg border border-void-border bg-void-bg-primary shadow-md p-2 z-50 animate-fade-in-up">
+          <div class="max-h-56 overflow-y-auto space-y-2">
+            {#each emojiCategories as cat}
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-void-text-muted px-1 mb-1">{cat.label}</p>
+                <div class="grid grid-cols-8 gap-0.5">
+                  {#each cat.emojis as emoji}
+                    <button
+                      class="flex items-center justify-center rounded p-1 text-lg hover:bg-void-bg-hover transition-colors cursor-pointer"
+                      onclick={() => insertEmoji(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
 
     <!-- Send button (visible when content or file exists) -->
     {#if content.trim() || pendingFile}

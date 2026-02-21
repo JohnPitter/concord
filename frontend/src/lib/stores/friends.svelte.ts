@@ -6,11 +6,20 @@ export interface Friend {
   display_name: string
   avatar_url?: string
   status: FriendStatus
-  activity?: string          // e.g. "Jogando Valorant"
-  game?: string              // game name for ActiveNow card
-  gameSince?: string         // e.g. "4 horas atrás"
+  activity?: string
+  game?: string
+  gameSince?: string
   streaming?: boolean
   streamTitle?: string
+}
+
+export interface FriendRequest {
+  id: string
+  username: string
+  display_name: string
+  avatar_url?: string
+  direction: 'incoming' | 'outgoing'
+  createdAt: string
 }
 
 export interface DMConversation {
@@ -28,138 +37,194 @@ type FriendsTab = 'online' | 'all' | 'pending' | 'blocked'
 
 interface FriendsState {
   friends: Friend[]
+  pendingRequests: FriendRequest[]
+  blocked: string[]
   dms: DMConversation[]
   tab: FriendsTab
   loading: boolean
-  activeDMId: string | null   // null = friends view, string = DM conversation
+  activeDMId: string | null
+  addFriendError: string | null
+  addFriendSuccess: string | null
 }
+
+const STORAGE_KEY = 'concord_friends'
 
 const state = $state<FriendsState>({
   friends: [],
+  pendingRequests: [],
+  blocked: [],
   dms: [],
   tab: 'online',
   loading: false,
   activeDMId: null,
+  addFriendError: null,
+  addFriendSuccess: null,
 })
 
-// ── Selectors ───────────────────────────────────────────────────────────────
+// ── Persistence ────────────────────────────────────────────────────────────
+
+function persist() {
+  try {
+    const data = {
+      friends: state.friends,
+      pendingRequests: state.pendingRequests,
+      blocked: state.blocked,
+      dms: state.dms,
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch { /* localStorage unavailable */ }
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const data = JSON.parse(raw)
+      if (data.friends) state.friends = data.friends
+      if (data.pendingRequests) state.pendingRequests = data.pendingRequests
+      if (data.blocked) state.blocked = data.blocked
+      if (data.dms) state.dms = data.dms
+    }
+  } catch { /* ignore parse errors */ }
+}
+
+// ── Selectors ────────────────────────────────────────────────────────────
 
 export function getFriends() {
   return {
     get friends() { return state.friends },
+    get pendingRequests() { return state.pendingRequests },
     get dms() { return state.dms },
     get tab() { return state.tab },
     get loading() { return state.loading },
     get activeDMId() { return state.activeDMId },
+    get addFriendError() { return state.addFriendError },
+    get addFriendSuccess() { return state.addFriendSuccess },
     get onlineFriends() {
       return state.friends.filter(f => f.status !== 'offline')
     },
     get activeDM() {
       return state.dms.find(d => d.id === state.activeDMId) ?? null
     },
+    get pendingCount() {
+      return state.pendingRequests.filter(r => r.direction === 'incoming').length
+    },
   }
 }
 
-// ── Actions ─────────────────────────────────────────────────────────────────
+// ── Actions ──────────────────────────────────────────────────────────────
 
 export function setFriendsTab(tab: FriendsTab) {
   state.tab = tab
+  state.addFriendError = null
+  state.addFriendSuccess = null
 }
 
 export function openDM(dmId: string | null) {
   state.activeDMId = dmId
 }
 
-// Seed with realistic mock data — replaced by real API when backend supports it
 export function loadFriends() {
   state.loading = true
-
-  const mockFriends: Friend[] = [
-    {
-      id: 'f1',
-      username: 'Capitão Sparrow',
-      display_name: 'Capitão Sparrow',
-      status: 'online',
-      game: 'Valorant',
-      activity: 'Jogando Valorant',
-      gameSince: '4 horas atrás',
-    },
-    {
-      id: 'f2',
-      username: 'RobertPad',
-      display_name: 'RobertPad ★ 4',
-      status: 'online',
-      streaming: true,
-      streamTitle: 'GIANT SERVER — Minecraft',
-      activity: 'Transmitindo GIANT SERVER',
-    },
-    {
-      id: 'f3',
-      username: 'Raid 🔥',
-      display_name: 'Raid 🔥',
-      status: 'online',
-      activity: 'No Servidor de Voz',
-    },
-    {
-      id: 'f4',
-      username: 'rodrigopacera',
-      display_name: 'rodrigopacera',
-      status: 'online',
-      activity: 'Ouvindo Spotify',
-    },
-    {
-      id: 'f5',
-      username: 'SamuraiX',
-      display_name: 'SamuraiX',
-      status: 'idle',
-    },
-    {
-      id: 'f6',
-      username: 'ShadowMaster',
-      display_name: 'ShadowMaster',
-      status: 'online',
-      game: 'League of Legends',
-      activity: 'Jogando League of Legends',
-      gameSince: '2 horas atrás',
-    },
-    {
-      id: 'f7',
-      username: 'gq07',
-      display_name: 'gq07',
-      status: 'offline',
-    },
-    {
-      id: 'f8',
-      username: 'Colosseum Maycole',
-      display_name: 'Colosseum Maycole',
-      status: 'offline',
-    },
-    {
-      id: 'f9',
-      username: 'ZzDougie',
-      display_name: 'ZzDougie',
-      status: 'offline',
-    },
-    {
-      id: 'f10',
-      username: 'RobertPad2',
-      display_name: 'RobertPad',
-      status: 'offline',
-    },
-  ]
-
-  const mockDMs: DMConversation[] = mockFriends.slice(0, 6).map(f => ({
-    id: `dm-${f.id}`,
-    friendId: f.id,
-    username: f.username,
-    display_name: f.display_name,
-    avatar_url: f.avatar_url,
-    status: f.status,
-    lastMessage: undefined,
-    unread: 0,
-  }))
-
-  state.friends = mockFriends
-  state.dms = mockDMs
+  loadFromStorage()
   state.loading = false
+}
+
+export function sendFriendRequest(username: string) {
+  state.addFriendError = null
+  state.addFriendSuccess = null
+
+  const trimmed = username.trim()
+  if (!trimmed) {
+    state.addFriendError = 'Digite um nome de usuario.'
+    return
+  }
+
+  // Check if already friends
+  if (state.friends.some(f => f.username.toLowerCase() === trimmed.toLowerCase())) {
+    state.addFriendError = `Voce ja e amigo de ${trimmed}.`
+    return
+  }
+
+  // Check if already pending
+  if (state.pendingRequests.some(r => r.username.toLowerCase() === trimmed.toLowerCase())) {
+    state.addFriendError = `Ja existe um pedido pendente para ${trimmed}.`
+    return
+  }
+
+  // Since there's no backend API for friends yet, we simulate:
+  // Add as pending outgoing request
+  const request: FriendRequest = {
+    id: `req-${Date.now()}`,
+    username: trimmed,
+    display_name: trimmed,
+    direction: 'outgoing',
+    createdAt: new Date().toISOString(),
+  }
+  state.pendingRequests = [...state.pendingRequests, request]
+  state.addFriendSuccess = `Pedido de amizade enviado para ${trimmed}!`
+  persist()
+
+  // Auto-accept after a short delay (simulate the other user accepting)
+  setTimeout(() => {
+    acceptFriendRequest(request.id)
+  }, 1500)
+}
+
+export function acceptFriendRequest(requestId: string) {
+  const request = state.pendingRequests.find(r => r.id === requestId)
+  if (!request) return
+
+  const friend: Friend = {
+    id: `friend-${Date.now()}`,
+    username: request.username,
+    display_name: request.display_name,
+    avatar_url: request.avatar_url,
+    status: 'online',
+  }
+
+  state.friends = [...state.friends, friend]
+  state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
+
+  // Auto-create DM
+  const dm: DMConversation = {
+    id: `dm-${friend.id}`,
+    friendId: friend.id,
+    username: friend.username,
+    display_name: friend.display_name,
+    avatar_url: friend.avatar_url,
+    status: friend.status,
+  }
+  state.dms = [...state.dms, dm]
+  persist()
+}
+
+export function rejectFriendRequest(requestId: string) {
+  state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
+  persist()
+}
+
+export function removeFriend(friendId: string) {
+  state.friends = state.friends.filter(f => f.id !== friendId)
+  state.dms = state.dms.filter(d => d.friendId !== friendId)
+  persist()
+}
+
+export function blockUser(friendId: string) {
+  const friend = state.friends.find(f => f.id === friendId)
+  if (friend) {
+    state.blocked = [...state.blocked, friend.username]
+    removeFriend(friendId)
+  }
+  persist()
+}
+
+export function unblockUser(username: string) {
+  state.blocked = state.blocked.filter(u => u !== username)
+  persist()
+}
+
+export function clearFriendNotifications() {
+  state.addFriendError = null
+  state.addFriendSuccess = null
 }

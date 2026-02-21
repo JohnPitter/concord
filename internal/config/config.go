@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -90,6 +91,7 @@ type PostgresConfig struct {
 type ServerConfig struct {
 	Host            string        `json:"host"`
 	Port            int           `json:"port"`
+	PublicURL       string        `json:"public_url"`  // External URL (e.g. Cloudflare tunnel)
 	TLSEnabled      bool          `json:"tls_enabled"`
 	TLSCertFile     string        `json:"tls_cert_file"`
 	TLSKeyFile      string        `json:"tls_key_file"`
@@ -225,14 +227,10 @@ func Load(configPath string) (*Config, error) {
 	// Load from config file if it exists
 	if configPath != "" {
 		if err := cfg.loadFromFile(configPath); err != nil {
-			// If config file doesn't exist, create it with defaults
-			if errors.Is(err, os.ErrNotExist) {
-				if err := cfg.Save(configPath); err != nil {
-					return nil, fmt.Errorf("failed to create default config: %w", err)
-				}
-			} else {
+			if !errors.Is(err, os.ErrNotExist) {
 				return nil, fmt.Errorf("failed to load config: %w", err)
 			}
+			// File does not exist — continue with defaults + env vars
 		}
 	}
 
@@ -271,20 +269,44 @@ func (c *Config) loadFromEnv() {
 		c.App.DataDir = v
 	}
 
-	// Database
+	// Database — SQLite
 	if v := os.Getenv("CONCORD_DB_PATH"); v != "" {
 		c.Database.SQLite.Path = v
 	}
+
+	// Database — PostgreSQL
 	if v := os.Getenv("POSTGRES_HOST"); v != "" {
 		c.Database.Postgres.Host = v
 	}
+	if v := os.Getenv("POSTGRES_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Database.Postgres.Port = port
+		}
+	}
+	if v := os.Getenv("POSTGRES_USER"); v != "" {
+		c.Database.Postgres.User = v
+	}
 	if v := os.Getenv("POSTGRES_PASSWORD"); v != "" {
 		c.Database.Postgres.Password = v
+	}
+	if v := os.Getenv("POSTGRES_DB"); v != "" {
+		c.Database.Postgres.Database = v
+	}
+	if v := os.Getenv("POSTGRES_SSLMODE"); v != "" {
+		c.Database.Postgres.SSLMode = v
 	}
 
 	// Server
 	if v := os.Getenv("CONCORD_SERVER_HOST"); v != "" {
 		c.Server.Host = v
+	}
+	if v := os.Getenv("SERVER_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Server.Port = port
+		}
+	}
+	if v := os.Getenv("CONCORD_PUBLIC_URL"); v != "" {
+		c.Server.PublicURL = v
 	}
 
 	// Auth
@@ -308,6 +330,12 @@ func (c *Config) loadFromEnv() {
 	// Redis
 	if v := os.Getenv("REDIS_HOST"); v != "" {
 		c.Cache.Redis.Host = v
+		c.Cache.Redis.Enabled = true
+	}
+	if v := os.Getenv("REDIS_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Cache.Redis.Port = port
+		}
 	}
 	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
 		c.Cache.Redis.Password = v
@@ -420,6 +448,14 @@ func (c *Config) GetDatabaseDSN() string {
 		c.Database.Postgres.Database,
 		c.Database.Postgres.SSLMode,
 	)
+}
+
+// GetPublicURL returns the public URL for the server (tunnel or local fallback)
+func (c *Config) GetPublicURL() string {
+	if c.Server.PublicURL != "" {
+		return c.Server.PublicURL
+	}
+	return fmt.Sprintf("http://%s:%d", c.Server.Host, c.Server.Port)
 }
 
 // GetRedisDSN returns the Redis connection string

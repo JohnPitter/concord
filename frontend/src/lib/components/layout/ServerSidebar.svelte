@@ -27,7 +27,7 @@
   const isHome = $derived(activeServerId === 'home')
 </script>
 
-<aside class="flex h-full w-[72px] flex-col items-center gap-2 bg-void-bg-primary py-3 overflow-y-auto scrollbar-none">
+<aside class="flex h-full w-[72px] flex-col items-center gap-2 bg-void-bg-primary py-3 overflow-y-auto overflow-x-hidden scrollbar-none">
   <!-- Home / DMs button -->
   <Tooltip text="Mensagens Diretas" position="right">
     <button
@@ -99,10 +99,10 @@
     </button>
   </Tooltip>
 
-  <div class="flex-1"></div>
+  <div class="flex-1 shrink-0"></div>
 
   <!-- User avatar -->
-  <div class="pb-1">
+  <div class="pb-1 shrink-0">
     {#if currentUser?.avatar_url}
       <div class="relative">
         <img src={currentUser.avatar_url} alt={displayName} class="h-10 w-10 rounded-full object-cover" />

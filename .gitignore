@@ -1,6 +1,8 @@
 # Build artifacts
 build/
 dist/
+*.exe
+frontend/package.json.md5
 
 # Frontend
 frontend/node_modules/

@@ -12,9 +12,30 @@
 
   let visible = $state(false)
   let timeout: ReturnType<typeof setTimeout> | undefined
+  let triggerEl: HTMLDivElement | undefined = $state()
+  let tooltipX = $state(0)
+  let tooltipY = $state(0)
 
   function show() {
-    timeout = setTimeout(() => (visible = true), delay)
+    timeout = setTimeout(() => {
+      if (triggerEl) {
+        const rect = triggerEl.getBoundingClientRect()
+        if (position === 'right') {
+          tooltipX = rect.right + 8
+          tooltipY = rect.top + rect.height / 2
+        } else if (position === 'left') {
+          tooltipX = rect.left - 8
+          tooltipY = rect.top + rect.height / 2
+        } else if (position === 'bottom') {
+          tooltipX = rect.left + rect.width / 2
+          tooltipY = rect.bottom + 6
+        } else {
+          tooltipX = rect.left + rect.width / 2
+          tooltipY = rect.top - 6
+        }
+      }
+      visible = true
+    }, delay)
   }
 
   function hide() {
@@ -22,17 +43,18 @@
     visible = false
   }
 
-  const positionClasses: Record<string, string> = {
-    top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-    bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-    left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-    right: 'left-full top-1/2 -translate-y-1/2 ml-2',
+  const transformMap: Record<string, string> = {
+    top: 'translate(-50%, -100%)',
+    bottom: 'translate(-50%, 0)',
+    left: 'translate(-100%, -50%)',
+    right: 'translate(0, -50%)',
   }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="relative inline-flex"
+  bind:this={triggerEl}
+  class="inline-flex"
   onmouseenter={show}
   onmouseleave={hide}
   onfocusin={show}
@@ -41,19 +63,20 @@
   {#if children}
     {@render children()}
   {/if}
-
-  {#if visible}
-    <div
-      class="pointer-events-none absolute z-50 whitespace-nowrap rounded-md bg-void-bg-tertiary px-2.5 py-1.5 text-xs text-void-text-primary shadow-md border border-void-border animate-[fade-in_100ms_ease-out] {positionClasses[position]}"
-      role="tooltip"
-    >
-      {text}
-    </div>
-  {/if}
 </div>
 
+{#if visible}
+  <div
+    class="pointer-events-none fixed z-[100] whitespace-nowrap rounded-md bg-void-bg-tertiary px-2.5 py-1.5 text-xs text-void-text-primary shadow-md border border-void-border"
+    role="tooltip"
+    style="left: {tooltipX}px; top: {tooltipY}px; transform: {transformMap[position]}; animation: tooltip-fade 100ms ease-out"
+  >
+    {text}
+  </div>
+{/if}
+
 <style>
-  @keyframes fade-in {
+  @keyframes tooltip-fade {
     from { opacity: 0; }
     to { opacity: 1; }
   }

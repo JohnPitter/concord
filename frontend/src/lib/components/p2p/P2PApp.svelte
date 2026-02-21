@@ -4,14 +4,18 @@
   import P2PChatArea from './P2PChatArea.svelte'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
   import {
-    getP2P, initP2PStore, setActivePeer, sendMessage, joinRoom, stopP2PStore,
+    getP2P, initP2PStore, setActivePeer, sendMessage, joinRoom, stopP2PStore, createRoom,
     type P2PPeer, type P2PMessage,
   } from '../../stores/p2p.svelte'
 
   let {
     profile,
+    onLogout,
+    onSwitchMode,
   }: {
     profile: { displayName: string; avatarDataUrl?: string } | null
+    onLogout: () => void
+    onSwitchMode: () => void
   } = $props()
 
   const p2p = getP2P()
@@ -34,6 +38,7 @@
     {profile}
     onSelectPeer={(id) => setActivePeer(id)}
     onJoinRoom={(code) => joinRoom(code)}
+    onCreateRoom={() => createRoom()}
     onOpenSettings={() => showSettings = true}
   />
   <P2PChatArea
@@ -47,5 +52,6 @@
 <SettingsPanel
   bind:open={showSettings}
   currentUser={profile ? { username: profile.displayName, display_name: profile.displayName, avatar_url: profile.avatarDataUrl ?? '' } : null}
-  onLogout={() => {}}
+  onLogout={() => { stopP2PStore(); onLogout() }}
+  onSwitchMode={() => { stopP2PStore(); onSwitchMode() }}
 />

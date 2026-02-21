@@ -262,14 +262,14 @@ func TestLoadNonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "nonexistent.json")
 
-	// Should create default config if file doesn't exist
+	// Should return defaults when file doesn't exist
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	// Verify file was created
-	_, err = os.Stat(configPath)
-	require.NoError(t, err)
+	// Defaults should be applied
+	assert.Equal(t, "Concord", cfg.App.Name)
+	assert.Equal(t, "dev", cfg.App.Environment)
 }
 
 func TestDefaultDataDirExists(t *testing.T) {

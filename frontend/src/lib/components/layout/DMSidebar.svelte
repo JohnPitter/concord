@@ -21,8 +21,12 @@
     voiceMuted = false,
     voiceDeafened = false,
     voiceSpeakers = [],
+    voiceNoiseSuppression = true,
+    voiceScreenSharing = false,
     onToggleMute,
     onToggleDeafen,
+    onToggleNoiseSuppression,
+    onToggleScreenShare,
     onLeaveVoice,
     onOpenSettings,
   }: {
@@ -36,8 +40,12 @@
     voiceMuted?: boolean
     voiceDeafened?: boolean
     voiceSpeakers?: SpeakerData[]
+    voiceNoiseSuppression?: boolean
+    voiceScreenSharing?: boolean
     onToggleMute?: () => void
     onToggleDeafen?: () => void
+    onToggleNoiseSuppression?: () => void
+    onToggleScreenShare?: () => void
     onLeaveVoice?: () => void
     onOpenSettings?: () => void
   } = $props()
@@ -51,22 +59,57 @@
     dnd:    'bg-void-danger',
     offline: 'bg-void-text-muted',
   }
+
+  let searchQuery = $state('')
+  let searching = $state(false)
+
+  const filteredDms = $derived(
+    searchQuery.trim()
+      ? dms.filter(dm => dm.display_name.toLowerCase().includes(searchQuery.toLowerCase()))
+      : dms
+  )
 </script>
 
 <aside class="flex h-full w-60 flex-col bg-void-bg-secondary">
   <!-- Search bar -->
   <div class="px-2 pt-3 pb-2 shrink-0">
-    <button
-      class="flex w-full items-center gap-2 rounded-md bg-void-bg-primary px-2 py-1.5 text-xs text-void-text-muted cursor-text hover:bg-void-bg-primary/80 transition-colors"
-      onclick={() => {}}
-      aria-label="Localizar ou iniciar uma conversa"
-    >
-      <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <span>Localizar ou iniciar uma conversa</span>
-    </button>
+    {#if searching}
+      <div class="flex items-center gap-2 rounded-md bg-void-bg-primary px-2 py-1.5">
+        <svg class="h-3.5 w-3.5 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          type="text"
+          bind:value={searchQuery}
+          placeholder="Pesquisar..."
+          class="flex-1 bg-transparent text-xs text-void-text-primary placeholder:text-void-text-muted outline-none"
+          onkeydown={(e) => { if (e.key === 'Escape') { searching = false; searchQuery = '' } }}
+        />
+        {#if searchQuery}
+          <button
+            class="text-void-text-muted hover:text-void-text-primary cursor-pointer"
+            onclick={() => { searchQuery = '' }}
+          >
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        {/if}
+      </div>
+    {:else}
+      <button
+        class="flex w-full items-center gap-2 rounded-md bg-void-bg-primary px-2 py-1.5 text-xs text-void-text-muted cursor-text hover:bg-void-bg-primary/80 transition-colors"
+        onclick={() => searching = true}
+        aria-label="Localizar ou iniciar uma conversa"
+      >
+        <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <span>Localizar ou iniciar uma conversa</span>
+      </button>
+    {/if}
   </div>
 
   <div class="flex-1 overflow-y-auto">
@@ -89,16 +132,6 @@
       </button>
     </div>
 
-    <!-- Nitro (decorativo) -->
-    <div class="px-2 mb-1">
-      <button class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary transition-colors cursor-pointer">
-        <svg class="h-5 w-5 shrink-0 text-void-accent" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-        Concord Premium
-      </button>
-    </div>
-
     <!-- DM section label -->
     <div class="flex items-center justify-between px-4 pt-3 pb-1">
       <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted">Mensagens Diretas</span>
@@ -113,7 +146,7 @@
     </div>
 
     <!-- DM list -->
-    {#each dms as dm}
+    {#each filteredDms as dm}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div class="px-2">
@@ -171,9 +204,13 @@
     channelName={voiceChannelName}
     muted={voiceMuted}
     deafened={voiceDeafened}
+    noiseSuppression={voiceNoiseSuppression}
+    screenSharing={voiceScreenSharing}
     speakers={voiceSpeakers}
     onToggleMute={() => onToggleMute?.()}
     onToggleDeafen={() => onToggleDeafen?.()}
+    onToggleNoiseSuppression={() => onToggleNoiseSuppression?.()}
+    onToggleScreenShare={() => onToggleScreenShare?.()}
     onDisconnect={() => onLeaveVoice?.()}
   />
 
