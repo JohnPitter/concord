@@ -5,9 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-02-20
 
 ### Added
+
+#### Phase 10: Polish & Hardening (2026-02-20)
+
+- Settings panel with categories: Account, Audio, Appearance, Notifications, Language
+  - Audio device selection via WebAudio API (input/output)
+  - Theme selector (dark only, light prepared)
+  - Notification toggle and sounds toggle
+  - Translation language preferences (source/target)
+  - Persisted to localStorage
+- Desktop notification service wrapper (browser Notification API)
+- Toast notification system (success/error/warning/info variants, auto-dismiss)
+- Settings button wired in ChannelSidebar user panel
+- E2E test skeletons with Playwright (auth, server, chat flows)
+- CI/CD pipelines:
+  - `ci.yml` — Go test + lint + frontend type check on PR
+  - `release.yml` — Cross-platform desktop build + server binary on tag push
+  - `security.yml` — govulncheck, npm audit, Trivy container scan (weekly)
+- Security hardening: CSP headers, rate limiting, input sanitization, request size limits
+- Documentation: API.md, SECURITY.md, CONTRIBUTING.md, P2P-PROTOCOL.md, VOICE-PIPELINE.md
+- Version bumped to v1.0.0
+
+#### Phase 9: Central Server (2026-02-20)
+
+- PostgreSQL layer (`internal/store/postgres/`)
+  - Connection pool via pgx/v5 with health check
+  - Embedded SQL migration system with version tracking
+  - Full schema: users, servers, channels, messages, attachments, server_members, sessions, audit_log, invites
+  - Integration tests (skip if no PG available)
+- Redis layer (`internal/store/redis/`)
+  - Client wrapper with Set, Get, Delete, SetNX, Incr, Expire, Publish, Subscribe
+  - Health check, retry, pool management via go-redis/v9
+  - Integration tests (skip if no Redis available)
+- HTTP API server (`internal/api/`) with chi v5 router
+  - Full REST API: auth (device-code, token, refresh), servers CRUD, channels, members, invites, messages
+  - Middleware stack: JWT auth, CORS, rate limiting, request logging, security headers, max body size, recovery
+  - Cursor-based message pagination, full-text search endpoint
+  - WebSocket signaling integration route
+  - Offline message queue for reconnection delivery
+  - httptest-based test suite
+- Central server implementation (`cmd/server/main.go`)
+  - PostgreSQL + Redis + chi HTTP server initialization
+  - Graceful shutdown in reverse order
+  - Health checks for all infrastructure components
+- Docker deployment (`deployments/docker/`)
+  - Multi-stage Dockerfile for Go server (distroless runtime)
+  - Coturn TURN/relay server with configuration
+  - docker-compose.yml: server + PostgreSQL 16 + Redis 7 + coturn
+  - Health checks, volumes, environment variable configuration
+  - `.env.example` template
+
+#### Phase 8: Voice Translation (2026-02-20)
+
+- PersonaPlex API client (`internal/translation/personaplex.go`)
+  - HTTP text translation with JSON request/response
+  - WebSocket streaming audio translation
+  - Circuit breaker: auto-disable after consecutive high-latency failures, auto-reset on success
+  - Configurable timeout, latency threshold, failure threshold
+- Streaming translation pipeline (`internal/translation/stream.go`)
+  - Goroutine bridge: voice engine → PersonaPlex → output
+  - Graceful degradation: passes original audio if PersonaPlex fails
+  - Start/Stop lifecycle with context cancellation
+- Translation cache (`internal/translation/cache.go`)
+  - Wraps existing LRU cache with SHA-256 key hashing
+  - Cache key format: `translate:{src}:{tgt}:{hash(text)}`, TTL 1h
+- Translation service (`internal/translation/service.go`)
+  - Enable/Disable/GetStatus orchestration
+  - Text translation with cache-first strategy
+- SQLite migration `006_translation.sql` for persistent cache
+- Wails bindings: EnableTranslation, DisableTranslation, GetTranslationStatus
+- 14 unit tests (client, circuit breaker, cache, pipeline, service, concurrency)
 
 #### Phase 1: Foundation (2026-02-20)
 
@@ -295,24 +365,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 64MB SQLite cache
 - Optimized pragmas for performance
 
-## [0.1.0] - TBD
-
-Initial development release - in progress.
-
-### Planned Features
-
-- Phase 2: GitHub OAuth authentication
-- Phase 3: Server management (CRUD, channels, members, invites)
-- Phase 4: Real-time text chat with WebSocket
-- Phase 5: P2P networking with libp2p
-- Phase 6: Voice chat with WebRTC
-- Phase 7: File sharing (DONE)
-- Phase 8: Voice translation with NVIDIA PersonaPlex
-- Phase 9: Central server (PostgreSQL, Redis, REST API)
-- Phase 10: Production hardening and release
-
 ---
 
 ## Version History
 
-- **0.1.0-dev** - Current development version
+- **1.0.0** - Production release with all 10 phases complete
+- **0.1.0-dev** - Initial development version

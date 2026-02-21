@@ -2,13 +2,19 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/concord-chat/concord/internal/api"
+	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/store/postgres"
+	"github.com/concord-chat/concord/internal/store/redis"
 	"github.com/concord-chat/concord/pkg/version"
 )
 
@@ -37,84 +43,110 @@ func main() {
 		Str("version", version.Version).
 		Str("git_commit", version.GitCommit).
 		Str("platform", version.Platform).
-		Msg("starting Concord server")
+		Msg("starting Concord central server")
 
 	// Initialize metrics
 	metrics := observability.NewMetrics()
-	logger.Info().
-		Str("metrics_addr", ":9090").
-		Msg("metrics initialized")
+	_ = metrics // Will be wired into middleware in future iteration
 
 	// Initialize health checker
 	health := observability.NewHealthChecker(logger, version.Version)
-	logger.Info().
-		Str("health_endpoint", "/health").
-		Msg("health checker initialized")
 
-	// TODO: Expose metrics endpoint on :9090/metrics
-	// TODO: Expose health endpoint on :9090/health
-	// These will be integrated in Phase 9 when HTTP server is implemented
+	// --- Infrastructure: PostgreSQL ---
+	pgDB, err := postgres.New(cfg.Database.Postgres, logger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("postgresql unavailable — server will start without database")
+		pgDB = nil
+	} else {
+		// Run migrations
+		migrator := postgres.NewMigrator(pgDB, logger)
+		if err := migrator.Run(context.Background()); err != nil {
+			logger.Error().Err(err).Msg("failed to run postgresql migrations")
+		}
 
-	// Register health checks for infrastructure components
-	// More checks will be added as components are implemented (DB, Redis, P2P, etc.)
-	logger.Debug().
-		Str("metrics_component", fmt.Sprintf("%T", metrics)).
-		Str("health_component", fmt.Sprintf("%T", health)).
-		Msg("observability components initialized")
+		// Register PG health check
+		health.RegisterCheck("postgresql", observability.DatabaseHealthCheck(pgDB.Ping))
 
-	// TODO: Initialize database (PostgreSQL)
-	// TODO: Initialize Redis
-	// TODO: Initialize HTTP server
-	// TODO: Initialize WebSocket signaling server
-	// TODO: Initialize P2P relay server
+		logger.Info().Msg("postgresql initialized and migrations applied")
+	}
+
+	// --- Infrastructure: Redis ---
+	var redisClient *redis.Client
+	if cfg.Cache.Redis.Enabled {
+		redisClient, err = redis.New(cfg.Cache.Redis, logger)
+		if err != nil {
+			logger.Warn().Err(err).Msg("redis unavailable — server will start without cache")
+			redisClient = nil
+		} else {
+			health.RegisterCheck("redis", observability.RedisHealthCheck(redisClient.Ping))
+			logger.Info().Msg("redis initialized")
+		}
+	}
+
+	// --- JWT Manager ---
+	jwtManager, err := auth.NewJWTManager(cfg.Security.JWTSecret)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to create JWT manager")
+	}
+
+	// --- API Server ---
+	// Note: Full service integration with PG-backed repos will come in a future iteration.
+	// For now the API server is initialized without services for routes that need PG-backed repos.
+	// Auth, server, and chat services are nil; handlers will return 500 if called without them.
+	apiServer := api.New(
+		cfg.Server,
+		nil, // auth service — requires PG-backed repo
+		nil, // server service — requires PG-backed repo
+		nil, // chat service — requires PG-backed repo
+		jwtManager,
+		health,
+		logger,
+	)
+
+	// Start HTTP server in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		if err := apiServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("HTTP server error: %w", err)
+		}
+	}()
 
 	logger.Info().
 		Str("host", cfg.Server.Host).
 		Int("port", cfg.Server.Port).
-		Msg("server started successfully")
+		Msg("concord central server started")
 
-	// Placeholder server implementation
-	logger.Info().Msg("server is running (stub implementation)")
-	logger.Info().Msg("press Ctrl+C to stop")
-
-	// Graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Set up signal handling
+	// --- Graceful shutdown ---
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Wait for interrupt signal
-	<-sigChan
-	logger.Info().Msg("shutdown signal received")
+	select {
+	case sig := <-sigChan:
+		logger.Info().Str("signal", sig.String()).Msg("shutdown signal received")
+	case err := <-errCh:
+		logger.Error().Err(err).Msg("server error, initiating shutdown")
+	}
 
-	// Create shutdown context with timeout
+	// Create shutdown context with configured timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer shutdownCancel()
 
-	// Perform graceful shutdown
-	logger.Info().Msg("shutting down server gracefully")
-
-	// TODO: Close database connections
-	// TODO: Close Redis connections
-	// TODO: Stop HTTP server
-	// TODO: Stop WebSocket server
-	// TODO: Stop P2P relay
-
-	// Wait for shutdown to complete or timeout
-	select {
-	case <-shutdownCtx.Done():
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			logger.Warn().Msg("shutdown timeout exceeded")
-		}
-	case <-ctx.Done():
-		logger.Info().Msg("shutdown completed")
+	// Shutdown HTTP server
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error().Err(err).Msg("HTTP server shutdown error")
 	}
 
-	// Log final metrics and health status before shutdown
-	logger.Info().
-		Str("metrics_status", "tracked").
-		Str("health_status", "monitored").
-		Msg("server shut down successfully")
+	// Close Redis
+	if redisClient != nil {
+		if err := redisClient.Close(); err != nil {
+			logger.Error().Err(err).Msg("redis close error")
+		}
+	}
+
+	// Close PostgreSQL
+	if pgDB != nil {
+		pgDB.Close()
+	}
+
+	logger.Info().Msg("concord central server shut down successfully")
 }

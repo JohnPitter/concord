@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import type { Snippet } from 'svelte'
 
   interface Props {
@@ -12,12 +13,16 @@
   let dialogEl: HTMLDialogElement | undefined = $state()
 
   $effect(() => {
-    if (!dialogEl) return
-    if (open) {
-      dialogEl.showModal()
-    } else {
-      dialogEl.close()
+    if (!open) {
+      dialogEl?.close()
+      return
     }
+    // Wait for the DOM to render the dialog before calling showModal
+    tick().then(() => {
+      if (dialogEl && open && !dialogEl.open) {
+        dialogEl.showModal()
+      }
+    })
   })
 
   function handleKeydown(e: KeyboardEvent) {

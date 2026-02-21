@@ -1,0 +1,30 @@
+# =============================================================================
+# Concord TURN/Relay Server — coturn-based NAT Traversal
+# =============================================================================
+# Provides TURN/STUN services for WebRTC voice chat NAT traversal.
+# Uses coturn, the industry-standard open-source TURN server.
+#
+# Build:  docker build -f deployments/docker/Dockerfile.relay -t concord-relay deployments/docker/
+# Run:    docker run -p 3478:3478 -p 3478:3478/udp -e TURN_SECRET=mysecret concord-relay
+# =============================================================================
+
+FROM coturn/coturn:latest
+
+# Copy coturn configuration template and entrypoint
+COPY turnserver.conf /etc/turnserver.conf.template
+COPY docker-entrypoint-relay.sh /docker-entrypoint-relay.sh
+
+# Switch to root to set permissions, then back
+USER root
+RUN chmod +x /docker-entrypoint-relay.sh && \
+    apt-get update -qq && apt-get install -y -qq gettext-base > /dev/null 2>&1 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* || true
+USER turnserver
+
+# Expose ports:
+#   3478      — STUN/TURN (TCP + UDP)
+#   5349      — STUN/TURN over TLS (TCP + UDP)
+#   49152-65535 — relay ports range (handled by host network or port range mapping)
+EXPOSE 3478 3478/udp 5349 5349/udp
+
+ENTRYPOINT ["/docker-entrypoint-relay.sh"]

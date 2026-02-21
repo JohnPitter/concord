@@ -15,6 +15,7 @@ import (
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
+	"github.com/concord-chat/concord/internal/translation"
 	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
 	"github.com/rs/zerolog"
@@ -39,6 +40,7 @@ type App struct {
 	chatService   *chat.Service
 	voiceEngine   *voice.Engine
 	fileService   *files.Service
+	translationService *translation.Service
 }
 
 // NewApp creates a new application instance
@@ -154,12 +156,25 @@ func (a *App) startup(ctx context.Context) {
 	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
 	a.logger.Info().Msg("voice engine initialized")
 
+	// Initialize translation service
+	a.translationService = translation.NewService(cfg.Translation, a.logger)
+	a.logger.Info().
+		Bool("enabled", cfg.Translation.Enabled).
+		Str("default_lang", cfg.Translation.DefaultLang).
+		Msg("translation service initialized")
+
 	a.logger.Info().Msg("Concord started successfully")
 }
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
 	a.logger.Info().Msg("shutting down Concord")
+
+	// Stop translation service if active
+	if a.translationService != nil {
+		a.translationService.StopPipeline()
+		a.logger.Info().Msg("translation service stopped")
+	}
 
 	// Leave voice channel if connected
 	if a.voiceEngine != nil {
@@ -372,6 +387,23 @@ func (a *App) GetAttachments(messageID string) ([]*files.Attachment, error) {
 // DeleteAttachment removes an attachment.
 func (a *App) DeleteAttachment(attachmentID string) error {
 	return a.fileService.DeleteAttachment(a.ctx, attachmentID)
+}
+
+// --- Translation Bindings ---
+
+// EnableTranslation activates voice translation between two languages.
+func (a *App) EnableTranslation(sourceLang, targetLang string) error {
+	return a.translationService.Enable(sourceLang, targetLang)
+}
+
+// DisableTranslation deactivates voice translation and stops the pipeline.
+func (a *App) DisableTranslation() error {
+	return a.translationService.Disable()
+}
+
+// GetTranslationStatus returns the current translation service status.
+func (a *App) GetTranslationStatus() translation.Status {
+	return a.translationService.GetStatus()
 }
 
 func main() {

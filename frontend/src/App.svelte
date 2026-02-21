@@ -13,6 +13,7 @@
     getVoice, joinVoice, leaveVoice,
     toggleMute, toggleDeafen, resetVoice,
   } from './lib/stores/voice.svelte'
+  import { loadSettings } from './lib/stores/settings.svelte'
   import Login from './lib/components/auth/Login.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
@@ -20,6 +21,8 @@
   import ChannelSidebar from './lib/components/layout/ChannelSidebar.svelte'
   import MainContent from './lib/components/layout/MainContent.svelte'
   import MemberSidebar from './lib/components/layout/MemberSidebar.svelte'
+  import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
+  import Toast from './lib/components/ui/Toast.svelte'
 
   const auth = getAuth()
   const srv = getServers()
@@ -28,7 +31,13 @@
 
   let showCreateServer = $state(false)
   let showJoinServer = $state(false)
+  let showSettings = $state(false)
   let activeChannelId = $state<string | null>(null)
+
+  // Load persisted settings
+  $effect(() => {
+    loadSettings()
+  })
 
   // Initialize auth + load servers on mount
   $effect(() => {
@@ -221,6 +230,7 @@
       onLeaveVoice={leaveVoice}
       onToggleMute={toggleMute}
       onToggleDeafen={toggleDeafen}
+      onOpenSettings={() => showSettings = true}
     />
     <MainContent
       channelName={activeChannel?.name ?? 'general'}
@@ -249,4 +259,12 @@
     bind:open={showJoinServer}
     onJoin={handleJoinServer}
   />
+
+  <SettingsPanel
+    bind:open={showSettings}
+    currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
+    onLogout={() => { logout() }}
+  />
 {/if}
+
+<Toast />
