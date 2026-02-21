@@ -1,0 +1,25 @@
+run:
+  timeout: 5m
+  skip-dirs:
+    - frontend
+    - docs
+  skip-files:
+    - "main.go"  # Uses //go:embed all:frontend/dist — not available in CI
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+  disable:
+    - depguard
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
