@@ -13,12 +13,14 @@
     getVoice, joinVoice, leaveVoice,
     toggleMute, toggleDeafen, resetVoice,
   } from './lib/stores/voice.svelte'
-  import { loadSettings } from './lib/stores/settings.svelte'
+  import { getSettings, loadSettings, setNetworkMode, setP2PProfile } from './lib/stores/settings.svelte'
   import {
     getFriends, loadFriends, setFriendsTab, openDM,
   } from './lib/stores/friends.svelte'
 
   import Login from './lib/components/auth/Login.svelte'
+  import ModeSelector from './lib/components/auth/ModeSelector.svelte'
+  import P2PProfile from './lib/components/auth/P2PProfile.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
@@ -36,6 +38,13 @@
   const chat = getChat()
   const vc = getVoice()
   const friends = getFriends()
+
+  const settings = getSettings()
+  const networkMode = $derived(settings.networkMode)
+  const p2pProfile = $derived(settings.p2pProfile)
+  const needsModeSelection = $derived(networkMode === null)
+  const needsP2PProfile = $derived(networkMode === 'p2p' && !p2pProfile)
+  const isP2PMode = $derived(networkMode === 'p2p' && !!p2pProfile)
 
   // 'home' = DMs/friends view, any other string = server id
   let activeServerId = $state<string>('home')
@@ -95,6 +104,14 @@
     activeServerId = id
     activeChannelId = null
     selectServer(id)
+  }
+
+  function handleModeSelect(mode: 'p2p' | 'server') {
+    setNetworkMode(mode)
+  }
+
+  function handleP2PProfileConfirm(profile: { displayName: string; avatarDataUrl?: string }) {
+    setP2PProfile(profile)
   }
 
   const activeChannel = $derived(srv.channels.find(c => c.id === activeChannelId))
@@ -211,7 +228,19 @@
   )
 </script>
 
-{#if auth.loading}
+{#if needsModeSelection}
+  <ModeSelector onSelectMode={handleModeSelect} />
+
+{:else if needsP2PProfile}
+  <P2PProfile onConfirm={handleP2PProfileConfirm} />
+
+{:else if isP2PMode}
+  <!-- Placeholder: P2P app (Task 6+) -->
+  <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
+    <p class="text-void-text-muted">Modo P2P — em breve</p>
+  </div>
+
+{:else if auth.loading}
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
     <div class="text-center">
       <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
