@@ -11,6 +11,7 @@
     hasMore = false,
     sending = false,
     attachmentsByMessage = {},
+    membersVisible = false,
     onSend,
     onLoadMore,
     onEdit,
@@ -18,6 +19,7 @@
     onFileSelect,
     onDownloadFile,
     onDeleteFile,
+    onToggleMembers,
   }: {
     channelName?: string
     messages?: MessageData[]
@@ -26,6 +28,7 @@
     hasMore?: boolean
     sending?: boolean
     attachmentsByMessage?: Record<string, AttachmentData[]>
+    membersVisible?: boolean
     onSend: (content: string) => void
     onLoadMore?: () => void
     onEdit?: (id: string) => void
@@ -33,6 +36,7 @@
     onFileSelect?: (file: { name: string; data: number[] }) => void
     onDownloadFile?: (id: string) => void
     onDeleteFile?: (id: string) => void
+    onToggleMembers?: () => void
   } = $props()
 </script>
 
@@ -57,7 +61,11 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
       </button>
-      <button aria-label="Members" class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:text-void-text-primary cursor-pointer">
+      <button
+        aria-label="Members"
+        class="rounded-md p-1.5 transition-colors cursor-pointer {membersVisible ? 'text-void-text-primary bg-void-bg-hover' : 'text-void-text-secondary hover:text-void-text-primary'}"
+        onclick={() => onToggleMembers?.()}
+      >
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />

@@ -2,6 +2,7 @@
 // Manages voice channel state via Wails bindings
 
 import * as App from '../../../wailsjs/go/main/App'
+import { ensureValidToken } from './auth.svelte'
 
 export interface SpeakerData {
   peer_id: string
@@ -46,6 +47,7 @@ export async function joinVoice(voiceChannelId: string): Promise<void> {
   error = null
 
   try {
+    await ensureValidToken()
     await App.JoinVoice(voiceChannelId)
     state = 'connected'
     channelId = voiceChannelId

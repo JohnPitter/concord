@@ -1,7 +1,11 @@
-# Concord
+<p align="center">
+  <img src="frontend/src/assets/logo.svg" alt="Concord Logo" width="96" height="96" />
+</p>
+
+<h1 align="center">Concord</h1>
 
 <p align="center">
-  <strong>Chat de voz para amigos que jogam com máximo de privacidade. No Scam Bro.</strong>
+  <strong>Chat de voz para amigos que jogam com maximo de privacidade. No Scam Bro.</strong>
 </p>
 
 <p align="center">
@@ -10,6 +14,20 @@
   <a href="https://wails.io/"><img src="https://img.shields.io/badge/Wails-v2-red?style=for-the-badge" alt="Wails v2"></a>
   <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=for-the-badge&logo=svelte&logoColor=white" alt="Svelte 5"></a>
 </p>
+
+---
+
+## Por que "Concord"?
+
+> **Concord** e o oposto de **Discord**. Simples assim.
+>
+> Enquanto Discord significa *discordia, conflito*, **Concord** significa *concordia, harmonia, acordo*.
+>
+> Este projeto nasceu como resposta direta a imposicao de **coleta de dados biometricos** para verificacao de idade em plataformas de comunicacao. Acreditamos que ninguem deveria ser obrigado a entregar dados biometricos — como scans faciais ou documentos de identidade — apenas para conversar com amigos.
+>
+> **Concord** e uma alternativa open-source, privacy-first, que respeita seus dados e sua liberdade. Sem biometria. Sem rastreamento. Sem scam.
+
+---
 
 **Concord** is a privacy-first, open-source Discord alternative designed for gamers. Real-time voice chat, text messaging, file sharing, and server management — all running as a native desktop app built with **Go (Wails)** and **Svelte 5**. Voice traffic flows peer-to-peer when possible, through relay servers when NAT traversal fails. A power-up feature enables **real-time voice translation** via NVIDIA PersonaPlex.
 
@@ -137,13 +155,14 @@ concord/
 | Phase | Feature | Status |
 |---|---|---|
 | 1 | Foundation (config, logging, SQLite, observability) | Done |
-| 1.2 | Frontend design system "Void" | Pending |
-| 2 | GitHub OAuth authentication | Planned |
-| 3 | Server management (CRUD, channels, members) | Planned |
-| 4 | Real-time text chat (WebSocket) | Planned |
-| 5 | P2P networking (libp2p, NAT traversal) | Planned |
-| 6 | Voice chat (WebRTC, Opus) | Planned |
-| 7 | File sharing | Planned |
+| 1.2 | Frontend design system "Void" | Done |
+| 1.6 | Layout Shell (4-panel Discord-like UI) | Done |
+| 2 | GitHub OAuth authentication (Device Flow) | Done |
+| 3 | Server management (CRUD, channels, members, invites) | Done |
+| 4 | Real-time text chat (FTS5, pagination) | Done |
+| 5 | P2P networking (libp2p, NAT traversal, signaling) | Done |
+| 6 | Voice chat (WebRTC, Opus, VAD, jitter buffer) | Done |
+| 7 | File sharing (chunking, dedup, scanner) | Done |
 | 8 | Voice translation (PersonaPlex) | Planned |
 | 9 | Central server (PostgreSQL, Redis, REST) | Planned |
 | 10 | Production hardening & release | Planned |

@@ -6,9 +6,6 @@
 
   async function handleLogin() {
     await startLogin()
-    if (auth.deviceCode) {
-      await pollForCompletion()
-    }
   }
 
   function handleCopyCode() {
@@ -29,9 +26,18 @@
   <div class="w-full max-w-md space-y-8 px-6">
     <!-- Logo / Branding -->
     <div class="text-center">
-      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-void-accent/20">
-        <svg class="h-8 w-8 text-void-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      <div class="mx-auto mb-4 h-16 w-16">
+        <svg viewBox="0 0 128 128" class="h-16 w-16">
+          <defs>
+            <linearGradient id="cg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#4ade80"/>
+              <stop offset="100%" stop-color="#16a34a"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#cg)" d="M58,6 C89,6 114,22 120,48 C121,52 118,56 114,56 C110,56 107,53 106,50 C102,30 82,18 58,18 C28,18 10,38 10,59 C10,80 28,100 58,100 C82,100 102,88 106,68 C107,65 110,62 114,62 C118,62 121,66 120,70 C114,96 89,112 58,112 L42,112 L16,126 L22,108 C8,100 -2,82 -2,59 C-2,28 22,6 58,6 Z"/>
+          <path d="M40,47 A17,17 0 0 1 40,71" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.95"/>
+          <path d="M54,39 A26,26 0 0 1 54,79" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" opacity="0.6"/>
+          <path d="M68,32 A34,34 0 0 1 68,86" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity="0.3"/>
         </svg>
       </div>
       <h1 class="text-2xl font-bold text-void-text-primary">Welcome to Concord</h1>

@@ -14,9 +14,10 @@
     size = 'md',
     loading = false,
     disabled = false,
+    class: extraClass = '',
     children,
     ...rest
-  }: Props = $props()
+  }: Props & { class?: string } = $props()
 
   const sizeClasses: Record<string, string> = {
     sm: 'px-2.5 py-1 text-xs',
@@ -33,7 +34,7 @@
 </script>
 
 <button
-  class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-void-accent disabled:pointer-events-none disabled:opacity-50 {sizeClasses[size]} {variantClasses[variant]}"
+  class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-void-accent disabled:pointer-events-none disabled:opacity-50 {sizeClasses[size]} {variantClasses[variant]} {extraClass}"
   disabled={disabled || loading}
   aria-busy={loading}
   {...rest}

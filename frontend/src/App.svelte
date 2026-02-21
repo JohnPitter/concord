@@ -32,6 +32,7 @@
   let showCreateServer = $state(false)
   let showJoinServer = $state(false)
   let showSettings = $state(false)
+  let showMembers = $state(false)
   let activeChannelId = $state<string | null>(null)
 
   // Load persisted settings
@@ -102,6 +103,7 @@
     srv.members.map(m => ({
       id: m.user_id,
       name: m.username,
+      avatarUrl: m.avatar_url || undefined,
       status: 'online' as const, // TODO: real presence in Phase 5
       role: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : m.role === 'moderator' ? 'Moderator' : undefined,
     }))
@@ -214,12 +216,14 @@
         activeChannelId = null
       }}
       onAddServer={() => showCreateServer = true}
+      currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
     />
     <ChannelSidebar
       serverName={srv.active?.name ?? 'Server'}
       channels={sidebarChannels}
       activeChannelId={activeChannelId ?? ''}
       onSelectChannel={(id) => activeChannelId = id}
+      currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
       voiceConnected={vc.connected}
       voiceChannelName={voiceChannelName}
       voiceMuted={vc.muted}
@@ -240,14 +244,18 @@
       hasMore={chat.hasMore}
       sending={chat.sending}
       attachmentsByMessage={chat.attachmentsByMessage}
+      membersVisible={showMembers}
       onSend={handleSendMessage}
       onLoadMore={loadOlderMessages}
       onDelete={handleDeleteMessage}
       onFileSelect={handleFileSelect}
       onDownloadFile={handleDownloadFile}
       onDeleteFile={handleDeleteFile}
+      onToggleMembers={() => showMembers = !showMembers}
     />
-    <MemberSidebar members={sidebarMembers} />
+    {#if showMembers}
+      <MemberSidebar members={sidebarMembers} />
+    {/if}
   </div>
 
   <CreateServerModal

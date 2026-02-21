@@ -163,14 +163,20 @@ func (s *Service) RestoreSession(ctx context.Context, userID string) (*AuthState
 		return &AuthState{Authenticated: false}, nil
 	}
 
-	// Get user from claims
-	claims, _ := s.jwt.ValidateToken(tokenPair.AccessToken)
-	var user *User
-	if claims != nil {
-		user = &User{
-			ID:       claims.UserID,
-			GitHubID: claims.GitHubID,
-			Username: claims.Username,
+	// Fetch full user profile from DB (not just JWT claims)
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to fetch user from DB, falling back to claims")
+	}
+	if user == nil {
+		// Fallback to JWT claims if DB lookup fails
+		claims, _ := s.jwt.ValidateToken(tokenPair.AccessToken)
+		if claims != nil {
+			user = &User{
+				ID:       claims.UserID,
+				GitHubID: claims.GitHubID,
+				Username: claims.Username,
+			}
 		}
 	}
 

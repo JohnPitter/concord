@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -63,11 +64,11 @@ func (g *GitHubOAuth) RequestDeviceCode(ctx context.Context) (*DeviceCodeRespons
 		"scope":     {"read:user"},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, githubDeviceCodeURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, githubDeviceCodeURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.URL.RawQuery = data.Encode()
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := g.httpClient.Do(req)
@@ -149,11 +150,11 @@ func (g *GitHubOAuth) exchangeDeviceCode(ctx context.Context, deviceCode string)
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, githubAccessTokenURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, githubAccessTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.URL.RawQuery = data.Encode()
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := g.httpClient.Do(req)

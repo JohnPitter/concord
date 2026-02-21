@@ -6,21 +6,30 @@ import (
 	"encoding/base32"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+
+	"github.com/concord-chat/concord/internal/cache"
+)
+
+const (
+	cacheTTL = 5 * time.Minute
 )
 
 // Service orchestrates server management operations.
 type Service struct {
 	repo   *Repository
+	cache  *cache.LRU
 	logger zerolog.Logger
 }
 
 // NewService creates a new server management service.
-func NewService(repo *Repository, logger zerolog.Logger) *Service {
+func NewService(repo *Repository, cache *cache.LRU, logger zerolog.Logger) *Service {
 	return &Service{
 		repo:   repo,
+		cache:  cache,
 		logger: logger.With().Str("component", "server_service").Logger(),
 	}
 }
@@ -80,6 +89,9 @@ func (s *Service) CreateServer(ctx context.Context, name, ownerID string) (*Serv
 		return nil, fmt.Errorf("failed to create default voice channel: %w", err)
 	}
 
+	// Invalidate user servers cache
+	s.cache.DeletePrefix("servers:user:" + ownerID)
+
 	s.logger.Info().
 		Str("server_id", srv.ID).
 		Str("name", srv.Name).
@@ -91,12 +103,32 @@ func (s *Service) CreateServer(ctx context.Context, name, ownerID string) (*Serv
 
 // GetServer retrieves a server by ID.
 func (s *Service) GetServer(ctx context.Context, serverID string) (*Server, error) {
-	return s.repo.GetServer(ctx, serverID)
+	cacheKey := "server:" + serverID
+	if val, ok := s.cache.Get(cacheKey); ok {
+		return val.(*Server), nil
+	}
+	srv, err := s.repo.GetServer(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if srv != nil {
+		s.cache.Set(cacheKey, srv, cacheTTL)
+	}
+	return srv, nil
 }
 
 // ListUserServers returns all servers a user belongs to.
 func (s *Service) ListUserServers(ctx context.Context, userID string) ([]*Server, error) {
-	return s.repo.ListServersByUser(ctx, userID)
+	cacheKey := "servers:user:" + userID
+	if val, ok := s.cache.Get(cacheKey); ok {
+		return val.([]*Server), nil
+	}
+	servers, err := s.repo.ListServersByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.cache.Set(cacheKey, servers, cacheTTL)
+	return servers, nil
 }
 
 // UpdateServer updates server name and icon. Requires PermManageServer.
@@ -109,7 +141,13 @@ func (s *Service) UpdateServer(ctx context.Context, serverID, userID, name, icon
 		return fmt.Errorf("server name cannot be empty")
 	}
 
-	return s.repo.UpdateServer(ctx, serverID, strings.TrimSpace(name), iconURL)
+	if err := s.repo.UpdateServer(ctx, serverID, strings.TrimSpace(name), iconURL); err != nil {
+		return err
+	}
+
+	s.cache.Delete("server:" + serverID)
+	s.cache.DeletePrefix("servers:user:")
+	return nil
 }
 
 // DeleteServer removes a server. Only the owner can delete.
@@ -125,7 +163,15 @@ func (s *Service) DeleteServer(ctx context.Context, serverID, userID string) err
 		return fmt.Errorf("only the server owner can delete the server")
 	}
 
-	return s.repo.DeleteServer(ctx, serverID)
+	if err := s.repo.DeleteServer(ctx, serverID); err != nil {
+		return err
+	}
+
+	s.cache.Delete("server:" + serverID)
+	s.cache.DeletePrefix("servers:user:")
+	s.cache.DeletePrefix("channels:server:" + serverID)
+	s.cache.DeletePrefix("members:server:" + serverID)
+	return nil
 }
 
 // --- Channels ---
@@ -154,12 +200,22 @@ func (s *Service) CreateChannel(ctx context.Context, serverID, userID, name, chT
 		return nil, err
 	}
 
+	s.cache.Delete("channels:server:" + serverID)
 	return ch, nil
 }
 
 // ListChannels returns all channels for a server.
 func (s *Service) ListChannels(ctx context.Context, serverID string) ([]*Channel, error) {
-	return s.repo.ListChannels(ctx, serverID)
+	cacheKey := "channels:server:" + serverID
+	if val, ok := s.cache.Get(cacheKey); ok {
+		return val.([]*Channel), nil
+	}
+	channels, err := s.repo.ListChannels(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	s.cache.Set(cacheKey, channels, cacheTTL)
+	return channels, nil
 }
 
 // UpdateChannel updates a channel. Requires PermManageChannels.
@@ -175,14 +231,27 @@ func (s *Service) DeleteChannel(ctx context.Context, serverID, userID, channelID
 	if err := s.requirePermission(ctx, serverID, userID, PermManageChannels); err != nil {
 		return err
 	}
-	return s.repo.DeleteChannel(ctx, channelID)
+	if err := s.repo.DeleteChannel(ctx, channelID); err != nil {
+		return err
+	}
+	s.cache.Delete("channels:server:" + serverID)
+	return nil
 }
 
 // --- Members ---
 
 // ListMembers returns all members of a server.
 func (s *Service) ListMembers(ctx context.Context, serverID string) ([]*Member, error) {
-	return s.repo.ListMembers(ctx, serverID)
+	cacheKey := "members:server:" + serverID
+	if val, ok := s.cache.Get(cacheKey); ok {
+		return val.([]*Member), nil
+	}
+	members, err := s.repo.ListMembers(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	s.cache.Set(cacheKey, members, cacheTTL)
+	return members, nil
 }
 
 // KickMember removes a member from a server. Requires PermManageMembers.
@@ -206,7 +275,12 @@ func (s *Service) KickMember(ctx context.Context, serverID, actorID, targetID st
 		return fmt.Errorf("cannot kick a member with equal or higher role")
 	}
 
-	return s.repo.RemoveMember(ctx, serverID, targetID)
+	if err := s.repo.RemoveMember(ctx, serverID, targetID); err != nil {
+		return err
+	}
+	s.cache.Delete("members:server:" + serverID)
+	s.cache.DeletePrefix("servers:user:" + targetID)
+	return nil
 }
 
 // UpdateMemberRole changes a member's role. Requires PermManageMembers.
@@ -238,7 +312,11 @@ func (s *Service) UpdateMemberRole(ctx context.Context, serverID, actorID, targe
 		return fmt.Errorf("cannot promote a member to your role or above")
 	}
 
-	return s.repo.UpdateMemberRole(ctx, serverID, targetID, newRole)
+	if err := s.repo.UpdateMemberRole(ctx, serverID, targetID, newRole); err != nil {
+		return err
+	}
+	s.cache.Delete("members:server:" + serverID)
+	return nil
 }
 
 // --- Invites ---
@@ -284,6 +362,10 @@ func (s *Service) RedeemInvite(ctx context.Context, code, userID string) (*Serve
 	if err := s.repo.AddMember(ctx, srv.ID, userID, RoleMember); err != nil {
 		return nil, fmt.Errorf("failed to join server: %w", err)
 	}
+
+	// Invalidate caches for member list and user server list
+	s.cache.Delete("members:server:" + srv.ID)
+	s.cache.DeletePrefix("servers:user:" + userID)
 
 	s.logger.Info().
 		Str("server_id", srv.ID).

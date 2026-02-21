@@ -27,6 +27,6 @@
     "generate": "go generate ./..."
   },
   "debounceMS": 750,
-  "devServer": "http://localhost:5173",
-  "frontendDevServerUrl": "http://localhost:5173"
+  "devServer": "localhost:5173",
+  "frontendDevServerUrl": "auto"
 }

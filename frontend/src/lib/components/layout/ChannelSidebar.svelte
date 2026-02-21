@@ -10,11 +10,18 @@
     unreadCount?: number
   }
 
+  interface CurrentUser {
+    username: string
+    display_name: string
+    avatar_url: string
+  }
+
   let {
     serverName,
     channels,
     activeChannelId,
     onSelectChannel,
+    currentUser = null,
     voiceConnected = false,
     voiceChannelName = '',
     voiceMuted = false,
@@ -31,6 +38,7 @@
     channels: Channel[]
     activeChannelId: string
     onSelectChannel: (id: string) => void
+    currentUser?: CurrentUser | null
     voiceConnected?: boolean
     voiceChannelName?: string
     voiceMuted?: boolean
@@ -43,6 +51,9 @@
     onToggleDeafen?: () => void
     onOpenSettings?: () => void
   } = $props()
+
+  const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
+  const initials = $derived(displayName.slice(0, 2).toUpperCase())
 
   const textChannels = $derived(channels.filter(c => c.type === 'text'))
   const voiceChannels = $derived(channels.filter(c => c.type === 'voice'))
@@ -137,11 +148,15 @@
   <!-- User panel -->
   <div class="border-t border-void-border bg-void-bg-primary p-2">
     <div class="flex items-center gap-2 rounded-md px-2 py-1.5">
-      <div class="h-8 w-8 shrink-0 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
-        YO
-      </div>
+      {#if currentUser?.avatar_url}
+        <img src={currentUser.avatar_url} alt={displayName} class="h-8 w-8 shrink-0 rounded-full object-cover" />
+      {:else}
+        <div class="h-8 w-8 shrink-0 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
+          {initials}
+        </div>
+      {/if}
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-void-text-primary truncate">You</p>
+        <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
         <p class="text-[11px] text-void-online">Online</p>
       </div>
       <Tooltip text="Settings" position="top">

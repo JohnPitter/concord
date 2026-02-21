@@ -103,7 +103,7 @@ func Default() *Config {
 		},
 
 		Auth: AuthConfig{
-			GitHubClientID: "", // Set via CONCORD_GITHUB_CLIENT_ID env var
+			GitHubClientID: "Ov23liWDhwBJ6BL202Ap",
 		},
 
 		Security: SecurityConfig{

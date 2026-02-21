@@ -5,17 +5,25 @@
   interface Server {
     id: string
     name: string
-    icon?: string
     iconUrl?: string
     hasNotification?: boolean
   }
 
-  let { servers, activeServerId, onSelectServer, onAddServer }: {
+  interface CurrentUser {
+    username: string
+    display_name: string
+    avatar_url: string
+  }
+
+  let { servers, activeServerId, onSelectServer, onAddServer, currentUser = null }: {
     servers: Server[]
     activeServerId: string
     onSelectServer: (id: string) => void
     onAddServer?: () => void
+    currentUser?: CurrentUser | null
   } = $props()
+
+  const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
 </script>
 
 <aside class="flex h-full w-[72px] flex-col items-center gap-2 bg-void-bg-primary py-3 overflow-y-auto">
@@ -44,8 +52,8 @@
             : 'bg-void-bg-tertiary text-void-text-primary hover:bg-void-accent-hover hover:text-white'}"
         onclick={() => onSelectServer(server.id)}
       >
-        {#if server.icon}
-          <img src={server.icon} alt={server.name} class="h-full w-full rounded-[inherit] object-cover" />
+        {#if server.iconUrl}
+          <img src={server.iconUrl} alt={server.name} class="h-full w-full rounded-[inherit] object-cover" />
         {:else}
           <span class="text-sm font-bold">{server.name.slice(0, 2).toUpperCase()}</span>
         {/if}
@@ -72,9 +80,14 @@
   <div class="flex-1"></div>
 
   <!-- User avatar -->
-  <Tooltip text="Settings" position="right">
-    <button class="cursor-pointer">
-      <Avatar name="You" size="sm" status="online" />
-    </button>
-  </Tooltip>
+  <div class="pb-1">
+    {#if currentUser?.avatar_url}
+      <div class="relative">
+        <img src={currentUser.avatar_url} alt={displayName} class="h-10 w-10 rounded-full object-cover" />
+        <span class="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-void-bg-primary bg-void-online"></span>
+      </div>
+    {:else}
+      <Avatar name={displayName} size="sm" status="online" />
+    {/if}
+  </div>
 </aside>

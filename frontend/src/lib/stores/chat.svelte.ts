@@ -2,6 +2,7 @@
 // Manages messages for the active channel via Wails bindings
 
 import * as App from '../../../wailsjs/go/main/App'
+import { ensureValidToken } from './auth.svelte'
 
 export interface MessageData {
   id: string
@@ -60,6 +61,7 @@ export async function loadMessages(channelID: string): Promise<void> {
   searchQuery = ''
 
   try {
+    await ensureValidToken()
     const result = await App.GetMessages(channelID, '', '', 50)
     // API returns newest first, reverse for display (oldest at top)
     const msgs = (result ?? []) as unknown as MessageData[]
@@ -81,6 +83,7 @@ export async function loadOlderMessages(): Promise<void> {
 
   loading = true
   try {
+    await ensureValidToken()
     const result = await App.GetMessages(
       activeChannelId, oldestMessage.id, '', 50
     )
@@ -99,6 +102,7 @@ export async function sendMessage(channelID: string, authorID: string, content: 
   error = null
 
   try {
+    await ensureValidToken()
     const msg = await App.SendMessage(channelID, authorID, content)
     const data = msg as unknown as MessageData
     messages = [...messages, data]
@@ -114,6 +118,7 @@ export async function sendMessage(channelID: string, authorID: string, content: 
 export async function editMessage(messageID: string, authorID: string, content: string): Promise<void> {
   error = null
   try {
+    await ensureValidToken()
     const updated = await App.EditMessage(messageID, authorID, content)
     const data = updated as unknown as MessageData
     messages = messages.map(m => m.id === messageID ? data : m)
@@ -125,6 +130,7 @@ export async function editMessage(messageID: string, authorID: string, content: 
 export async function deleteMessage(messageID: string, actorID: string, isManager: boolean): Promise<void> {
   error = null
   try {
+    await ensureValidToken()
     await App.DeleteMessage(messageID, actorID, isManager)
     messages = messages.filter(m => m.id !== messageID)
   } catch (e) {

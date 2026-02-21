@@ -79,6 +79,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wails bindings: EnableTranslation, DisableTranslation, GetTranslationStatus
 - 14 unit tests (client, circuit breaker, cache, pipeline, service, concurrency)
 
+#### Cache + Refresh Token (2026-02-20)
+
+- LRU cache package (`internal/cache/lru.go`) — generic, thread-safe, with per-key TTL and prefix invalidation
+- LRU cache integrated into server service (ListUserServers, ListChannels, ListMembers, GetServer) with 5min TTL
+- Cache invalidation on all write operations (create/update/delete server, channel, member)
+- Automatic access token refresh in frontend auth store with 2min pre-expiry buffer
+- `ensureValidToken()` guard in servers, chat, and voice frontend stores
+- CLAUDE.md principles 13 (Cache) and 14 (Refresh Token)
+
+### Fixed
+
+- RestoreSession now fetches full user profile from DB (display_name, avatar_url) instead of only JWT claims
+- Added `GetUser(ctx, userID)` to auth repository for primary key lookup
+- MemberSidebar now hidden by default, toggled via Members button in channel header
+- Removed tooltip from user avatar in ServerSidebar that caused clipped tooltip artifact on hover
+
 #### Phase 1: Foundation (2026-02-20)
 
 - Project scaffolding with Wails v2 + Go 1.23

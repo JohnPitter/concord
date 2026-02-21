@@ -159,6 +159,27 @@ func (r *Repository) DeleteUserSessions(ctx context.Context, userID string) erro
 	return nil
 }
 
+// GetUser retrieves a user by their primary ID.
+// Complexity: O(1) — indexed lookup
+func (r *Repository) GetUser(ctx context.Context, userID string) (*User, error) {
+	query := `SELECT id, github_id, username, display_name, avatar_url, created_at, updated_at
+		FROM users WHERE id = ?`
+
+	var user User
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&user.ID, &user.GitHubID, &user.Username, &user.DisplayName,
+		&user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &user, nil
+}
+
 // CleanExpiredSessions removes all expired sessions.
 // Complexity: O(n) where n = number of expired sessions
 func (r *Repository) CleanExpiredSessions(ctx context.Context) (int64, error) {

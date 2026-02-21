@@ -29,15 +29,22 @@ interface DeviceCodeResponse {
 // Persisted user ID key for session restore
 const USER_ID_KEY = 'concord_user_id'
 
+// Refresh token 2 minutes before expiry
+const REFRESH_BUFFER_MS = 2 * 60 * 1000
+
 let authenticated = $state(false)
 let user = $state<User | null>(null)
 let accessToken = $state<string | null>(null)
+let expiresAt = $state<number | null>(null)
 let loading = $state(true)
 let error = $state<string | null>(null)
 
 // Device flow state
 let deviceCode = $state<DeviceCodeResponse | null>(null)
 let polling = $state(false)
+
+// Refresh timer
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
 export function getAuth() {
   return {
@@ -49,6 +56,61 @@ export function getAuth() {
     get deviceCode() { return deviceCode },
     get polling() { return polling },
   }
+}
+
+function scheduleRefresh(): void {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+  if (!expiresAt || !user) return
+
+  const now = Date.now()
+  const expiresMs = expiresAt * 1000
+  const delay = Math.max(expiresMs - now - REFRESH_BUFFER_MS, 0)
+
+  refreshTimer = setTimeout(async () => {
+    await refreshAccessToken()
+  }, delay)
+}
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (!user) return false
+
+  try {
+    const state: AuthState = await App.RestoreSession(user.id)
+    if (state.authenticated && state.user) {
+      user = state.user
+      accessToken = state.access_token ?? null
+      expiresAt = state.expires_at ?? null
+      scheduleRefresh()
+      return true
+    }
+    // Session expired — force logout
+    await logout()
+    return false
+  } catch (e) {
+    console.error('Failed to refresh token:', e)
+    return false
+  }
+}
+
+/**
+ * Ensures the access token is valid before making a backend call.
+ * If the token expires within REFRESH_BUFFER_MS, it refreshes first.
+ * Returns true if the token is valid, false if refresh failed.
+ */
+export async function ensureValidToken(): Promise<boolean> {
+  if (!authenticated || !user) return false
+  if (!expiresAt) return true // No expiry info, assume valid
+
+  const now = Date.now()
+  const expiresMs = expiresAt * 1000
+
+  if (expiresMs - now < REFRESH_BUFFER_MS) {
+    return await refreshAccessToken()
+  }
+  return true
 }
 
 export async function initAuth(): Promise<void> {
@@ -67,6 +129,8 @@ export async function initAuth(): Promise<void> {
       authenticated = true
       user = state.user
       accessToken = state.access_token ?? null
+      expiresAt = state.expires_at ?? null
+      scheduleRefresh()
     } else {
       localStorage.removeItem(USER_ID_KEY)
     }
@@ -86,7 +150,7 @@ export async function startLogin(): Promise<void> {
     const response: DeviceCodeResponse = await App.StartLogin()
     deviceCode = response
   } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to start login'
+    error = e instanceof Error ? e.message : typeof e === 'string' ? e : 'Failed to start login'
   }
 }
 
@@ -105,8 +169,10 @@ export async function pollForCompletion(): Promise<void> {
       authenticated = true
       user = state.user
       accessToken = state.access_token ?? null
+      expiresAt = state.expires_at ?? null
       deviceCode = null
       localStorage.setItem(USER_ID_KEY, state.user.id)
+      scheduleRefresh()
     }
   } catch (e) {
     error = e instanceof Error ? e.message : 'Login failed'
@@ -123,9 +189,14 @@ export async function logout(): Promise<void> {
   } catch (e) {
     console.error('Logout error:', e)
   } finally {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
     authenticated = false
     user = null
     accessToken = null
+    expiresAt = null
     deviceCode = null
     polling = false
     error = null

@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/concord-chat/concord/internal/auth"
+	"github.com/concord-chat/concord/internal/cache"
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/files"
@@ -21,11 +23,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-// NOTE: Frontend assets will be embedded when the frontend is built in Phase 1.2
-// For now, we use Wails dev mode which serves the frontend directly
-// In production, uncomment and properly configure the embed directive:
+//go:embed all:frontend/dist
+var assets embed.FS
 
 // App struct holds the application state
 type App struct {
@@ -132,9 +134,13 @@ func (a *App) startup(ctx context.Context) {
 	a.authService = auth.NewService(githubOAuth, jwtManager, authRepo, cryptoManager, encryptKey[:], a.logger)
 	a.logger.Info().Msg("auth service initialized")
 
+	// Initialize LRU cache
+	srvCache := cache.NewLRU(cfg.Cache.LRU.MaxEntries)
+	a.logger.Info().Int("max_entries", cfg.Cache.LRU.MaxEntries).Msg("LRU cache initialized")
+
 	// Initialize server service
 	serverRepo := server.NewRepository(a.db, a.logger)
-	a.serverService = server.NewService(serverRepo, a.logger)
+	a.serverService = server.NewService(serverRepo, srvCache, a.logger)
 	a.logger.Info().Msg("server service initialized")
 
 	// Initialize chat service
@@ -416,12 +422,14 @@ func main() {
 		Width:            1200,
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 10, G: 10, B: 15, A: 255}, // Void theme background
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		OnStartup:  app.startup,
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},
-		// AssetServer will be configured when frontend is built
 	})
 
 	if err != nil {
