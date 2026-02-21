@@ -21,6 +21,7 @@
   import Login from './lib/components/auth/Login.svelte'
   import ModeSelector from './lib/components/auth/ModeSelector.svelte'
   import P2PProfile from './lib/components/auth/P2PProfile.svelte'
+  import P2PApp from './lib/components/p2p/P2PApp.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
@@ -235,10 +236,7 @@
   <P2PProfile onConfirm={handleP2PProfileConfirm} />
 
 {:else if isP2PMode}
-  <!-- Placeholder: P2P app (Task 6+) -->
-  <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
-    <p class="text-void-text-muted">Modo P2P — em breve</p>
-  </div>
+  <P2PApp profile={settings.p2pProfile} />
 
 {:else if auth.loading}
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
