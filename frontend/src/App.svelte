@@ -14,21 +14,31 @@
     toggleMute, toggleDeafen, resetVoice,
   } from './lib/stores/voice.svelte'
   import { loadSettings } from './lib/stores/settings.svelte'
+  import {
+    getFriends, loadFriends, setFriendsTab, openDM,
+  } from './lib/stores/friends.svelte'
+
   import Login from './lib/components/auth/Login.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
   import JoinServerModal from './lib/components/server/JoinServer.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
   import ChannelSidebar from './lib/components/layout/ChannelSidebar.svelte'
+  import DMSidebar from './lib/components/layout/DMSidebar.svelte'
   import MainContent from './lib/components/layout/MainContent.svelte'
   import MemberSidebar from './lib/components/layout/MemberSidebar.svelte'
+  import FriendsList from './lib/components/layout/FriendsList.svelte'
+  import ActiveNow from './lib/components/layout/ActiveNow.svelte'
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
-  import NoServers from './lib/components/layout/NoServers.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
 
   const auth = getAuth()
   const srv = getServers()
   const chat = getChat()
   const vc = getVoice()
+  const friends = getFriends()
+
+  // 'home' = DMs/friends view, any other string = server id
+  let activeServerId = $state<string>('home')
 
   let showCreateServer = $state(false)
   let showJoinServer = $state(false)
@@ -36,52 +46,62 @@
   let showMembers = $state(false)
   let activeChannelId = $state<string | null>(null)
 
-  // Load persisted settings
-  $effect(() => {
-    loadSettings()
-  })
+  const isHome = $derived(activeServerId === 'home')
 
-  // Initialize auth + load servers on mount
-  $effect(() => {
-    initAuth()
-  })
+  // Load persisted settings on mount
+  $effect(() => { loadSettings() })
 
-  // Load servers when authenticated
+  // Initialize auth on mount
+  $effect(() => { initAuth() })
+
+  // Load data once authenticated
   $effect(() => {
     if (auth.authenticated && auth.user) {
       loadUserServers(auth.user.id)
+      loadFriends()
     }
   })
 
-  // Auto-select first server when servers load
+  // Auto-select first server when in server mode and servers load
   $effect(() => {
-    if (srv.list.length > 0 && !srv.activeId) {
+    if (!isHome && srv.list.length > 0 && !srv.activeId) {
       selectServer(srv.list[0].id)
     }
   })
 
   // Auto-select first text channel when channels change
   $effect(() => {
-    if (srv.textChannels.length > 0 && !activeChannelId) {
+    if (!isHome && srv.textChannels.length > 0 && !activeChannelId) {
       activeChannelId = srv.textChannels[0].id
     }
   })
 
   // Load messages when active channel changes
   $effect(() => {
-    if (activeChannelId) {
+    if (!isHome && activeChannelId) {
       loadMessages(activeChannelId)
-    } else {
+    } else if (!activeChannelId) {
       resetChat()
     }
   })
+
+  function handleSelectServer(id: string) {
+    if (id === 'home') {
+      activeServerId = 'home'
+      activeChannelId = null
+      resetChat()
+      return
+    }
+    activeServerId = id
+    activeChannelId = null
+    selectServer(id)
+  }
 
   const activeChannel = $derived(srv.channels.find(c => c.id === activeChannelId))
   const voiceChannelName = $derived(
     srv.channels.find(c => c.id === vc.channelId)?.name ?? ''
   )
 
-  // Map server data for ServerSidebar format
   const sidebarServers = $derived(
     srv.list.map(s => ({
       id: s.id,
@@ -90,7 +110,6 @@
     }))
   )
 
-  // Map channel data for ChannelSidebar format
   const sidebarChannels = $derived(
     srv.channels.map(c => ({
       id: c.id,
@@ -99,13 +118,12 @@
     }))
   )
 
-  // Map member data for MemberSidebar format
   const sidebarMembers = $derived(
     srv.members.map(m => ({
       id: m.user_id,
       name: m.username,
       avatarUrl: m.avatar_url || undefined,
-      status: 'online' as const, // TODO: real presence in Phase 5
+      status: 'online' as const,
       role: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : m.role === 'moderator' ? 'Moderator' : undefined,
     }))
   )
@@ -114,6 +132,7 @@
     if (!auth.user) return
     const created = await createServer(name, auth.user.id)
     if (created) {
+      activeServerId = created.id
       await selectServer(created.id)
     }
   }
@@ -123,6 +142,7 @@
     const joined = await redeemInvite(code, auth.user.id)
     if (joined) {
       await loadUserServers(auth.user.id)
+      activeServerId = joined.id
       await selectServer(joined.id)
     }
   }
@@ -139,7 +159,6 @@
     await deleteMessage(messageId, auth.user.id, isManager)
   }
 
-  // Load attachments for each message when messages change
   $effect(() => {
     for (const msg of chat.messages) {
       if (!chat.attachmentsByMessage[msg.id]) {
@@ -150,7 +169,6 @@
 
   async function handleFileSelect(file: { name: string; data: number[] }) {
     if (!auth.user || !activeChannelId) return
-    // Send a placeholder message first, then upload file to it
     const msg = await sendMessage(activeChannelId, auth.user.id, `[file: ${file.name}]`)
     if (msg) {
       await uploadFile(msg.id, file.name, file.data)
@@ -160,27 +178,17 @@
   async function handleDownloadFile(attachmentId: string) {
     const data = await downloadFile(attachmentId)
     if (!data) return
-
-    // Find the attachment info for filename
     let filename = 'download'
     for (const atts of Object.values(chat.attachmentsByMessage)) {
       const att = atts.find(a => a.id === attachmentId)
-      if (att) {
-        filename = att.filename
-        break
-      }
+      if (att) { filename = att.filename; break }
     }
-
-    // Trigger browser download
     const blob = new Blob([new Uint8Array(data)])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click()
+    document.body.removeChild(a); URL.revokeObjectURL(url)
   }
 
   async function handleDeleteFile(attachmentId: string) {
@@ -195,44 +203,78 @@
       await joinVoice(channelId)
     }
   }
+
+  const currentUserProp = $derived(
+    auth.user
+      ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url }
+      : null
+  )
 </script>
 
 {#if auth.loading}
-  <!-- Loading splash -->
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
     <div class="text-center">
       <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
-      <p class="text-sm text-void-text-muted">Loading Concord...</p>
+      <p class="text-sm text-void-text-muted">Carregando Concord...</p>
     </div>
   </div>
+
 {:else if !auth.authenticated}
   <Login />
+
 {:else}
   <div class="flex h-screen w-screen overflow-hidden">
+
+    <!-- Col 1: Server rail (72px) -->
     <ServerSidebar
       servers={sidebarServers}
-      activeServerId={srv.activeId ?? ''}
-      onSelectServer={(id) => {
-        selectServer(id)
-        activeChannelId = null
-      }}
+      activeServerId={activeServerId}
+      onSelectServer={handleSelectServer}
       onAddServer={() => showCreateServer = true}
-      currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
+      currentUser={currentUserProp}
     />
 
-    {#if srv.list.length === 0}
-      <!-- No servers: show welcome screen -->
-      <NoServers
-        onCreateServer={() => showCreateServer = true}
-        onJoinServer={() => showJoinServer = true}
+    {#if isHome}
+      <!-- ══ HOME VIEW (DMs + Friends + Active Now) ══════════════════════ -->
+
+      <!-- Col 2: DM sidebar (240px) -->
+      <DMSidebar
+        dms={friends.dms}
+        activeDMId={friends.activeDMId}
+        onSelectDM={(id) => openDM(id)}
+        onOpenFriends={() => openDM(null)}
+        currentUser={currentUserProp}
+        voiceConnected={vc.connected}
+        voiceChannelName={voiceChannelName}
+        voiceMuted={vc.muted}
+        voiceDeafened={vc.deafened}
+        voiceSpeakers={vc.speakers}
+        onToggleMute={toggleMute}
+        onToggleDeafen={toggleDeafen}
+        onLeaveVoice={leaveVoice}
+        onOpenSettings={() => showSettings = true}
       />
+
+      <!-- Col 3: Friends list (flex-1) -->
+      <FriendsList
+        friends={friends.friends}
+        tab={friends.tab}
+        onTabChange={(t) => setFriendsTab(t)}
+      />
+
+      <!-- Col 4: Active Now (340px) -->
+      <ActiveNow friends={friends.friends} />
+
     {:else}
+      <!-- ══ SERVER VIEW (Channels + Chat + Members) ═════════════════════ -->
+
+      <!-- Col 2: Channel sidebar (240px) -->
       <ChannelSidebar
-        serverName={srv.active?.name ?? 'Server'}
+        serverName={srv.active?.name ?? 'Servidor'}
         channels={sidebarChannels}
         activeChannelId={activeChannelId ?? ''}
         onSelectChannel={(id) => activeChannelId = id}
-        currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
+        currentUser={currentUserProp}
         voiceConnected={vc.connected}
         voiceChannelName={voiceChannelName}
         voiceMuted={vc.muted}
@@ -245,8 +287,10 @@
         onToggleDeafen={toggleDeafen}
         onOpenSettings={() => showSettings = true}
       />
+
+      <!-- Col 3: Main chat (flex-1) -->
       <MainContent
-        channelName={activeChannel?.name ?? 'general'}
+        channelName={activeChannel?.name ?? 'geral'}
         messages={chat.messages}
         currentUserId={auth.user?.id ?? ''}
         loading={chat.loading}
@@ -262,10 +306,13 @@
         onDeleteFile={handleDeleteFile}
         onToggleMembers={() => showMembers = !showMembers}
       />
+
+      <!-- Col 4: Member sidebar (240px, toggle) -->
       {#if showMembers}
         <MemberSidebar members={sidebarMembers} />
       {/if}
     {/if}
+
   </div>
 
   <CreateServerModal
@@ -280,7 +327,7 @@
 
   <SettingsPanel
     bind:open={showSettings}
-    currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
+    currentUser={currentUserProp}
     onLogout={() => { logout() }}
   />
 {/if}
