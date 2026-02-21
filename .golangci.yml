@@ -1,10 +1,5 @@
 run:
   timeout: 5m
-  skip-dirs:
-    - frontend
-    - docs
-  skip-files:
-    - "main.go"  # Uses //go:embed all:frontend/dist — not available in CI
 
 linters:
   enable:
@@ -19,6 +14,9 @@ linters:
     - depguard
 
 issues:
+  exclude-dirs:
+    - frontend
+    - docs
   exclude-rules:
     - path: _test\.go
       linters:
