@@ -2,22 +2,10 @@
   import P2PPeerSidebar from './P2PPeerSidebar.svelte'
   import P2PChatArea from './P2PChatArea.svelte'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
-
-  interface P2PPeer {
-    id: string
-    displayName: string
-    avatarDataUrl?: string
-    connected: boolean
-    source: 'lan' | 'room'
-  }
-
-  interface P2PMessage {
-    id: string
-    peerID: string
-    direction: 'sent' | 'received'
-    content: string
-    sentAt: string
-  }
+  import {
+    getP2P, initP2PStore, setActivePeer, sendMessage, joinRoom, stopP2PStore,
+    type P2PPeer, type P2PMessage,
+  } from '../../stores/p2p.svelte'
 
   let {
     profile,
@@ -25,42 +13,38 @@
     profile: { displayName: string; avatarDataUrl?: string } | null
   } = $props()
 
-  // Local temporary state -- will be replaced by the p2p store
-  let peers = $state<P2PPeer[]>([])
-  let activePeerID = $state<string | null>(null)
-  let messages = $state<P2PMessage[]>([])
-  let roomCode = $state('carregando...')
-  let sending = $state(false)
+  const p2p = getP2P()
   let showSettings = $state(false)
 
-  const activePeer = $derived(peers.find(p => p.id === activePeerID) ?? null)
-  const peerMessages = $derived(messages.filter(m => m.peerID === activePeerID))
+  $effect(() => {
+    initP2PStore(profile)
+    return () => stopP2PStore()
+  })
 
-  function handleSelectPeer(id: string) { activePeerID = id }
-  function handleJoinRoom(code: string) { console.log('join room:', code) }
-  function handleSend(content: string) { console.log('send:', content) }
+  const activePeer = $derived(p2p.peers.find(p => p.id === p2p.activePeerID) ?? null)
+  const peerMessages = $derived(p2p.activePeerID ? (p2p.messages[p2p.activePeerID] ?? []) : [])
 </script>
 
 <div class="flex h-screen w-screen overflow-hidden">
   <P2PPeerSidebar
-    {peers}
-    {activePeerID}
-    {roomCode}
+    peers={p2p.peers}
+    activePeerID={p2p.activePeerID}
+    roomCode={p2p.roomCode}
     {profile}
-    onSelectPeer={handleSelectPeer}
-    onJoinRoom={handleJoinRoom}
+    onSelectPeer={(id) => setActivePeer(id)}
+    onJoinRoom={(code) => joinRoom(code)}
     onOpenSettings={() => showSettings = true}
   />
   <P2PChatArea
     peer={activePeer}
     messages={peerMessages}
-    {sending}
-    onSend={handleSend}
+    sending={p2p.sending}
+    onSend={(content) => p2p.activePeerID && sendMessage(p2p.activePeerID, content)}
   />
 </div>
 
 <SettingsPanel
   bind:open={showSettings}
-  currentUser={profile ? { username: profile.displayName, display_name: profile.displayName, avatar_url: profile.avatarDataUrl ?? '' } : null}
+  currentUser={profile ? { username: profile.displayName, display_name: profile.displayName, avatar_url: profile.avatarDataUrl } : null}
   onLogout={() => {}}
 />
