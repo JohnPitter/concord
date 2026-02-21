@@ -22,6 +22,7 @@
   import MainContent from './lib/components/layout/MainContent.svelte'
   import MemberSidebar from './lib/components/layout/MemberSidebar.svelte'
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
+  import NoServers from './lib/components/layout/NoServers.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
 
   const auth = getAuth()
@@ -218,43 +219,52 @@
       onAddServer={() => showCreateServer = true}
       currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
     />
-    <ChannelSidebar
-      serverName={srv.active?.name ?? 'Server'}
-      channels={sidebarChannels}
-      activeChannelId={activeChannelId ?? ''}
-      onSelectChannel={(id) => activeChannelId = id}
-      currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
-      voiceConnected={vc.connected}
-      voiceChannelName={voiceChannelName}
-      voiceMuted={vc.muted}
-      voiceDeafened={vc.deafened}
-      voiceSpeakers={vc.speakers}
-      voiceChannelId={vc.channelId}
-      onJoinVoice={handleJoinVoice}
-      onLeaveVoice={leaveVoice}
-      onToggleMute={toggleMute}
-      onToggleDeafen={toggleDeafen}
-      onOpenSettings={() => showSettings = true}
-    />
-    <MainContent
-      channelName={activeChannel?.name ?? 'general'}
-      messages={chat.messages}
-      currentUserId={auth.user?.id ?? ''}
-      loading={chat.loading}
-      hasMore={chat.hasMore}
-      sending={chat.sending}
-      attachmentsByMessage={chat.attachmentsByMessage}
-      membersVisible={showMembers}
-      onSend={handleSendMessage}
-      onLoadMore={loadOlderMessages}
-      onDelete={handleDeleteMessage}
-      onFileSelect={handleFileSelect}
-      onDownloadFile={handleDownloadFile}
-      onDeleteFile={handleDeleteFile}
-      onToggleMembers={() => showMembers = !showMembers}
-    />
-    {#if showMembers}
-      <MemberSidebar members={sidebarMembers} />
+
+    {#if srv.list.length === 0}
+      <!-- No servers: show welcome screen -->
+      <NoServers
+        onCreateServer={() => showCreateServer = true}
+        onJoinServer={() => showJoinServer = true}
+      />
+    {:else}
+      <ChannelSidebar
+        serverName={srv.active?.name ?? 'Server'}
+        channels={sidebarChannels}
+        activeChannelId={activeChannelId ?? ''}
+        onSelectChannel={(id) => activeChannelId = id}
+        currentUser={auth.user ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url } : null}
+        voiceConnected={vc.connected}
+        voiceChannelName={voiceChannelName}
+        voiceMuted={vc.muted}
+        voiceDeafened={vc.deafened}
+        voiceSpeakers={vc.speakers}
+        voiceChannelId={vc.channelId}
+        onJoinVoice={handleJoinVoice}
+        onLeaveVoice={leaveVoice}
+        onToggleMute={toggleMute}
+        onToggleDeafen={toggleDeafen}
+        onOpenSettings={() => showSettings = true}
+      />
+      <MainContent
+        channelName={activeChannel?.name ?? 'general'}
+        messages={chat.messages}
+        currentUserId={auth.user?.id ?? ''}
+        loading={chat.loading}
+        hasMore={chat.hasMore}
+        sending={chat.sending}
+        attachmentsByMessage={chat.attachmentsByMessage}
+        membersVisible={showMembers}
+        onSend={handleSendMessage}
+        onLoadMore={loadOlderMessages}
+        onDelete={handleDeleteMessage}
+        onFileSelect={handleFileSelect}
+        onDownloadFile={handleDownloadFile}
+        onDeleteFile={handleDeleteFile}
+        onToggleMembers={() => showMembers = !showMembers}
+      />
+      {#if showMembers}
+        <MemberSidebar members={sidebarMembers} />
+      {/if}
     {/if}
   </div>
 
