@@ -1,6 +1,13 @@
 // Settings store using Svelte 5 runes
 // Persists to localStorage under 'concord-settings'
 
+export type NetworkMode = 'p2p' | 'server'
+
+export interface P2PProfile {
+  displayName: string
+  avatarDataUrl?: string  // base64 data URL da imagem local
+}
+
 export interface SettingsData {
   audioInputDevice: string
   audioOutputDevice: string
@@ -9,6 +16,8 @@ export interface SettingsData {
   notificationSounds: boolean
   translationSourceLang: string
   translationTargetLang: string
+  networkMode?: NetworkMode | null
+  p2pProfile?: P2PProfile | null
 }
 
 const STORAGE_KEY = 'concord-settings'
@@ -31,6 +40,8 @@ let notificationSounds = $state(defaults.notificationSounds)
 let translationSourceLang = $state(defaults.translationSourceLang)
 let translationTargetLang = $state(defaults.translationTargetLang)
 let settingsOpen = $state(false)
+let networkMode = $state<NetworkMode | null>(null)
+let p2pProfile = $state<P2PProfile | null>(null)
 
 export function getSettings() {
   return {
@@ -42,6 +53,8 @@ export function getSettings() {
     get translationSourceLang() { return translationSourceLang },
     get translationTargetLang() { return translationTargetLang },
     get open() { return settingsOpen },
+    get networkMode() { return networkMode },
+    get p2pProfile() { return p2pProfile },
   }
 }
 
@@ -54,6 +67,8 @@ function persist(): void {
     notificationSounds,
     translationSourceLang,
     translationTargetLang,
+    networkMode,
+    p2pProfile,
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -75,6 +90,8 @@ export function loadSettings(): void {
     if (data.notificationSounds !== undefined) notificationSounds = data.notificationSounds
     if (data.translationSourceLang !== undefined) translationSourceLang = data.translationSourceLang
     if (data.translationTargetLang !== undefined) translationTargetLang = data.translationTargetLang
+    if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
+    if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
   } catch (e) {
     console.error('Failed to load settings:', e)
   }
@@ -88,6 +105,8 @@ export function saveSettings(data: Partial<SettingsData>): void {
   if (data.notificationSounds !== undefined) notificationSounds = data.notificationSounds
   if (data.translationSourceLang !== undefined) translationSourceLang = data.translationSourceLang
   if (data.translationTargetLang !== undefined) translationTargetLang = data.translationTargetLang
+  if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
+  if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
   persist()
 }
 
@@ -128,4 +147,14 @@ export function openSettings(): void {
 
 export function closeSettings(): void {
   settingsOpen = false
+}
+
+export function setNetworkMode(mode: NetworkMode): void {
+  networkMode = mode
+  persist()
+}
+
+export function setP2PProfile(profile: P2PProfile): void {
+  p2pProfile = profile
+  persist()
 }
