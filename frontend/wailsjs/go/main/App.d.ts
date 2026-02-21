@@ -5,6 +5,7 @@ import {server} from '../models';
 import {chat} from '../models';
 import {files} from '../models';
 import {observability} from '../models';
+import {p2p} from '../models';
 import {translation} from '../models';
 import {version} from '../models';
 import {voice} from '../models';
@@ -41,6 +42,10 @@ export function GetInviteInfo(arg1:string):Promise<server.InviteInfo>;
 
 export function GetMessages(arg1:string,arg2:string,arg3:string,arg4:number):Promise<Array<chat.Message>>;
 
+export function GetP2PPeers():Promise<Array<p2p.PeerInfo>>;
+
+export function GetP2PRoomCode():Promise<string>;
+
 export function GetServer(arg1:string):Promise<server.Server>;
 
 export function GetTranslationStatus():Promise<translation.Status>;
@@ -50,6 +55,8 @@ export function GetVersion():Promise<version.Info>;
 export function GetVoiceStatus():Promise<voice.VoiceStatus>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function JoinP2PRoom(arg1:string):Promise<void>;
 
 export function JoinVoice(arg1:string):Promise<void>;
 

@@ -66,6 +66,14 @@ export function GetMessages(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetMessages'](arg1, arg2, arg3, arg4);
 }
 
+export function GetP2PPeers() {
+  return window['go']['main']['App']['GetP2PPeers']();
+}
+
+export function GetP2PRoomCode() {
+  return window['go']['main']['App']['GetP2PRoomCode']();
+}
+
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }
@@ -84,6 +92,10 @@ export function GetVoiceStatus() {
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function JoinP2PRoom(arg1) {
+  return window['go']['main']['App']['JoinP2PRoom'](arg1);
 }
 
 export function JoinVoice(arg1) {

@@ -19,6 +19,7 @@ import (
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
+	"github.com/concord-chat/concord/internal/network/p2p"
 	"github.com/concord-chat/concord/internal/translation"
 	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
@@ -46,6 +47,7 @@ type App struct {
 	voiceEngine   *voice.Engine
 	fileService   *files.Service
 	translationService *translation.Service
+	p2pHost            *p2p.Host
 }
 
 // NewApp creates a new application instance
@@ -437,6 +439,37 @@ func (a *App) SelectAvatarFile() (string, error) {
 	mimeType := http.DetectContentType(data)
 	encoded := base64.StdEncoding.EncodeToString(data)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
+}
+
+// --- P2P Bindings ---
+
+// GetP2PRoomCode retorna o código de sala do peer local.
+// Retorna string vazia se o host P2P não estiver inicializado.
+func (a *App) GetP2PRoomCode() string {
+	if a.p2pHost == nil {
+		return ""
+	}
+	return a.p2pHost.RoomCode()
+}
+
+// JoinP2PRoom conecta ao rendezvous DHT de uma sala pelo código curto.
+// Retorna erro se o host P2P não estiver inicializado ou DHT indisponível.
+func (a *App) JoinP2PRoom(code string) error {
+	if a.p2pHost == nil {
+		return fmt.Errorf("p2p host not initialized")
+	}
+	rendezvous := p2p.RoomRendezvous(code)
+	_, err := a.p2pHost.FindPeers(a.ctx, rendezvous)
+	return err
+}
+
+// GetP2PPeers retorna a lista de peers conectados (LAN e sala).
+// Retorna slice vazio se o host P2P não estiver inicializado.
+func (a *App) GetP2PPeers() []p2p.PeerInfo {
+	if a.p2pHost == nil {
+		return []p2p.PeerInfo{}
+	}
+	return a.p2pHost.Peers()
 }
 
 func main() {

@@ -262,6 +262,27 @@ export namespace observability {
 
 }
 
+export namespace p2p {
+	
+	export class PeerInfo {
+	    id: string;
+	    addresses: string[];
+	    connected: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PeerInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.addresses = source["addresses"];
+	        this.connected = source["connected"];
+	    }
+	}
+
+}
+
 export namespace server {
 	
 	export class Channel {
