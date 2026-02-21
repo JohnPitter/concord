@@ -9,15 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Phase 9: Central Server Online (2026-02-21)
+
+- **PostgreSQL stdlib bridge** (`postgres.StdlibDB()`): bridges `pgxpool.Pool` to `database/sql` interface via `pgx/v5/stdlib`, enabling existing repositories to work with PostgreSQL
+- **Placeholder adapter** (`postgres.Adapter`): translates SQLite `?` placeholders to PostgreSQL `$1, $2...` style, implements `querier` interface for auth/server/chat repositories
+- **PG migration aligned** (`001_init.sql`): fixed `auth_sessions` column names to match repository code, added `search_vector` tsvector column with GIN index and auto-update trigger
+- **PG full-text search** (`postgres.ChatSearcher`): PostgreSQL-specific search using `tsvector`/`plainto_tsquery`/`ts_headline` replacing SQLite FTS5
+- **Central server wiring** (`cmd/server/main.go`): replaced nil service stubs with real PG-backed auth, server, and chat services
+- **Docker deployment** (`deployments/docker/`): multi-stage Dockerfile, docker-compose with PostgreSQL 17 + Redis 7, health checks, `.env.example`
+- **Server config template** (`config.server.json`): production-ready configuration for central server mode
+- **API + adapter tests**: unit tests for placeholder replacement, adapter interface compliance, and API handler responses
+
+#### P2P Full Mode — Modo P2P Completo (estilo Discord)
+
+- **Layout espelho do Discord** (`P2PApp.svelte`): sidebar de peers (240px) + área de chat (flex-1), sem servidor central
+- **P2PPeerSidebar** (`components/p2p/`): perfil local no topo, card de sala com room code copiável, input para entrar em sala, lista de peers com badge LAN/WAN
+- **P2PChatArea** (`components/p2p/`): empty state, header com peer selecionado, chat bubbles (sent=direita, received=esquerda), input com Enter para enviar
+- **P2P store reativo** (`p2p.svelte.ts`): polling de peers a cada 3s, `EventsOn('p2p:message')` para mensagens recebidas, cache de perfis, fallback silencioso fora do Wails
+- **Protocolo P2P** (`internal/network/p2p/protocol.go`): envelope JSON com `type: 'profile'|'chat'`, funções `EncodeEnvelope`/`DecodeEnvelope`
+- **Persistência SQLite** (`internal/store/sqlite/p2p_repository.go` + migration `007_p2p_messages.sql`): tabela `p2p_messages(id, peer_id, direction, content, sent_at)` com índice por peer
+- **Handshake de perfil**: ao conectar um peer, troca automática de `{displayName, avatarDataUrl}` via protocolo Concord
+- **Novos Wails bindings** (`main.go`): `InitP2PHost`, `SendP2PMessage`, `GetP2PMessages`, `SendP2PProfile`, `GetP2PPeerName`
+- **E2E tests** (`tests/e2e/p2p.spec.ts`): testa ModeSelector, P2PProfile, room code, peers list, empty state — com stubs dos bindings Wails
+
 #### P2P Onboarding — Seleção de Modo no Boot
 
 - **Mode selector screen** (`ModeSelector.svelte`): primeira tela ao abrir o app, permite escolher entre modo P2P e Servidor Oficial
 - **P2P profile screen** (`P2PProfile.svelte`): criação de identidade local (nome + avatar) para modo P2P sem conta
-- **Boot routing** (`App.svelte`): roteamento de boot por `networkMode` — `null→ModeSelector`, `p2p+sem-perfil→P2PProfile`, `p2p+perfil→P2P placeholder`, `server→fluxo GitHub OAuth`
+- **Boot routing** (`App.svelte`): roteamento de boot por `networkMode` — `null→ModeSelector`, `p2p+sem-perfil→P2PProfile`, `p2p+perfil→P2PApp`, `server→fluxo GitHub OAuth`
 - **Settings store** (`settings.svelte.ts`): novos campos `networkMode: 'p2p'|'server'|null` e `p2pProfile: {displayName, avatarDataUrl?}`, persistidos no localStorage
 - **`SelectAvatarFile` Wails binding** (`main.go`): diálogo nativo de seleção de imagem que retorna data URL base64
 - **`RoomCode()` e `RoomRendezvous()`** (`internal/network/p2p/room.go`): código de sala determinístico e legível gerado do peer ID (e.g. `"amber-4271"`)
-- **P2P Wails bindings** (`main.go`): `GetP2PRoomCode`, `JoinP2PRoom`, `GetP2PPeers` expostos ao frontend
 - Testes unitários para `RoomCode` (determinismo e formato)
 
 ## [1.0.0] - 2026-02-20

@@ -1,78 +1,46 @@
-# =============================================================================
-# Concord Central Server — Multi-stage Docker Build
-# =============================================================================
-# Build:  docker build -f deployments/docker/Dockerfile.server -t concord-server .
-# Run:    docker run -p 8080:8080 -p 9090:9090 concord-server
-# =============================================================================
-
-# ---------------------------------------------------------------------------
 # Stage 1: Build the Go binary
-# ---------------------------------------------------------------------------
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
-# Install git for version info injection via ldflags
 RUN apk --no-cache add git
 
 WORKDIR /app
 
-# Cache module downloads in a separate layer
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
-# Copy source code
 COPY . .
 
-# Build arguments for version injection
 ARG VERSION=0.1.0-dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-# Build a static binary with no CGo (pure Go, no external C deps)
-# -trimpath removes file system paths from the binary for reproducibility
-# -ldflags injects version info and strips debug symbols for smaller binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w \
         -X github.com/concord-chat/concord/pkg/version.Version=${VERSION} \
         -X github.com/concord-chat/concord/pkg/version.GitCommit=${GIT_COMMIT} \
         -X github.com/concord-chat/concord/pkg/version.BuildDate=${BUILD_DATE}" \
-    -o /server \
+    -o /concord-server \
     ./cmd/server
 
-# ---------------------------------------------------------------------------
 # Stage 2: Minimal runtime image
-# ---------------------------------------------------------------------------
-FROM alpine:3.19
+FROM alpine:3.21
 
-# Install runtime dependencies:
-#   ca-certificates — TLS connections to external services (GitHub OAuth, etc.)
-#   tzdata          — timezone support for correct log timestamps
-#   wget            — healthcheck probe
 RUN apk --no-cache add ca-certificates tzdata wget
 
-# Create non-root user for security (principle of least privilege)
 RUN addgroup -S concord && adduser -S concord -G concord
 
-# Copy compiled binary from builder stage
-COPY --from=builder /server /usr/local/bin/server
+COPY --from=builder /concord-server /usr/local/bin/concord-server
+RUN chmod +x /usr/local/bin/concord-server
 
-# Ensure binary is executable
-RUN chmod +x /usr/local/bin/server
-
-# Create data directory owned by concord user
 RUN mkdir -p /data && chown concord:concord /data
 
-# Expose ports:
-#   8080 — HTTP API server
-#   9090 — Prometheus metrics + health endpoint
-EXPOSE 8080 9090
+EXPOSE 8080
 
-# Run as non-root user
 USER concord:concord
 
-# Set environment defaults for container context
 ENV CONCORD_ENV=production \
     CONCORD_DATA_DIR=/data \
     LOG_LEVEL=info
 
-ENTRYPOINT ["server"]
+ENTRYPOINT ["concord-server"]

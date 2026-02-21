@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import P2PPeerSidebar from './P2PPeerSidebar.svelte'
   import P2PChatArea from './P2PChatArea.svelte'
   import SettingsPanel from '../settings/SettingsPanel.svelte'
@@ -17,7 +18,7 @@
   let showSettings = $state(false)
 
   $effect(() => {
-    initP2PStore(profile)
+    untrack(() => initP2PStore(profile))
     return () => stopP2PStore()
   })
 
@@ -45,6 +46,6 @@
 
 <SettingsPanel
   bind:open={showSettings}
-  currentUser={profile ? { username: profile.displayName, display_name: profile.displayName, avatar_url: profile.avatarDataUrl } : null}
+  currentUser={profile ? { username: profile.displayName, display_name: profile.displayName, avatar_url: profile.avatarDataUrl ?? '' } : null}
   onLogout={() => {}}
 />

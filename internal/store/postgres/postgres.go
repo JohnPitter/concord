@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/rs/zerolog"
 )
 
@@ -86,4 +88,10 @@ func (db *DB) Close() {
 // Pool returns the underlying *pgxpool.Pool for direct access.
 func (db *DB) Pool() *pgxpool.Pool {
 	return db.pool
+}
+
+// StdlibDB returns a *sql.DB that uses the underlying pgx pool via the stdlib bridge.
+// This allows existing repositories that use database/sql interface to work with PostgreSQL.
+func (db *DB) StdlibDB() *sql.DB {
+	return stdlib.OpenDBFromPool(db.pool)
 }

@@ -54,6 +54,25 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages(channel_id, created_at DESC);
 
+-- Full-text search vector column
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+-- GIN index for fast FTS
+CREATE INDEX IF NOT EXISTS idx_messages_fts ON messages USING GIN(search_vector);
+
+-- Trigger to auto-update search_vector on INSERT/UPDATE
+CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
+BEGIN
+    NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER messages_search_vector_trigger
+    BEFORE INSERT OR UPDATE OF content ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION messages_search_vector_update();
+
 -- Attachments
 CREATE TABLE IF NOT EXISTS attachments (
     id TEXT PRIMARY KEY,
@@ -72,8 +91,8 @@ CREATE INDEX IF NOT EXISTS idx_attachments_hash ON attachments(hash);
 CREATE TABLE IF NOT EXISTS auth_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL,
-    encrypted_token TEXT NOT NULL,
+    refresh_token_hash TEXT NOT NULL,
+    encrypted_refresh TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

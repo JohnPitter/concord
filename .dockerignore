@@ -1,50 +1,7 @@
-# =============================================================================
-# Docker Build Context Exclusions
-# =============================================================================
-# Reduces build context size and prevents leaking secrets into the image.
-# =============================================================================
-
-# Version control
 .git
-.gitignore
-
-# Build artifacts
-build/
-dist/
-
-# Frontend (not needed for server-only builds)
-frontend/node_modules/
-frontend/dist/
-
-# IDE and editor
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Environment files (secrets)
-.env
-.env.local
-.env.*.local
-deployments/docker/.env
-
-# Database files (local dev)
+.claude
+frontend/node_modules
+frontend/dist
+*.exe
 *.db
-*.db-journal
-*.db-wal
-*.db-shm
-
-# Test artifacts
-coverage.out
-coverage.html
-
-# Documentation (not needed in image)
-*.md
-
-# Claude Code
-.claude/
-CLAUDE.md
+*.log

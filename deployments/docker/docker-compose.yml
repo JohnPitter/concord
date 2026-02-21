@@ -1,17 +1,4 @@
-# =============================================================================
-# Concord — Full Stack Docker Compose
-# =============================================================================
-# Usage:
-#   cp .env.example .env   # edit with real secrets
-#   docker compose up -d   # start all services
-#   docker compose logs -f # follow logs
-#   docker compose down    # stop all services
-# =============================================================================
-
 services:
-  # ---------------------------------------------------------------------------
-  # Concord Central Server (Go API)
-  # ---------------------------------------------------------------------------
   server:
     build:
       context: ../..
@@ -22,18 +9,13 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     ports:
       - "${SERVER_PORT:-8080}:8080"
-      - "${METRICS_PORT:-9090}:9090"
+    env_file:
+      - .env
     environment:
       - CONCORD_ENV=production
+      - CONCORD_SERVER_HOST=0.0.0.0
       - POSTGRES_HOST=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - CONCORD_JWT_SECRET=${JWT_SECRET}
-      - CONCORD_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
-      - PERSONAPLEX_URL=${PERSONAPLEX_URL:-}
-      - PERSONAPLEX_API_KEY=${PERSONAPLEX_API_KEY:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,86 +29,51 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - concord-net
+      - concord
 
-  # ---------------------------------------------------------------------------
-  # PostgreSQL Database
-  # ---------------------------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
-      - POSTGRES_DB=concord
-      - POSTGRES_USER=concord
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_USER: ${POSTGRES_USER:-concord}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-concord}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U concord -d concord"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-concord}"]
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
     restart: unless-stopped
     networks:
-      - concord-net
+      - concord
 
-  # ---------------------------------------------------------------------------
-  # Redis Cache
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD:-}
-      --maxmemory 256mb
+      --maxmemory 128mb
       --maxmemory-policy allkeys-lru
-      --appendonly yes
-    volumes:
-      - redis_data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
-      interval: 10s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 5s
     restart: unless-stopped
     networks:
-      - concord-net
+      - concord
 
-  # ---------------------------------------------------------------------------
-  # coturn TURN/STUN Relay Server (WebRTC NAT traversal)
-  # ---------------------------------------------------------------------------
-  coturn:
-    build:
-      context: .
-      dockerfile: Dockerfile.relay
-    ports:
-      - "3478:3478"
-      - "3478:3478/udp"
-      - "5349:5349"
-      - "5349:5349/udp"
-    environment:
-      - TURN_SECRET=${TURN_SECRET}
-    restart: unless-stopped
-    networks:
-      - concord-net
-
-# =============================================================================
-# Volumes — Persistent data storage
-# =============================================================================
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
 
-# =============================================================================
-# Networks — Isolated internal network
-# =============================================================================
 networks:
-  concord-net:
+  concord:
     driver: bridge

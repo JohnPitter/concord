@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -226,4 +227,233 @@ func TestMetricsEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	// Prometheus metrics endpoint returns text/plain with metrics
 	assert.Contains(t, rec.Body.String(), "go_")
+}
+
+// ============================================================================
+// Nil-service tests: jwtManager is nil so auth middleware is skipped,
+// allowing requests to reach handlers that check for nil services.
+// ============================================================================
+
+// --- Auth handlers with nil service ---
+
+func TestDeviceCode_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device-code", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var resp errorResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "auth service not available", resp.Error.Message)
+}
+
+func TestToken_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"device_code":"abc","interval":5}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestRefresh_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"user_id":"u1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// --- Server handlers with nil service (jwtManager nil so auth middleware is skipped) ---
+
+func TestListServers_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestCreateServer_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"name":"Test Server"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/servers", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestGetServer_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/srv-1", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestUpdateServer_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"name":"Updated","icon_url":""}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/servers/srv-1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestDeleteServer_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/servers/srv-1", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// --- Channel handlers ---
+
+func TestListChannels_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/srv-1/channels", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestCreateChannel_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"name":"general","type":"text"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/servers/srv-1/channels", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// --- Message handlers ---
+
+func TestGetMessages_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/ch-1/messages", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestSendMessage_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	body := `{"content":"Hello!"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/channels/ch-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestSearchMessages_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/ch-1/messages/search?q=hello", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// --- Member handlers ---
+
+func TestListMembers_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/srv-1/members", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// --- Invite handlers ---
+
+func TestGenerateInvite_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/servers/srv-1/invite", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestRedeemInvite_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/invite/abc123/redeem", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// ============================================================================
+// Validation tests: verify that bad inputs are rejected before hitting services.
+// ============================================================================
+
+func TestSearchMessages_MissingQuery_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	// With nil chat service, nil check fires before validation
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/ch-1/messages/search", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestGetMessages_InvalidLimit(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/ch-1/messages?limit=abc", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	// Nil check precedes validation
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestSearchMessages_InvalidLimit_NilService(t *testing.T) {
+	s := testServer(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/ch-1/messages/search?q=hello&limit=abc", nil)
+	w := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(w, req)
+
+	// Nil check precedes validation
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }

@@ -152,6 +152,11 @@ func (s *Server) handleEditMessage(w http.ResponseWriter, r *http.Request) {
 // Query: ?is_manager=true (optional, for permission-based delete)
 // Complexity: O(1) + O(log n) FTS cleanup
 func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	if s.chat == nil {
+		writeError(w, http.StatusServiceUnavailable, "chat service not available")
+		return
+	}
+
 	userID := UserIDFromContext(r.Context())
 	messageID := chi.URLParam(r, "messageID")
 	if messageID == "" {
@@ -179,6 +184,11 @@ func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 // Query: q (search query), limit (max results)
 // Complexity: O(log n) — FTS5 inverted index lookup
 func (s *Server) handleSearchMessages(w http.ResponseWriter, r *http.Request) {
+	if s.chat == nil {
+		writeError(w, http.StatusServiceUnavailable, "chat service not available")
+		return
+	}
+
 	channelID := chi.URLParam(r, "channelID")
 	if channelID == "" {
 		writeError(w, http.StatusBadRequest, "channel ID is required")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,8 +12,12 @@ import (
 
 	"github.com/concord-chat/concord/internal/api"
 	"github.com/concord-chat/concord/internal/auth"
+	"github.com/concord-chat/concord/internal/cache"
+	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/security"
+	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/postgres"
 	"github.com/concord-chat/concord/internal/store/redis"
 	"github.com/concord-chat/concord/pkg/version"
@@ -89,15 +94,43 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to create JWT manager")
 	}
 
+	// --- Services ---
+	var (
+		authSvc   *auth.Service
+		serverSvc *server.Service
+		chatSvc   *chat.Service
+	)
+
+	if pgDB != nil {
+		// Bridge pgx pool to database/sql interface
+		stdlibDB := pgDB.StdlibDB()
+		pgAdapter := postgres.NewAdapter(stdlibDB)
+
+		// Auth service
+		githubOAuth := auth.NewGitHubOAuth(cfg.Auth.GitHubClientID, logger)
+		authRepo := auth.NewRepository(pgAdapter, logger)
+		cryptoMgr := security.NewCryptoManager()
+		encryptKey := sha256Key(cfg.Security.JWTSecret)
+		authSvc = auth.NewService(githubOAuth, jwtManager, authRepo, cryptoMgr, encryptKey, logger)
+
+		// Server service
+		serverRepo := server.NewRepository(pgAdapter, logger)
+		serverCache := cache.NewLRU(1000)
+		serverSvc = server.NewService(serverRepo, serverCache, logger)
+
+		// Chat service
+		chatRepo := chat.NewRepository(pgAdapter, logger)
+		chatSvc = chat.NewService(chatRepo, logger)
+
+		logger.Info().Msg("all services initialized with postgresql backend")
+	}
+
 	// --- API Server ---
-	// Note: Full service integration with PG-backed repos will come in a future iteration.
-	// For now the API server is initialized without services for routes that need PG-backed repos.
-	// Auth, server, and chat services are nil; handlers will return 500 if called without them.
 	apiServer := api.New(
 		cfg.Server,
-		nil, // auth service — requires PG-backed repo
-		nil, // server service — requires PG-backed repo
-		nil, // chat service — requires PG-backed repo
+		authSvc,
+		serverSvc,
+		chatSvc,
 		jwtManager,
 		health,
 		logger,
@@ -149,4 +182,10 @@ func main() {
 	}
 
 	logger.Info().Msg("concord central server shut down successfully")
+}
+
+// sha256Key derives a 32-byte key from the JWT secret for AES-256 encryption.
+func sha256Key(secret string) []byte {
+	h := sha256.Sum256([]byte(secret))
+	return h[:]
 }
