@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Concord — Comunicação sem limites</title>
-  <meta name="description" content="Concord é um app desktop de comunicação com suporte a P2P e servidor central. Chat, voz, vídeo e muito mais." />
+  <title>Concord — Privacy. Freedom. Friendship.</title>
+  <meta name="description" content="Concord é um app de comunicação gratuito e open source. Chat, voz e compartilhamento de tela com privacidade total." />
   <link rel="icon" type="image/svg+xml" href="logo.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,335 +23,90 @@
       --text-secondary: #a1a1aa;
       --text-muted: #52525b;
       --border: #1e2e22;
-      --danger: #ef4444;
       --font: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
-    html {
-      scroll-behavior: smooth;
-      -webkit-font-smoothing: antialiased;
-    }
+    html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+    body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary); line-height: 1.6; overflow-x: hidden; }
 
-    body {
-      font-family: var(--font);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-
-    /* ═══ Navbar ═══════════════════════════════════════════ */
-    nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      backdrop-filter: blur(16px);
-      background: rgba(10, 15, 10, 0.85);
-      border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-    }
-    .nav-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 64px;
-    }
-    .nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      text-decoration: none;
-      color: var(--text-primary);
-    }
+    /* ═══ Navbar ═══ */
+    nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; backdrop-filter: blur(16px); background: rgba(10, 15, 10, 0.85); border-bottom: 1px solid var(--border); padding: 0 2rem; }
+    .nav-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .nav-logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--text-primary); }
     .nav-logo img { height: 36px; width: 36px; }
     .nav-logo span { font-weight: 800; font-size: 1.25rem; letter-spacing: -0.5px; }
     .nav-links { display: flex; align-items: center; gap: 2rem; }
-    .nav-links a {
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-size: 0.875rem;
-      font-weight: 500;
-      transition: color 200ms;
-    }
+    .nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color 200ms; }
     .nav-links a:hover { color: var(--text-primary); }
 
-    /* ═══ Hero ═════════════════════════════════════════════ */
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 120px 2rem 80px;
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -200px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 800px;
-      border-radius: 50%;
-      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-      pointer-events: none;
-      animation: hero-glow 6s ease-in-out infinite;
-    }
-    @keyframes hero-glow {
-      0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(1); }
-      50% { opacity: 0.7; transform: translateX(-50%) scale(1.1); }
-    }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.375rem 1rem;
-      border: 1px solid var(--border);
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--accent-light);
-      background: var(--bg-secondary);
-      margin-bottom: 2rem;
-      animation: fade-in-up 600ms ease-out;
-    }
-    .hero-badge::before { content: '✦'; }
-    .hero-mascot {
-      width: 180px;
-      height: 180px;
-      margin-bottom: 2rem;
-      animation: float 4s ease-in-out infinite, fade-in-up 600ms ease-out 200ms both;
-      filter: drop-shadow(0 0 40px rgba(22, 163, 74, 0.3));
-    }
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
-    }
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4.5rem);
-      font-weight: 900;
-      letter-spacing: -2px;
-      line-height: 1.1;
-      margin-bottom: 1.5rem;
-      animation: fade-in-up 600ms ease-out 400ms both;
-    }
-    .hero h1 .gradient {
-      background: linear-gradient(135deg, var(--accent-light), var(--accent));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero p {
-      font-size: 1.25rem;
-      color: var(--text-secondary);
-      max-width: 600px;
-      margin-bottom: 2.5rem;
-      animation: fade-in-up 600ms ease-out 600ms both;
-    }
-    .hero-buttons {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
-      animation: fade-in-up 600ms ease-out 800ms both;
-    }
-    .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.875rem 2rem;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 700;
-      font-size: 1rem;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 200ms;
-      box-shadow: 0 0 30px var(--accent-glow);
-    }
+    /* ═══ Hero ═══ */
+    .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 2rem 80px; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; animation: hero-glow 6s ease-in-out infinite; }
+    @keyframes hero-glow { 0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(1); } 50% { opacity: 0.7; transform: translateX(-50%) scale(1.1); } }
+    .hero-logo { width: 280px; height: 280px; margin-bottom: 2rem; animation: float 4s ease-in-out infinite, fade-in-up 600ms ease-out 200ms both; filter: drop-shadow(0 0 60px rgba(22, 163, 74, 0.3)); border-radius: 24px; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+    .hero-tagline { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.375rem 1rem; border: 1px solid var(--border); border-radius: 9999px; font-size: 0.8rem; font-weight: 600; color: var(--accent-light); background: var(--bg-secondary); margin-bottom: 2rem; letter-spacing: 2px; animation: fade-in-up 600ms ease-out; }
+    .hero h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 900; letter-spacing: -2px; line-height: 1.1; margin-bottom: 1.5rem; animation: fade-in-up 600ms ease-out 400ms both; }
+    .hero h1 .gradient { background: linear-gradient(135deg, var(--accent-light), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 1.25rem; color: var(--text-secondary); max-width: 600px; margin-bottom: 2.5rem; animation: fade-in-up 600ms ease-out 600ms both; }
+    .hero-buttons { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; animation: fade-in-up 600ms ease-out 800ms both; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.875rem 2rem; background: var(--accent); color: #fff; font-weight: 700; font-size: 1rem; border: none; border-radius: 12px; cursor: pointer; text-decoration: none; transition: all 200ms; box-shadow: 0 0 30px var(--accent-glow); }
     .btn-primary:hover { background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 0 40px rgba(22, 163, 74, 0.4); }
-    .btn-outline {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.875rem 2rem;
-      background: transparent;
-      color: var(--text-primary);
-      font-weight: 700;
-      font-size: 1rem;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 200ms;
-    }
+    .btn-outline { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.875rem 2rem; background: transparent; color: var(--text-primary); font-weight: 700; font-size: 1rem; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; text-decoration: none; transition: all 200ms; }
     .btn-outline:hover { border-color: var(--accent); color: var(--accent-light); }
 
-    /* ═══ Features ═══════════════════════════════════════ */
-    .features {
-      padding: 100px 2rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .features h2 {
-      text-align: center;
-      font-size: 2.5rem;
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 1rem;
-    }
-    .features .subtitle {
-      text-align: center;
-      color: var(--text-secondary);
-      font-size: 1.1rem;
-      max-width: 600px;
-      margin: 0 auto 4rem;
-    }
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-    }
-    .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      transition: all 300ms;
-      position: relative;
-      overflow: hidden;
-    }
-    .feature-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      opacity: 0;
-      transition: opacity 300ms;
-    }
+    /* ═══ Features ═══ */
+    .features { padding: 100px 2rem; max-width: 1200px; margin: 0 auto; }
+    .features h2 { text-align: center; font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 1rem; }
+    .features .subtitle { text-align: center; color: var(--text-secondary); font-size: 1.1rem; max-width: 600px; margin: 0 auto 4rem; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .feature-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; transition: all 300ms; position: relative; overflow: hidden; }
+    .feature-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0; transition: opacity 300ms; }
     .feature-card:hover { border-color: var(--accent); transform: translateY(-4px); }
     .feature-card:hover::before { opacity: 1; }
-    .feature-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      background: var(--accent-glow);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 1.25rem;
-      font-size: 1.5rem;
-    }
+    .feature-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-glow); display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; font-size: 1.5rem; }
     .feature-card h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem; }
     .feature-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; }
 
-    /* ═══ Modes Section ═══════════════════════════════════ */
-    .modes {
-      padding: 100px 2rem;
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
-    .modes-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      text-align: center;
-    }
+    /* ═══ Modes ═══ */
+    .modes { padding: 100px 2rem; background: var(--bg-secondary); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .modes-inner { max-width: 1200px; margin: 0 auto; text-align: center; }
     .modes h2 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 1rem; }
     .modes .subtitle { color: var(--text-secondary); font-size: 1.1rem; max-width: 600px; margin: 0 auto 4rem; }
-    .modes-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 2rem;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .mode-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 2.5rem 2rem;
-      text-align: center;
-      transition: all 300ms;
-    }
+    .modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 800px; margin: 0 auto; }
+    .mode-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem 2rem; text-align: center; transition: all 300ms; }
     .mode-card:hover { border-color: var(--accent); transform: translateY(-4px); }
     .mode-icon { font-size: 3rem; margin-bottom: 1rem; }
     .mode-card h3 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.75rem; }
     .mode-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; }
 
-    /* ═══ Download CTA ════════════════════════════════════ */
-    .download {
-      padding: 120px 2rem;
-      text-align: center;
-      position: relative;
-    }
-    .download::before {
-      content: '';
-      position: absolute;
-      bottom: -100px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 600px;
-      border-radius: 50%;
-      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-      pointer-events: none;
-    }
+    /* ═══ Download ═══ */
+    .download { padding: 120px 2rem; text-align: center; position: relative; }
+    .download::before { content: ''; position: absolute; bottom: -100px; left: 50%; transform: translateX(-50%); width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; }
     .download h2 { font-size: 2.5rem; font-weight: 900; letter-spacing: -1px; margin-bottom: 1rem; }
     .download p { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 2.5rem; max-width: 500px; margin-left: auto; margin-right: auto; }
     .download-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-    .download-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 1rem 2rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      color: var(--text-primary);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.95rem;
-      transition: all 200ms;
-    }
+    .download-btn { display: inline-flex; align-items: center; gap: 0.75rem; padding: 1rem 2rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; color: var(--text-primary); text-decoration: none; font-weight: 600; font-size: 0.95rem; transition: all 200ms; }
     .download-btn:hover { border-color: var(--accent); transform: translateY(-2px); }
     .download-btn .os-icon { font-size: 1.5rem; }
     .download-btn .os-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
 
-    /* ═══ Footer ═══════════════════════════════════════════ */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 3rem 2rem;
-      text-align: center;
-    }
+    /* ═══ Footer ═══ */
+    footer { border-top: 1px solid var(--border); padding: 3rem 2rem; text-align: center; }
     footer p { color: var(--text-muted); font-size: 0.8rem; }
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
     .footer-links { display: flex; gap: 2rem; justify-content: center; margin-bottom: 1.5rem; }
     .footer-links a { color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; }
 
-    /* ═══ Animations ══════════════════════════════════════ */
-    @keyframes fade-in-up {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    /* ═══ Animations ═══ */
+    @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ═══ Responsive ══════════════════════════════════════ */
+    /* ═══ Responsive ═══ */
     @media (max-width: 768px) {
       .modes-grid { grid-template-columns: 1fr; }
       .hero h1 { font-size: 2.5rem; }
+      .hero-logo { width: 200px; height: 200px; }
       .nav-links { display: none; }
     }
   </style>
@@ -366,26 +121,26 @@
         <span>Concord</span>
       </a>
       <div class="nav-links">
-        <a href="#features">Features</a>
+        <a href="#features">Funcionalidades</a>
         <a href="#modes">Modos</a>
         <a href="#download">Download</a>
-        <a href="https://github.com/concord-chat/concord" target="_blank">GitHub</a>
+        <a href="https://github.com/JohnPitter/concord" target="_blank">GitHub</a>
       </div>
     </div>
   </nav>
 
   <!-- Hero -->
   <section class="hero">
-    <div class="hero-badge">Open Source & Free</div>
-    <img src="logo.svg" alt="Concord Mascot" class="hero-mascot" />
-    <h1>Comunicação<br/><span class="gradient">sem limites.</span></h1>
-    <p>Chat, voz e compartilhamento de tela em um app desktop moderno. Escolha entre P2P descentralizado ou servidor central.</p>
+    <div class="hero-tagline">PRIVACY. FREEDOM. FRIENDSHIP.</div>
+    <img src="logo.png" alt="Concord" class="hero-logo" />
+    <h1>Comunicacao<br/><span class="gradient">sem limites.</span></h1>
+    <p>Chat, voz e compartilhamento de tela em um app gratuito e open source. Sua privacidade, suas regras.</p>
     <div class="hero-buttons">
       <a href="#download" class="btn-primary">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download
+        Download Gratis
       </a>
-      <a href="https://github.com/concord-chat/concord" target="_blank" class="btn-outline">
+      <a href="https://github.com/JohnPitter/concord" target="_blank" class="btn-outline">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
         Ver no GitHub
       </a>
@@ -394,38 +149,38 @@
 
   <!-- Features -->
   <section id="features" class="features">
-    <h2>Tudo que você precisa</h2>
-    <p class="subtitle">Uma plataforma completa de comunicação, construída com tecnologia moderna e design pensado para gamers.</p>
+    <h2>Tudo que voce precisa</h2>
+    <p class="subtitle">Uma plataforma completa de comunicacao, pensada para quem valoriza privacidade e liberdade.</p>
     <div class="feature-grid">
       <div class="feature-card">
         <div class="feature-icon">💬</div>
         <h3>Chat em Tempo Real</h3>
-        <p>Mensagens instantâneas com suporte a arquivos, emojis, busca e tradução automática integrada.</p>
+        <p>Mensagens instantaneas com suporte a arquivos, emojis, busca e traducao automatica integrada.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🎤</div>
         <h3>Canais de Voz</h3>
-        <p>Áudio cristalino com WebRTC, detecção de atividade de voz e supressão de ruído.</p>
+        <p>Audio cristalino com deteccao automatica de voz e supressao de ruido. Saiba quem esta falando em tempo real.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🖥️</div>
-        <h3>Screen Sharing</h3>
-        <p>Compartilhe sua tela ou qualquer janela específica. Badge "Ao Vivo" mostra quem está streamando.</p>
+        <h3>Compartilhamento de Tela</h3>
+        <p>Compartilhe sua tela ou qualquer janela. Os outros membros veem quem esta "Ao Vivo" transmitindo.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🌐</div>
-        <h3>Tradução Automática</h3>
-        <p>Traduza mensagens entre 11 idiomas com um clique. Quebre barreiras linguísticas instantaneamente.</p>
+        <h3>Traducao Automatica</h3>
+        <p>Traduza mensagens entre idiomas com um clique. Quebre barreiras linguisticas sem sair do chat.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔒</div>
-        <h3>Seguro por Design</h3>
-        <p>Criptografia AES-256-GCM, rate limiting, sanitização de inputs e zero tolerância a vazamentos.</p>
+        <h3>Privacidade em Primeiro Lugar</h3>
+        <p>Seus dados sao seus. Criptografia ponta a ponta, sem rastreamento, sem anuncios, sem surpresas.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🎨</div>
-        <h3>Design System Void</h3>
-        <p>Interface dark-first com tema light, otimizada para longas sessões. Animações suaves e responsivas.</p>
+        <h3>Interface Moderna</h3>
+        <p>Design escuro elegante com tema claro opcional. Pensado para longas sessoes com conforto visual.</p>
       </div>
     </div>
   </section>
@@ -433,18 +188,18 @@
   <!-- Modes -->
   <section id="modes" class="modes">
     <div class="modes-inner">
-      <h2>Dois modos. Uma experiência.</h2>
-      <p class="subtitle">Escolha como quer se conectar. Mude a qualquer momento nas configurações.</p>
+      <h2>Dois modos. Uma experiencia.</h2>
+      <p class="subtitle">Escolha como quer se conectar. Mude a qualquer momento nas configuracoes.</p>
       <div class="modes-grid">
         <div class="mode-card">
           <div class="mode-icon">🔗</div>
           <h3>Modo P2P</h3>
-          <p>Conexão direta entre dispositivos via libp2p. Sem servidor, sem intermediários. Total privacidade e controle dos seus dados.</p>
+          <p>Conexao direta entre dispositivos. Sem servidor, sem intermediarios. Privacidade total e controle absoluto dos seus dados.</p>
         </div>
         <div class="mode-card">
           <div class="mode-icon">🏢</div>
           <h3>Modo Servidor</h3>
-          <p>Servidor central com PostgreSQL. Login via GitHub OAuth, gerenciamento de membros, roles e permissões avançadas.</p>
+          <p>Servidor central com login via GitHub. Crie comunidades, gerencie membros, canais, roles e permissoes avancadas.</p>
         </div>
       </div>
     </div>
@@ -452,28 +207,28 @@
 
   <!-- Download -->
   <section id="download" class="download">
-    <h2>Pronto para começar?</h2>
+    <h2>Pronto para comecar?</h2>
     <p>Baixe o Concord gratuitamente e conecte-se com sua comunidade.</p>
     <div class="download-buttons">
-      <a href="https://github.com/concord-chat/concord/releases/latest" class="download-btn">
+      <a href="https://github.com/JohnPitter/concord/releases/latest" class="download-btn">
         <span class="os-icon">🪟</span>
         <div>
           <div>Windows</div>
-          <div class="os-label">64-bit (x86_64)</div>
+          <div class="os-label">64-bit</div>
         </div>
       </a>
-      <a href="https://github.com/concord-chat/concord/releases/latest" class="download-btn">
+      <a href="https://github.com/JohnPitter/concord/releases/latest" class="download-btn">
         <span class="os-icon">🍎</span>
         <div>
           <div>macOS</div>
-          <div class="os-label">Universal Binary</div>
+          <div class="os-label">Universal</div>
         </div>
       </a>
-      <a href="https://github.com/concord-chat/concord/releases/latest" class="download-btn">
+      <a href="https://github.com/JohnPitter/concord/releases/latest" class="download-btn">
         <span class="os-icon">🐧</span>
         <div>
           <div>Linux</div>
-          <div class="os-label">64-bit (x86_64)</div>
+          <div class="os-label">64-bit</div>
         </div>
       </a>
     </div>
@@ -482,12 +237,11 @@
   <!-- Footer -->
   <footer>
     <div class="footer-links">
-      <a href="https://github.com/concord-chat/concord">GitHub</a>
-      <a href="https://github.com/concord-chat/concord/releases">Releases</a>
-      <a href="https://github.com/concord-chat/concord/blob/main/docs/CONTRIBUTING.md">Contribuir</a>
-      <a href="https://github.com/concord-chat/concord/blob/main/LICENSE">Licença</a>
+      <a href="https://github.com/JohnPitter/concord">GitHub</a>
+      <a href="https://github.com/JohnPitter/concord/releases">Releases</a>
+      <a href="https://github.com/JohnPitter/concord/issues">Feedback</a>
     </div>
-    <p>Feito com 💚 — Concord é open source sob licença MIT.</p>
+    <p>Concord is open source and free forever.</p>
   </footer>
 
 </body>

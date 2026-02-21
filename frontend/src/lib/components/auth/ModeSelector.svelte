@@ -1,5 +1,5 @@
 <script lang="ts">
-  import logoSvg from '../../../assets/logo.svg'
+  import logoPng from '../../../assets/logo.png'
 
   let {
     onSelectMode,
@@ -13,7 +13,7 @@
     <!-- Logo -->
     <div class="text-center">
       <div class="mx-auto mb-4 h-16 w-16">
-        <img src={logoSvg} alt="Concord" class="h-16 w-16" />
+        <img src={logoPng} alt="Concord" class="h-16 w-16 rounded-xl" />
       </div>
       <h1 class="mt-4 text-2xl font-bold text-void-text-primary">Bem-vindo ao Concord</h1>
       <p class="mt-2 text-sm text-void-text-muted">Como você quer se conectar?</p>

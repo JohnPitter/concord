@@ -51,6 +51,8 @@ export function GetP2PPeers():Promise<Array<p2p.PeerInfo>>;
 
 export function GetP2PRoomCode():Promise<string>;
 
+export function GetPublicURL():Promise<string>;
+
 export function GetServer(arg1:string):Promise<server.Server>;
 
 export function GetTranslationStatus():Promise<translation.Status>;

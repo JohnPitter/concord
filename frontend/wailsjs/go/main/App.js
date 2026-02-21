@@ -82,6 +82,10 @@ export function GetP2PRoomCode() {
   return window['go']['main']['App']['GetP2PRoomCode']();
 }
 
+export function GetPublicURL() {
+  return window['go']['main']['App']['GetPublicURL']();
+}
+
 export function GetServer(arg1) {
   return window['go']['main']['App']['GetServer'](arg1);
 }

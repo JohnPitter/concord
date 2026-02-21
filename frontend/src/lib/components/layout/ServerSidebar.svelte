@@ -38,20 +38,28 @@
           : 'rounded-2xl bg-void-bg-tertiary text-void-text-primary hover:rounded-xl hover:bg-void-accent hover:text-white'}"
       onclick={() => onSelectServer('home')}
     >
-      <!-- Concord logo mark (mini) -->
+      <!-- Concord dove logo (mini) -->
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="h-7 w-7">
         <defs>
-          <linearGradient id="g-ss" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color={isHome ? '#fff' : '#4ade80'}/>
-            <stop offset="100%" stop-color={isHome ? '#d4fae8' : '#16a34a'}/>
+          <linearGradient id="wl-ss" x1="10" y1="30" x2="60" y2="90" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color={isHome ? '#86efac' : '#4ade80'}/>
+            <stop offset="100%" stop-color={isHome ? '#22c55e' : '#15803d'}/>
+          </linearGradient>
+          <linearGradient id="wr-ss" x1="68" y1="30" x2="118" y2="90" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color={isHome ? '#86efac' : '#22c55e'}/>
+            <stop offset="100%" stop-color={isHome ? '#16a34a' : '#166534'}/>
           </linearGradient>
         </defs>
-        <circle cx="64" cy="64" r="56" fill="url(#g-ss)"/>
-        <circle cx="64" cy="64" r="36" fill="currentColor" class="text-void-bg-primary"/>
-        <rect x="88" y="44" width="32" height="40" fill="currentColor" class="text-void-bg-primary"/>
-        <line x1="92" y1="44" x2="108" y2="56" stroke="url(#g-ss)" stroke-width="6" stroke-linecap="round"/>
-        <line x1="92" y1="84" x2="108" y2="72" stroke="url(#g-ss)" stroke-width="6" stroke-linecap="round"/>
-        <circle cx="58" cy="64" r="6" fill="url(#g-ss)"/>
+        <path d="M58 58 C50 42 28 20 8 28 C18 38 30 52 42 60 Z" fill="url(#wl-ss)" opacity="0.7"/>
+        <path d="M56 64 C44 52 18 38 4 50 C16 56 36 62 50 66 Z" fill="url(#wl-ss)" opacity="0.85"/>
+        <path d="M54 70 C40 62 14 56 4 68 C16 70 38 72 50 72 Z" fill="url(#wl-ss)"/>
+        <path d="M70 58 C78 42 100 20 120 28 C110 38 98 52 86 60 Z" fill="url(#wr-ss)" opacity="0.7"/>
+        <path d="M72 64 C84 52 110 38 124 50 C112 56 92 62 78 66 Z" fill="url(#wr-ss)" opacity="0.85"/>
+        <path d="M74 70 C88 62 114 56 124 68 C112 70 90 72 78 72 Z" fill="url(#wr-ss)"/>
+        <ellipse cx="64" cy="68" rx="14" ry="16" fill={isHome ? '#fff' : '#f0fdf4'}/>
+        <circle cx="64" cy="48" r="11" fill={isHome ? '#fff' : '#f0fdf4'}/>
+        <path d="M56 54 Q64 62 72 54" fill={isHome ? '#fff' : '#f0fdf4'}/>
+        <rect x="56" y="52" width="16" height="14" rx="4" fill={isHome ? '#fff' : '#f0fdf4'}/>
       </svg>
 
       {#if isHome}

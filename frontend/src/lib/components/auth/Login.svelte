@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getAuth, startLogin, pollForCompletion, clearError, cancelLogin } from '../../stores/auth.svelte'
   import Button from '../ui/Button.svelte'
-  import logoSvg from '../../../assets/logo.svg'
+  import logoPng from '../../../assets/logo.png'
 
   const auth = getAuth()
 
@@ -28,7 +28,7 @@
     <!-- Logo / Branding -->
     <div class="text-center">
       <div class="mx-auto mb-4 h-16 w-16">
-        <img src={logoSvg} alt="Concord" class="h-16 w-16" />
+        <img src={logoPng} alt="Concord" class="h-16 w-16 rounded-xl" />
       </div>
       <h1 class="text-2xl font-bold text-void-text-primary">Welcome to Concord</h1>
       <p class="mt-2 text-sm text-void-text-muted">Privacy-first communication for gamers</p>
