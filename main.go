@@ -628,9 +628,9 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:            "Concord",
 		Width:            1200,
-		Height:           800,
+		Height:           1200,
 		MinWidth:         960,
-		MinHeight:        640,
+		MinHeight:        960,
 		BackgroundColour: &options.RGBA{R: 10, G: 10, B: 15, A: 255}, // Void theme background
 		AssetServer: &assetserver.Options{
 			Assets: assets,

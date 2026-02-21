@@ -1,67 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 128" width="420" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 128" width="380" height="128">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#4ade80"/>
       <stop offset="100%" stop-color="#16a34a"/>
     </linearGradient>
-    <linearGradient id="text-grad" x1="140" y1="30" x2="410" y2="100" gradientUnits="userSpaceOnUse">
+    <linearGradient id="text-grad" x1="140" y1="40" x2="380" y2="90" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#22c55e"/>
       <stop offset="100%" stop-color="#16a34a"/>
     </linearGradient>
   </defs>
 
-  <!--
-    Concord Full Logo (mascot icon + wordmark)
-  -->
-
-  <!-- === ICON (mascot version) === -->
-  <path fill="url(#g)" d="
-    M 64,8
-    C 96,8 118,28 118,56
-    C 118,84 96,104 64,104
-    L 44,104
-    L 18,120
-    L 24,100
-    C 12,92 4,76 4,56
-    C 4,28 28,8 64,8
-    Z
-  "/>
-
-  <!-- Mascot body -->
-  <ellipse cx="64" cy="62" rx="34" ry="32" fill="#fef3c7"/>
-  <!-- Ears -->
-  <path d="M38 44 L30 22 L48 38 Z" fill="#fef3c7"/>
-  <path d="M90 44 L98 22 L80 38 Z" fill="#fef3c7"/>
-  <path d="M39 42 L34 26 L47 38 Z" fill="#fda4af"/>
-  <path d="M89 42 L94 26 L81 38 Z" fill="#fda4af"/>
-  <!-- Eyes -->
-  <ellipse cx="52" cy="58" rx="7" ry="8" fill="#1a1a2e"/>
-  <ellipse cx="76" cy="58" rx="7" ry="8" fill="#1a1a2e"/>
-  <circle cx="55" cy="55" r="2.5" fill="white"/>
-  <circle cx="79" cy="55" r="2.5" fill="white"/>
-  <!-- Nose -->
-  <ellipse cx="64" cy="66" rx="3.5" ry="2.5" fill="#f472b6"/>
-  <!-- Mouth -->
-  <path d="M59 70 Q64 76 69 70" stroke="#1a1a2e" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-  <!-- Cheeks -->
-  <ellipse cx="42" cy="66" rx="5" ry="3.5" fill="#fda4af" opacity="0.5"/>
-  <ellipse cx="86" cy="66" rx="5" ry="3.5" fill="#fda4af" opacity="0.5"/>
-  <!-- Headphones -->
-  <path d="M32 54 Q32 34 48 30" stroke="#22c55e" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-  <path d="M96 54 Q96 34 80 30" stroke="#22c55e" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-  <rect x="28" y="52" width="7" height="12" rx="3" fill="#22c55e"/>
-  <rect x="93" y="52" width="7" height="12" rx="3" fill="#22c55e"/>
-  <!-- Heart -->
-  <path d="M64 80 C62 77 57 76 57 79 C57 82 64 87 64 87 C64 87 71 82 71 79 C71 76 66 77 64 80Z" fill="#ef4444" opacity="0.8"/>
+  <!-- === ICON === -->
+  <circle cx="64" cy="64" r="56" fill="url(#g)"/>
+  <circle cx="64" cy="64" r="36" fill="#0a0a0f"/>
+  <rect x="88" y="44" width="32" height="40" fill="#0a0a0f"/>
+  <line x1="92" y1="44" x2="108" y2="56" stroke="url(#g)" stroke-width="6" stroke-linecap="round"/>
+  <line x1="92" y1="84" x2="108" y2="72" stroke="url(#g)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="58" cy="64" r="6" fill="url(#g)"/>
 
   <!-- === WORDMARK === -->
   <text
     x="140"
     y="80"
-    font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
-    font-size="52"
-    font-weight="700"
-    letter-spacing="-1"
+    font-family="'Inter', 'SF Pro Display', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+    font-size="48"
+    font-weight="600"
+    letter-spacing="-1.5"
     fill="url(#text-grad)"
   >Concord</text>
 </svg>

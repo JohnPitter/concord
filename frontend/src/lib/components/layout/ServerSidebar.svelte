@@ -46,10 +46,12 @@
             <stop offset="100%" stop-color={isHome ? '#d4fae8' : '#16a34a'}/>
           </linearGradient>
         </defs>
-        <path fill="url(#g-ss)" d="M 58,6 C 89,6 114,22 120,48 C 121,52 118,56 114,56 C 110,56 107,53 106,50 C 102,30 82,18 58,18 C 28,18 10,38 10,59 C 10,80 28,100 58,100 C 82,100 102,88 106,68 C 107,65 110,62 114,62 C 118,62 121,66 120,70 C 114,96 89,112 58,112 L 42,112 L 16,126 L 22,108 C 8,100 -2,82 -2,59 C -2,28 22,6 58,6 Z"/>
-        <path d="M 40,47 A 17,17 0 0 1 40,71" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity="0.95"/>
-        <path d="M 54,39 A 26,26 0 0 1 54,79" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity="0.6"/>
-        <path d="M 68,32 A 34,34 0 0 1 68,86" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.3"/>
+        <circle cx="64" cy="64" r="56" fill="url(#g-ss)"/>
+        <circle cx="64" cy="64" r="36" fill="currentColor" class="text-void-bg-primary"/>
+        <rect x="88" y="44" width="32" height="40" fill="currentColor" class="text-void-bg-primary"/>
+        <line x1="92" y1="44" x2="108" y2="56" stroke="url(#g-ss)" stroke-width="6" stroke-linecap="round"/>
+        <line x1="92" y1="84" x2="108" y2="72" stroke="url(#g-ss)" stroke-width="6" stroke-linecap="round"/>
+        <circle cx="58" cy="64" r="6" fill="url(#g-ss)"/>
       </svg>
 
       {#if isHome}
