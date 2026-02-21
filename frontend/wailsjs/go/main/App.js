@@ -66,6 +66,14 @@ export function GetMessages(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetMessages'](arg1, arg2, arg3, arg4);
 }
 
+export function GetP2PMessages(arg1, arg2) {
+  return window['go']['main']['App']['GetP2PMessages'](arg1, arg2);
+}
+
+export function GetP2PPeerName(arg1) {
+  return window['go']['main']['App']['GetP2PPeerName'](arg1);
+}
+
 export function GetP2PPeers() {
   return window['go']['main']['App']['GetP2PPeers']();
 }
@@ -92,6 +100,10 @@ export function GetVoiceStatus() {
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function InitP2PHost() {
+  return window['go']['main']['App']['InitP2PHost']();
 }
 
 export function JoinP2PRoom(arg1) {
@@ -144,6 +156,14 @@ export function SelectAvatarFile() {
 
 export function SendMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendMessage'](arg1, arg2, arg3);
+}
+
+export function SendP2PMessage(arg1, arg2) {
+  return window['go']['main']['App']['SendP2PMessage'](arg1, arg2);
+}
+
+export function SendP2PProfile(arg1, arg2) {
+  return window['go']['main']['App']['SendP2PProfile'](arg1, arg2);
 }
 
 export function StartLogin() {

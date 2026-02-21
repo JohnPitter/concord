@@ -372,6 +372,31 @@ export namespace server {
 
 }
 
+export namespace sqlite {
+	
+	export class P2PMessage {
+	    id: string;
+	    peer_id: string;
+	    direction: string;
+	    content: string;
+	    sent_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new P2PMessage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.peer_id = source["peer_id"];
+	        this.direction = source["direction"];
+	        this.content = source["content"];
+	        this.sent_at = source["sent_at"];
+	    }
+	}
+
+}
+
 export namespace translation {
 	
 	export class Status {

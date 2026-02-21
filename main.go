@@ -5,21 +5,24 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/cache"
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/files"
+	"github.com/concord-chat/concord/internal/network/p2p"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
-	"github.com/concord-chat/concord/internal/network/p2p"
 	"github.com/concord-chat/concord/internal/translation"
 	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
@@ -48,6 +51,8 @@ type App struct {
 	fileService   *files.Service
 	translationService *translation.Service
 	p2pHost            *p2p.Host
+	p2pRepo            *sqlite.P2PRepo
+	p2pPeerNames       sync.Map // peerID(string) → p2p.ProfilePayload
 }
 
 // NewApp creates a new application instance
@@ -470,6 +475,144 @@ func (a *App) GetP2PPeers() []p2p.PeerInfo {
 		return []p2p.PeerInfo{}
 	}
 	return a.p2pHost.Peers()
+}
+
+// --- P2P Full Mode Bindings ---
+
+// P2PMessage é a estrutura de mensagem P2P exposta ao frontend.
+type P2PMessage = sqlite.P2PMessage
+
+// InitP2PHost inicializa o host libp2p para o modo P2P.
+// Idempotente — seguro de chamar múltiplas vezes.
+// Complexity: O(1).
+func (a *App) InitP2PHost() error {
+	if a.p2pHost != nil {
+		return nil // já inicializado
+	}
+
+	host, err := p2p.New(p2p.DefaultConfig(), a.logger)
+	if err != nil {
+		return fmt.Errorf("init p2p host: %w", err)
+	}
+	a.p2pHost = host
+	a.p2pRepo = sqlite.NewP2PRepo(a.db)
+
+	// Registrar handler de mensagens recebidas
+	host.OnMessage(func(peerID string, data []byte) {
+		env, err := p2p.DecodeEnvelope(data)
+		if err != nil {
+			a.logger.Warn().Err(err).Str("peer", peerID).Msg("p2p: invalid envelope")
+			return
+		}
+
+		switch env.Type {
+		case p2p.TypeProfile:
+			var prof p2p.ProfilePayload
+			if err := json.Unmarshal(env.Payload, &prof); err == nil {
+				a.p2pPeerNames.Store(peerID, prof)
+				a.logger.Info().Str("peer", peerID).Str("name", prof.DisplayName).Msg("p2p: profile received")
+			}
+
+		case p2p.TypeChat:
+			var chat p2p.ChatPayload
+			if err := json.Unmarshal(env.Payload, &chat); err == nil {
+				msg := sqlite.P2PMessage{
+					ID:        fmt.Sprintf("%s-%s", peerID, chat.SentAt),
+					PeerID:    peerID,
+					Direction: "received",
+					Content:   chat.Content,
+					SentAt:    chat.SentAt,
+				}
+				if err := a.p2pRepo.SaveMessage(a.ctx, msg); err != nil {
+					a.logger.Warn().Err(err).Msg("p2p: save received message")
+				}
+				runtime.EventsEmit(a.ctx, "p2p:message", msg)
+			}
+		}
+	})
+
+	a.logger.Info().Str("id", host.ID()).Msg("p2p: host initialized")
+	return nil
+}
+
+// SendP2PProfile envia o perfil local para todos os peers conectados.
+func (a *App) SendP2PProfile(displayName, avatarDataURL string) error {
+	if a.p2pHost == nil {
+		return nil
+	}
+	prof := p2p.ProfilePayload{DisplayName: displayName, AvatarDataURL: avatarDataURL}
+	for _, peer := range a.p2pHost.Peers() {
+		a.sendProfileHandshake(peer.ID, prof)
+	}
+	return nil
+}
+
+func (a *App) sendProfileHandshake(peerID string, prof p2p.ProfilePayload) {
+	data, err := p2p.EncodeEnvelope(p2p.TypeProfile, a.p2pHost.ID(), prof)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	if err := a.p2pHost.SendData(ctx, peerID, data); err != nil {
+		a.logger.Debug().Err(err).Str("peer", peerID).Msg("p2p: profile handshake failed")
+	}
+}
+
+// SendP2PMessage envia uma mensagem de chat para um peer e persiste localmente.
+// Complexity: O(1).
+func (a *App) SendP2PMessage(peerID, content string) error {
+	if a.p2pHost == nil {
+		return fmt.Errorf("p2p host not initialized")
+	}
+	if a.p2pRepo == nil {
+		return fmt.Errorf("p2p repository not initialized")
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	msg := sqlite.P2PMessage{
+		ID:        fmt.Sprintf("%s-%s", a.p2pHost.ID(), now),
+		PeerID:    peerID,
+		Direction: "sent",
+		Content:   content,
+		SentAt:    now,
+	}
+
+	if err := a.p2pRepo.SaveMessage(a.ctx, msg); err != nil {
+		return fmt.Errorf("save sent message: %w", err)
+	}
+
+	payload := p2p.ChatPayload{Content: content, SentAt: now}
+	data, err := p2p.EncodeEnvelope(p2p.TypeChat, a.p2pHost.ID(), payload)
+	if err != nil {
+		return fmt.Errorf("encode chat: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	return a.p2pHost.SendData(ctx, peerID, data)
+}
+
+// GetP2PMessages retorna o histórico de mensagens com um peer.
+// Complexity: O(n) onde n = limit.
+func (a *App) GetP2PMessages(peerID string, limit int) ([]sqlite.P2PMessage, error) {
+	if a.p2pRepo == nil {
+		return []sqlite.P2PMessage{}, nil
+	}
+	return a.p2pRepo.GetMessages(a.ctx, peerID, limit)
+}
+
+// GetP2PPeerName retorna o nome do perfil recebido de um peer.
+func (a *App) GetP2PPeerName(peerID string) string {
+	if v, ok := a.p2pPeerNames.Load(peerID); ok {
+		if prof, ok := v.(p2p.ProfilePayload); ok {
+			return prof.DisplayName
+		}
+	}
+	if len(peerID) >= 8 {
+		return peerID[:8]
+	}
+	return peerID
 }
 
 func main() {

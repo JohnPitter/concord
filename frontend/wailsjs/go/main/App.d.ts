@@ -5,6 +5,7 @@ import {server} from '../models';
 import {chat} from '../models';
 import {files} from '../models';
 import {observability} from '../models';
+import {sqlite} from '../models';
 import {p2p} from '../models';
 import {translation} from '../models';
 import {version} from '../models';
@@ -42,6 +43,10 @@ export function GetInviteInfo(arg1:string):Promise<server.InviteInfo>;
 
 export function GetMessages(arg1:string,arg2:string,arg3:string,arg4:number):Promise<Array<chat.Message>>;
 
+export function GetP2PMessages(arg1:string,arg2:number):Promise<Array<sqlite.P2PMessage>>;
+
+export function GetP2PPeerName(arg1:string):Promise<string>;
+
 export function GetP2PPeers():Promise<Array<p2p.PeerInfo>>;
 
 export function GetP2PRoomCode():Promise<string>;
@@ -55,6 +60,8 @@ export function GetVersion():Promise<version.Info>;
 export function GetVoiceStatus():Promise<voice.VoiceStatus>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function InitP2PHost():Promise<void>;
 
 export function JoinP2PRoom(arg1:string):Promise<void>;
 
@@ -81,6 +88,10 @@ export function SearchMessages(arg1:string,arg2:string,arg3:number):Promise<Arra
 export function SelectAvatarFile():Promise<string>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
+
+export function SendP2PMessage(arg1:string,arg2:string):Promise<void>;
+
+export function SendP2PProfile(arg1:string,arg2:string):Promise<void>;
 
 export function StartLogin():Promise<auth.DeviceCodeResponse>;
 
