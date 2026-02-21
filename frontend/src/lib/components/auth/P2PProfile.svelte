@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SelectAvatarFile } from '../../../wailsjs/go/main/App'
+  import { SelectAvatarFile } from '../../../../wailsjs/go/main/App'
   import Button from '../ui/Button.svelte'
 
   let {
@@ -80,10 +80,11 @@
     <!-- Name input -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div onkeydown={handleKeydown}>
-      <label class="mb-1.5 block text-sm font-medium text-void-text-secondary">
+      <label for="p2p-display-name" class="mb-1.5 block text-sm font-medium text-void-text-secondary">
         Nome de exibição
       </label>
       <input
+        id="p2p-display-name"
         type="text"
         bind:value={displayName}
         placeholder="Seu nome..."
