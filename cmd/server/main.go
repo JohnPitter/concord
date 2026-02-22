@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/concord-chat/concord/internal/api"
 	"github.com/concord-chat/concord/internal/auth"
@@ -56,12 +57,22 @@ func main() {
 	// Initialize health checker
 	health := observability.NewHealthChecker(logger, version.Version)
 
-	// --- Infrastructure: PostgreSQL ---
-	pgDB, err := postgres.New(cfg.Database.Postgres, logger)
-	if err != nil {
-		logger.Warn().Err(err).Msg("postgresql unavailable — server will start without database")
-		pgDB = nil
-	} else {
+	// --- Infrastructure: PostgreSQL (with retry) ---
+	var pgDB *postgres.DB
+	const maxRetries = 5
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		pgDB, err = postgres.New(cfg.Database.Postgres, logger)
+		if err == nil {
+			break
+		}
+		if attempt == maxRetries {
+			logger.Fatal().Err(err).Int("attempts", maxRetries).Msg("postgresql unavailable after retries — cannot start without database")
+		}
+		wait := time.Duration(attempt) * 2 * time.Second
+		logger.Warn().Err(err).Int("attempt", attempt).Dur("retry_in", wait).Msg("postgresql unavailable — retrying")
+		time.Sleep(wait)
+	}
+	{
 		// Run migrations
 		migrator := postgres.NewMigrator(pgDB, logger)
 		if err := migrator.Run(context.Background()); err != nil {
@@ -93,36 +104,27 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to create JWT manager")
 	}
 
-	// --- Services ---
-	var (
-		authSvc   *auth.Service
-		serverSvc *server.Service
-		chatSvc   *chat.Service
-	)
+	// --- Services (pgDB is guaranteed non-nil due to retry+fatal above) ---
+	stdlibDB := pgDB.StdlibDB()
+	pgAdapter := postgres.NewAdapter(stdlibDB)
 
-	if pgDB != nil {
-		// Bridge pgx pool to database/sql interface
-		stdlibDB := pgDB.StdlibDB()
-		pgAdapter := postgres.NewAdapter(stdlibDB)
+	// Auth service
+	githubOAuth := auth.NewGitHubOAuth(cfg.Auth.GitHubClientID, logger)
+	authRepo := auth.NewRepository(pgAdapter, logger)
+	cryptoMgr := security.NewCryptoManager()
+	encryptKey := sha256Key(cfg.Security.JWTSecret)
+	authSvc := auth.NewService(githubOAuth, jwtManager, authRepo, cryptoMgr, encryptKey, logger)
 
-		// Auth service
-		githubOAuth := auth.NewGitHubOAuth(cfg.Auth.GitHubClientID, logger)
-		authRepo := auth.NewRepository(pgAdapter, logger)
-		cryptoMgr := security.NewCryptoManager()
-		encryptKey := sha256Key(cfg.Security.JWTSecret)
-		authSvc = auth.NewService(githubOAuth, jwtManager, authRepo, cryptoMgr, encryptKey, logger)
+	// Server service
+	serverRepo := server.NewRepository(pgAdapter, logger)
+	serverCache := cache.NewLRU(1000)
+	serverSvc := server.NewService(serverRepo, serverCache, logger)
 
-		// Server service
-		serverRepo := server.NewRepository(pgAdapter, logger)
-		serverCache := cache.NewLRU(1000)
-		serverSvc = server.NewService(serverRepo, serverCache, logger)
+	// Chat service
+	chatRepo := chat.NewRepository(pgAdapter, logger)
+	chatSvc := chat.NewService(chatRepo, logger)
 
-		// Chat service
-		chatRepo := chat.NewRepository(pgAdapter, logger)
-		chatSvc = chat.NewService(chatRepo, logger)
-
-		logger.Info().Msg("all services initialized with postgresql backend")
-	}
+	logger.Info().Msg("all services initialized with postgresql backend")
 
 	// --- API Server ---
 	apiServer := api.New(

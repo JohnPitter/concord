@@ -163,6 +163,8 @@ export async function createRoom() {
   try {
     const code = await App.GetP2PRoomCode()
     roomCode = code
+    // Advertise on DHT so joiners can find us
+    await App.JoinP2PRoom(code)
   } catch {
     roomCode = generateRoomCode()
   }

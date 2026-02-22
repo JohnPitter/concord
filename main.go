@@ -522,14 +522,36 @@ func (a *App) GetP2PRoomCode() string {
 }
 
 // JoinP2PRoom conecta ao rendezvous DHT de uma sala pelo código curto.
+// Descobre peers via DHT e conecta automaticamente a cada um encontrado.
 // Retorna erro se o host P2P não estiver inicializado ou DHT indisponível.
 func (a *App) JoinP2PRoom(code string) error {
 	if a.p2pHost == nil {
 		return fmt.Errorf("p2p host not initialized")
 	}
 	rendezvous := p2p.RoomRendezvous(code)
-	_, err := a.p2pHost.FindPeers(a.ctx, rendezvous)
-	return err
+	peerChan, err := a.p2pHost.FindPeers(a.ctx, rendezvous)
+	if err != nil {
+		return err
+	}
+
+	// Consume the peer channel in a goroutine and auto-connect
+	go func() {
+		for pi := range peerChan {
+			if pi.ID == a.p2pHost.LibP2PHost().ID() {
+				continue // skip self
+			}
+			a.logger.Info().Str("peer_id", pi.ID.String()).Str("room", code).Msg("room: peer discovered via DHT")
+			connectCtx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+			if err := a.p2pHost.LibP2PHost().Connect(connectCtx, pi); err != nil {
+				a.logger.Debug().Err(err).Str("peer_id", pi.ID.String()).Msg("room: auto-connect failed")
+			} else {
+				a.logger.Info().Str("peer_id", pi.ID.String()).Msg("room: peer connected")
+			}
+			cancel()
+		}
+	}()
+
+	return nil
 }
 
 // GetP2PPeers retorna a lista de peers conectados (LAN e sala).
