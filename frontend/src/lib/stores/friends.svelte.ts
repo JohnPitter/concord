@@ -1,3 +1,13 @@
+// Friends store — dual-mode (Wails bindings or HTTP API) with localStorage cache
+// Svelte 5 runes
+
+import * as App from '../../../wailsjs/go/main/App'
+import { ensureValidToken } from './auth.svelte'
+import { getAuth } from './auth.svelte'
+import { isServerMode } from '../api/mode'
+import { apiFriends } from '../api/friends'
+import type { FriendRequestView, FriendView } from '../api/friends'
+
 export type FriendStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
 export interface Friend {
@@ -57,8 +67,10 @@ interface FriendsState {
 }
 
 const STORAGE_KEY = 'concord_friends'
-
 const DM_MESSAGES_KEY = 'concord_dm_messages'
+const POLL_INTERVAL = 30_000 // 30s polling for pending requests
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const state = $state<FriendsState>({
   friends: [],
@@ -73,7 +85,14 @@ const state = $state<FriendsState>({
   addFriendSuccess: null,
 })
 
-// ── Persistence ────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
+
+function currentUserID(): string | null {
+  const auth = getAuth()
+  return auth.user?.id ?? null
+}
+
+// ── Persistence (localStorage cache) ────────────────────────────────────
 
 function persist() {
   try {
@@ -108,6 +127,83 @@ function loadFromStorage() {
       state.dmMessages = JSON.parse(dmRaw)
     }
   } catch { /* ignore parse errors */ }
+}
+
+// ── Backend sync helpers ──────────────────────────────────────────────
+
+function mapBackendFriend(f: FriendView): Friend {
+  return {
+    id: f.id,
+    username: f.username,
+    display_name: f.display_name,
+    avatar_url: f.avatar_url || undefined,
+    status: 'offline' as FriendStatus,
+  }
+}
+
+function mapBackendRequest(r: FriendRequestView): FriendRequest {
+  return {
+    id: r.id,
+    username: r.username,
+    display_name: r.display_name,
+    avatar_url: r.avatar_url || undefined,
+    direction: r.direction as 'incoming' | 'outgoing',
+    createdAt: r.createdAt,
+  }
+}
+
+function syncDMsFromFriends(friends: Friend[]) {
+  // Ensure every friend has a DM conversation entry
+  const existingDMFriendIds = new Set(state.dms.map(d => d.friendId))
+  const newDMs: DMConversation[] = []
+
+  for (const f of friends) {
+    if (!existingDMFriendIds.has(f.id)) {
+      newDMs.push({
+        id: `dm-${f.id}`,
+        friendId: f.id,
+        username: f.username,
+        display_name: f.display_name,
+        avatar_url: f.avatar_url,
+        status: f.status,
+      })
+    }
+  }
+
+  // Remove DMs for users no longer in friends list
+  const friendIds = new Set(friends.map(f => f.id))
+  state.dms = [
+    ...state.dms.filter(d => friendIds.has(d.friendId)),
+    ...newDMs,
+  ]
+}
+
+async function fetchFriendsFromBackend(): Promise<Friend[]> {
+  const uid = currentUserID()
+  if (!uid) return []
+
+  await ensureValidToken()
+  let raw: FriendView[]
+  if (isServerMode()) {
+    raw = await apiFriends.getFriends()
+  } else {
+    raw = await App.GetFriends(uid) as unknown as FriendView[]
+  }
+  return (raw ?? []).map(mapBackendFriend)
+}
+
+async function fetchPendingFromBackend(): Promise<FriendRequest[]> {
+  const uid = currentUserID()
+  if (!uid) return []
+
+  await ensureValidToken()
+  let raw: FriendRequestView[]
+  if (isServerMode()) {
+    raw = await apiFriends.getPendingRequests()
+  } else {
+    raw = await App.GetPendingRequests(uid) as unknown as FriendRequestView[]
+  }
+  return (raw ?? []).map(mapBackendRequest)
 }
 
 // ── Selectors ────────────────────────────────────────────────────────────
@@ -151,13 +247,56 @@ export function openDM(dmId: string | null) {
   state.activeDMId = dmId
 }
 
-export function loadFriends() {
+export async function loadFriends() {
   state.loading = true
+  // Load cached data immediately so the UI isn't blank
   loadFromStorage()
-  state.loading = false
+
+  try {
+    const [friends, pending] = await Promise.all([
+      fetchFriendsFromBackend(),
+      fetchPendingFromBackend(),
+    ])
+    state.friends = friends
+    state.pendingRequests = pending
+    syncDMsFromFriends(friends)
+    persist()
+  } catch {
+    // Keep cached data on error
+  } finally {
+    state.loading = false
+  }
+
+  // Start polling for incoming requests
+  startPolling()
 }
 
-export function sendFriendRequest(username: string) {
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    try {
+      const [friends, pending] = await Promise.all([
+        fetchFriendsFromBackend(),
+        fetchPendingFromBackend(),
+      ])
+      state.friends = friends
+      state.pendingRequests = pending
+      syncDMsFromFriends(friends)
+      persist()
+    } catch {
+      // Silently ignore polling errors
+    }
+  }, POLL_INTERVAL)
+}
+
+export function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+export async function sendFriendRequest(username: string) {
   state.addFriendError = null
   state.addFriendSuccess = null
 
@@ -167,83 +306,151 @@ export function sendFriendRequest(username: string) {
     return
   }
 
-  // Check if already friends
-  if (state.friends.some(f => f.username.toLowerCase() === trimmed.toLowerCase())) {
-    state.addFriendError = `Voce ja e amigo de ${trimmed}.`
+  const uid = currentUserID()
+  if (!uid) {
+    state.addFriendError = 'Voce precisa estar logado.'
     return
   }
 
-  // Check if already pending
-  if (state.pendingRequests.some(r => r.username.toLowerCase() === trimmed.toLowerCase())) {
-    state.addFriendError = `Ja existe um pedido pendente para ${trimmed}.`
-    return
-  }
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      await apiFriends.sendRequest(trimmed)
+    } else {
+      await App.SendFriendRequest(uid, trimmed)
+    }
 
-  // Since there's no backend API for friends yet, we simulate:
-  // Add as pending outgoing request
-  const request: FriendRequest = {
-    id: `req-${Date.now()}`,
-    username: trimmed,
-    display_name: trimmed,
-    direction: 'outgoing',
-    createdAt: new Date().toISOString(),
+    state.addFriendSuccess = `Pedido de amizade enviado para ${trimmed}!`
+
+    // Refresh pending requests from backend
+    const pending = await fetchPendingFromBackend()
+    state.pendingRequests = pending
+    persist()
+  } catch (e) {
+    state.addFriendError = e instanceof Error ? e.message : 'Falha ao enviar pedido.'
   }
-  state.pendingRequests = [...state.pendingRequests, request]
-  state.addFriendSuccess = `Pedido de amizade enviado para ${trimmed}!`
-  persist()
 }
 
-export function acceptFriendRequest(requestId: string) {
-  const request = state.pendingRequests.find(r => r.id === requestId)
-  if (!request) return
+export async function acceptFriendRequest(requestId: string) {
+  const uid = currentUserID()
+  if (!uid) return
 
-  const friend: Friend = {
-    id: `friend-${Date.now()}`,
-    username: request.username,
-    display_name: request.display_name,
-    avatar_url: request.avatar_url,
-    status: 'online',
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      await apiFriends.acceptRequest(requestId)
+    } else {
+      await App.AcceptFriendRequest(requestId, uid)
+    }
+
+    // Refresh both lists from backend
+    const [friends, pending] = await Promise.all([
+      fetchFriendsFromBackend(),
+      fetchPendingFromBackend(),
+    ])
+    state.friends = friends
+    state.pendingRequests = pending
+    syncDMsFromFriends(friends)
+    persist()
+  } catch {
+    // Optimistic remove on error is too risky — keep state
   }
+}
 
-  state.friends = [...state.friends, friend]
-  state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
+export async function rejectFriendRequest(requestId: string) {
+  const uid = currentUserID()
+  if (!uid) return
 
-  // Auto-create DM
-  const dm: DMConversation = {
-    id: `dm-${friend.id}`,
-    friendId: friend.id,
-    username: friend.username,
-    display_name: friend.display_name,
-    avatar_url: friend.avatar_url,
-    status: friend.status,
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      await apiFriends.rejectRequest(requestId)
+    } else {
+      await App.RejectFriendRequest(requestId, uid)
+    }
+
+    // Remove from local state immediately
+    state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
+    persist()
+  } catch {
+    // Refresh to get actual state
+    const pending = await fetchPendingFromBackend()
+    state.pendingRequests = pending
+    persist()
   }
-  state.dms = [...state.dms, dm]
-  persist()
 }
 
-export function rejectFriendRequest(requestId: string) {
-  state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
-  persist()
-}
+export async function removeFriend(friendId: string) {
+  const uid = currentUserID()
+  if (!uid) return
 
-export function removeFriend(friendId: string) {
-  state.friends = state.friends.filter(f => f.id !== friendId)
-  state.dms = state.dms.filter(d => d.friendId !== friendId)
-  persist()
-}
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      await apiFriends.removeFriend(friendId)
+    } else {
+      await App.RemoveFriend(uid, friendId)
+    }
 
-export function blockUser(friendId: string) {
-  const friend = state.friends.find(f => f.id === friendId)
-  if (friend) {
-    state.blocked = [...state.blocked, friend.username]
-    removeFriend(friendId)
+    state.friends = state.friends.filter(f => f.id !== friendId)
+    state.dms = state.dms.filter(d => d.friendId !== friendId)
+    persist()
+  } catch {
+    // Refresh on error
+    const friends = await fetchFriendsFromBackend()
+    state.friends = friends
+    syncDMsFromFriends(friends)
+    persist()
   }
-  persist()
 }
 
-export function unblockUser(username: string) {
-  state.blocked = state.blocked.filter(u => u !== username)
-  persist()
+export async function blockUser(friendId: string) {
+  const uid = currentUserID()
+  if (!uid) return
+
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      await apiFriends.blockUser(friendId)
+    } else {
+      await App.BlockUser(uid, friendId)
+    }
+
+    const friend = state.friends.find(f => f.id === friendId)
+    if (friend) {
+      state.blocked = [...state.blocked, friend.username]
+    }
+    state.friends = state.friends.filter(f => f.id !== friendId)
+    state.dms = state.dms.filter(d => d.friendId !== friendId)
+    persist()
+  } catch {
+    // Refresh
+    const friends = await fetchFriendsFromBackend()
+    state.friends = friends
+    syncDMsFromFriends(friends)
+    persist()
+  }
+}
+
+export async function unblockUser(username: string) {
+  const uid = currentUserID()
+  if (!uid) return
+
+  try {
+    await ensureValidToken()
+    if (isServerMode()) {
+      // For server mode, we need the user ID — but unblock takes friendID in the API
+      // The API handler does a username lookup, so we pass the username as the friendID param
+      await apiFriends.unblockUser(username)
+    } else {
+      await App.UnblockUser(uid, username)
+    }
+
+    state.blocked = state.blocked.filter(u => u !== username)
+    persist()
+  } catch {
+    // keep state
+  }
 }
 
 export function clearFriendNotifications() {

@@ -16,6 +16,7 @@ import (
 	"github.com/concord-chat/concord/internal/cache"
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
+	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
@@ -124,6 +125,10 @@ func main() {
 	chatRepo := chat.NewRepository(pgAdapter, logger)
 	chatSvc := chat.NewService(chatRepo, logger)
 
+	// Friends service (use stdlib DB wrapper for transactions)
+	friendRepo := friends.NewRepository(pgAdapter, friends.NewStdlibTransactor(stdlibDB), logger)
+	friendsSvc := friends.NewService(friendRepo, logger)
+
 	logger.Info().Msg("all services initialized with postgresql backend")
 
 	// --- API Server ---
@@ -132,6 +137,7 @@ func main() {
 		authSvc,
 		serverSvc,
 		chatSvc,
+		friendsSvc,
 		jwtManager,
 		health,
 		metrics,

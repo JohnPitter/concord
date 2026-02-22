@@ -15,6 +15,7 @@ import (
 	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
+	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/server"
 )
@@ -27,6 +28,7 @@ type Server struct {
 	auth       *auth.Service
 	servers    *server.Service
 	chat       *chat.Service
+	friends    *friends.Service
 	health     *observability.HealthChecker
 	metrics    *observability.Metrics
 	logger     zerolog.Logger
@@ -41,6 +43,7 @@ func New(
 	authSvc *auth.Service,
 	serverSvc *server.Service,
 	chatSvc *chat.Service,
+	friendsSvc *friends.Service,
 	jwtManager *auth.JWTManager,
 	health *observability.HealthChecker,
 	metrics *observability.Metrics,
@@ -50,6 +53,7 @@ func New(
 		auth:    authSvc,
 		servers: serverSvc,
 		chat:    chatSvc,
+		friends: friendsSvc,
 		health:  health,
 		metrics: metrics,
 		logger:  logger.With().Str("component", "api_server").Logger(),
@@ -125,6 +129,16 @@ func New(
 			protected.Put("/messages/{messageID}", s.handleEditMessage)
 			protected.Delete("/messages/{messageID}", s.handleDeleteMessage)
 			protected.Get("/channels/{channelID}/messages/search", s.handleSearchMessages)
+
+			// Friends
+			protected.Post("/friends/request", s.handleSendFriendRequest)
+			protected.Get("/friends/requests", s.handleGetPendingRequests)
+			protected.Put("/friends/requests/{requestID}/accept", s.handleAcceptFriendRequest)
+			protected.Delete("/friends/requests/{requestID}", s.handleRejectFriendRequest)
+			protected.Get("/friends", s.handleGetFriends)
+			protected.Delete("/friends/{friendID}", s.handleRemoveFriend)
+			protected.Post("/friends/{friendID}/block", s.handleBlockUser)
+			protected.Delete("/friends/{friendID}/block", s.handleUnblockUser)
 		})
 	})
 

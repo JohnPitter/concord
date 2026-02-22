@@ -4,12 +4,17 @@ import {auth} from '../models';
 import {server} from '../models';
 import {chat} from '../models';
 import {files} from '../models';
+import {friends} from '../models';
 import {observability} from '../models';
 import {sqlite} from '../models';
 import {p2p} from '../models';
 import {translation} from '../models';
 import {version} from '../models';
 import {voice} from '../models';
+
+export function AcceptFriendRequest(arg1:string,arg2:string):Promise<void>;
+
+export function BlockUser(arg1:string,arg2:string):Promise<void>;
 
 export function CompleteLogin(arg1:string,arg2:number):Promise<auth.AuthState>;
 
@@ -27,15 +32,21 @@ export function DeleteServer(arg1:string,arg2:string):Promise<void>;
 
 export function DisableTranslation():Promise<void>;
 
+export function DisableVoiceTranslation():Promise<void>;
+
 export function DownloadFile(arg1:string):Promise<Array<number>>;
 
 export function EditMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
 
 export function EnableTranslation(arg1:string,arg2:string):Promise<void>;
 
+export function EnableVoiceTranslation(arg1:string,arg2:string):Promise<void>;
+
 export function GenerateInvite(arg1:string,arg2:string):Promise<string>;
 
 export function GetAttachments(arg1:string):Promise<Array<files.Attachment>>;
+
+export function GetFriends(arg1:string):Promise<Array<friends.FriendView>>;
 
 export function GetHealth():Promise<observability.Health>;
 
@@ -51,6 +62,8 @@ export function GetP2PPeers():Promise<Array<p2p.PeerInfo>>;
 
 export function GetP2PRoomCode():Promise<string>;
 
+export function GetPendingRequests(arg1:string):Promise<Array<friends.FriendRequestView>>;
+
 export function GetPublicURL():Promise<string>;
 
 export function GetServer(arg1:string):Promise<server.Server>;
@@ -60,6 +73,8 @@ export function GetTranslationStatus():Promise<translation.Status>;
 export function GetVersion():Promise<version.Info>;
 
 export function GetVoiceStatus():Promise<voice.VoiceStatus>;
+
+export function GetVoiceTranslationStatus():Promise<voice.VoiceTranslationStatus>;
 
 export function Greet(arg1:string):Promise<string>;
 
@@ -83,11 +98,17 @@ export function Logout(arg1:string):Promise<void>;
 
 export function RedeemInvite(arg1:string,arg2:string):Promise<server.Server>;
 
+export function RejectFriendRequest(arg1:string,arg2:string):Promise<void>;
+
+export function RemoveFriend(arg1:string,arg2:string):Promise<void>;
+
 export function RestoreSession(arg1:string):Promise<auth.AuthState>;
 
 export function SearchMessages(arg1:string,arg2:string,arg3:number):Promise<Array<chat.SearchResult>>;
 
 export function SelectAvatarFile():Promise<string>;
+
+export function SendFriendRequest(arg1:string,arg2:string):Promise<void>;
 
 export function SendMessage(arg1:string,arg2:string,arg3:string):Promise<chat.Message>;
 
@@ -100,6 +121,10 @@ export function StartLogin():Promise<auth.DeviceCodeResponse>;
 export function ToggleDeafen():Promise<boolean>;
 
 export function ToggleMute():Promise<boolean>;
+
+export function TranslateText(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function UnblockUser(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateMemberRole(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 

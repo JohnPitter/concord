@@ -1,0 +1,40 @@
+package friends
+
+// RequestStatus represents the state of a friend request.
+type RequestStatus string
+
+const (
+	StatusPending  RequestStatus = "pending"
+	StatusAccepted RequestStatus = "accepted"
+	StatusRejected RequestStatus = "rejected"
+	StatusBlocked  RequestStatus = "blocked"
+)
+
+// FriendRequest represents a pending, accepted, rejected or blocked friend request.
+type FriendRequest struct {
+	ID         string        `json:"id"`
+	SenderID   string        `json:"sender_id"`
+	ReceiverID string        `json:"receiver_id"`
+	Status     RequestStatus `json:"status"`
+	CreatedAt  string        `json:"created_at"`
+	UpdatedAt  string        `json:"updated_at"`
+}
+
+// FriendRequestView is the enriched view sent to the frontend.
+type FriendRequestView struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Direction   string `json:"direction"` // "incoming" or "outgoing"
+	CreatedAt   string `json:"createdAt"`
+}
+
+// FriendView represents a friend with profile info for the frontend.
+type FriendView struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Status      string `json:"status"` // always "offline" for now
+}

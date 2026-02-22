@@ -197,6 +197,53 @@ export namespace files {
 
 }
 
+export namespace friends {
+	
+	export class FriendRequestView {
+	    id: string;
+	    username: string;
+	    display_name: string;
+	    avatar_url: string;
+	    direction: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FriendRequestView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.username = source["username"];
+	        this.display_name = source["display_name"];
+	        this.avatar_url = source["avatar_url"];
+	        this.direction = source["direction"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class FriendView {
+	    id: string;
+	    username: string;
+	    display_name: string;
+	    avatar_url: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FriendView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.username = source["username"];
+	        this.display_name = source["display_name"];
+	        this.avatar_url = source["avatar_url"];
+	        this.status = source["status"];
+	    }
+	}
+
+}
+
 export namespace observability {
 	
 	export class ComponentHealth {
@@ -405,7 +452,6 @@ export namespace translation {
 	    target_lang: string;
 	    circuit_breaker_open: boolean;
 	    cache_entries: number;
-	    pipeline_active: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
@@ -418,7 +464,6 @@ export namespace translation {
 	        this.target_lang = source["target_lang"];
 	        this.circuit_breaker_open = source["circuit_breaker_open"];
 	        this.cache_entries = source["cache_entries"];
-	        this.pipeline_active = source["pipeline_active"];
 	    }
 	}
 
@@ -510,6 +555,22 @@ export namespace voice {
 		    }
 		    return a;
 		}
+	}
+	export class VoiceTranslationStatus {
+	    enabled: boolean;
+	    source_lang: string;
+	    target_lang: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VoiceTranslationStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.source_lang = source["source_lang"];
+	        this.target_lang = source["target_lang"];
+	    }
 	}
 
 }

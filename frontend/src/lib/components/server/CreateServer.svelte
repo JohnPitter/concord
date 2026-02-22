@@ -11,13 +11,14 @@
   }: {
     open: boolean
     onCreate: (name: string) => void
-    onJoin: (code: string) => void
+    onJoin: (code: string) => Promise<string | null>
   } = $props()
 
   let mode = $state<'choose' | 'create' | 'join'>('choose')
   let serverName = $state('')
   let inviteCode = $state('')
   let error = $state('')
+  let joining = $state(false)
   const trans = $derived($translations)
 
   function resetState() {
@@ -43,16 +44,29 @@
     open = false
   }
 
-  function handleJoin() {
+  async function handleJoin() {
     const trimmed = inviteCode.trim()
     if (!trimmed) {
       error = t(trans, 'server.inviteRequired')
       return
     }
     error = ''
-    onJoin(trimmed)
-    resetState()
-    open = false
+    joining = true
+    try {
+      const result = await onJoin(trimmed)
+      if (result) {
+        // result is an error message
+        error = result
+      } else {
+        // success — close modal
+        resetState()
+        open = false
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to join server'
+    } finally {
+      joining = false
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -173,8 +187,15 @@
           <Button variant="ghost" onclick={() => { open = false }}>
             {t(trans, 'common.cancel')}
           </Button>
-          <Button variant="solid" onclick={handleJoin} disabled={!inviteCode.trim()}>
-            {t(trans, 'server.joinButton')}
+          <Button variant="solid" onclick={handleJoin} disabled={!inviteCode.trim() || joining}>
+            {#if joining}
+              <div class="flex items-center gap-2">
+                <div class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                {t(trans, 'server.joinButton')}
+              </div>
+            {:else}
+              {t(trans, 'server.joinButton')}
+            {/if}
           </Button>
         </div>
       </div>

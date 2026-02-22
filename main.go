@@ -18,6 +18,7 @@ import (
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/files"
+	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/network/p2p"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
@@ -47,6 +48,7 @@ type App struct {
 	authService   *auth.Service
 	serverService *server.Service
 	chatService   *chat.Service
+	friendService      *friends.Service
 	voiceEngine        *voice.Engine
 	voiceTranslator    *voice.VoiceTranslator
 	fileService        *files.Service
@@ -153,6 +155,11 @@ func (a *App) startup(ctx context.Context) {
 	serverRepo := server.NewRepository(a.db, a.logger)
 	a.serverService = server.NewService(serverRepo, srvCache, a.logger)
 	a.logger.Info().Msg("server service initialized")
+
+	// Initialize friends service
+	friendRepo := friends.NewRepository(a.db, a.db, a.logger)
+	a.friendService = friends.NewService(friendRepo, a.logger)
+	a.logger.Info().Msg("friends service initialized")
 
 	// Initialize chat service
 	chatRepo := chat.NewRepository(a.db, a.logger)
@@ -360,6 +367,48 @@ func (a *App) RedeemInvite(code, userID string) (*server.Server, error) {
 // GetInviteInfo returns info about a server from an invite code.
 func (a *App) GetInviteInfo(code string) (*server.InviteInfo, error) {
 	return a.serverService.GetInviteInfo(a.ctx, code)
+}
+
+// --- Friend Bindings ---
+
+// SendFriendRequest sends a friend request to a user by username.
+func (a *App) SendFriendRequest(senderID, username string) error {
+	return a.friendService.SendRequest(a.ctx, senderID, username)
+}
+
+// GetPendingRequests returns all pending friend requests for a user.
+func (a *App) GetPendingRequests(userID string) ([]friends.FriendRequestView, error) {
+	return a.friendService.GetPendingRequests(a.ctx, userID)
+}
+
+// AcceptFriendRequest accepts a friend request.
+func (a *App) AcceptFriendRequest(requestID, userID string) error {
+	return a.friendService.AcceptRequest(a.ctx, requestID, userID)
+}
+
+// RejectFriendRequest rejects or cancels a friend request.
+func (a *App) RejectFriendRequest(requestID, userID string) error {
+	return a.friendService.RejectRequest(a.ctx, requestID, userID)
+}
+
+// GetFriends returns all friends for a user.
+func (a *App) GetFriends(userID string) ([]friends.FriendView, error) {
+	return a.friendService.GetFriends(a.ctx, userID)
+}
+
+// RemoveFriend removes a friendship.
+func (a *App) RemoveFriend(userID, friendID string) error {
+	return a.friendService.RemoveFriend(a.ctx, userID, friendID)
+}
+
+// BlockUser blocks a target user.
+func (a *App) BlockUser(userID, targetID string) error {
+	return a.friendService.BlockUser(a.ctx, userID, targetID)
+}
+
+// UnblockUser unblocks a user by username.
+func (a *App) UnblockUser(userID, username string) error {
+	return a.friendService.UnblockUser(a.ctx, userID, username)
 }
 
 // --- Chat Bindings ---

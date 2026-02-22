@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-02-22
+
+### Added
+
+#### Friends System Backend + Server Join Fix (2026-02-22)
+
+- **Friends migration** (`008_friends.sql`): `friend_requests` table (sender/receiver/status with pending/accepted/rejected/blocked states, unique pair constraint) and `friends` table (bidirectional relationship with cascading deletes)
+- **Friends repository** (`internal/friends/repository.go`): full CRUD — `SendRequest`, `GetPendingRequests` (incoming+outgoing with JOIN users), `AcceptRequest` (transactional: update status + insert bidirectional friendship), `RejectRequest`, `GetFriends`, `RemoveFriend`, `BlockUser` (removes friendship + upserts blocked status), `UnblockUser`, `ExistingRequest`, `AreFriends`
+- **Friends service** (`internal/friends/service.go`): validation layer — prevents self-add, duplicate requests, sending to blocked users; username lookup via repository
+- **Wails bindings** (`main.go`): `SendFriendRequest`, `GetPendingRequests`, `AcceptFriendRequest`, `RejectFriendRequest`, `GetFriends`, `RemoveFriend`, `BlockUser`, `UnblockUser` exposed to frontend
+- **REST API endpoints** (`internal/api/handlers_friends.go`, `server.go`): `POST /friends/request`, `GET /friends/requests`, `PUT /friends/requests/{id}/accept`, `DELETE /friends/requests/{id}`, `GET /friends`, `DELETE /friends/{id}`, `POST /friends/{id}/block`, `DELETE /friends/{id}/block`
+- **Frontend API client** (`frontend/src/lib/api/friends.ts`): typed wrappers for all friend REST endpoints
+
+### Changed
+
+- **Friends store refactored** (`frontend/src/lib/stores/friends.svelte.ts`): all mutations now call backend (Wails bindings in P2P mode, HTTP API in server mode); 30s polling for incoming friend requests; localStorage retained as offline cache; DM conversations auto-synced from friends list
+- **Server Join fix** (`CreateServer.svelte`): `handleJoin()` now properly awaits the async `onJoin` callback; shows loading spinner during join; displays error messages from backend in the modal instead of silently failing
+- **Server Join error propagation** (`App.svelte`): `handleJoinServer` returns `string | null` (error message or null on success) instead of `void`; catches and surfaces errors from `redeemInvite`
+
 ## [0.13.0] - 2026-02-22
 
 ### Added

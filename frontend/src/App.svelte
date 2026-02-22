@@ -170,13 +170,20 @@
     }
   }
 
-  async function handleJoinServer(code: string) {
-    if (!auth.user) return
-    const joined = await redeemInvite(code, auth.user.id)
-    if (joined) {
-      await loadUserServers(auth.user.id)
-      activeServerId = joined.id
-      await selectServer(joined.id)
+  async function handleJoinServer(code: string): Promise<string | null> {
+    if (!auth.user) return 'Not authenticated'
+    try {
+      const joined = await redeemInvite(code, auth.user.id)
+      if (joined) {
+        await loadUserServers(auth.user.id)
+        activeServerId = joined.id
+        await selectServer(joined.id)
+        showCreateServer = false
+        return null // success
+      }
+      return 'Invalid invite code or server not found'
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Failed to join server'
     }
   }
 
