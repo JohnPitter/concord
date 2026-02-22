@@ -42,7 +42,6 @@
 |------------|----------|
 | Windows (x64) | [concord-windows-amd64.zip](https://github.com/JohnPitter/concord/releases/latest) |
 | macOS (Apple Silicon) | [concord-macos-arm64.zip](https://github.com/JohnPitter/concord/releases/latest) |
-| macOS (Intel) | [concord-macos-amd64.zip](https://github.com/JohnPitter/concord/releases/latest) |
 | Linux (x64) | [concord-linux-amd64.tar.gz](https://github.com/JohnPitter/concord/releases/latest) |
 
 > Servidor central tambem disponivel nos [releases](https://github.com/JohnPitter/concord/releases/latest) (Linux, macOS, Windows).

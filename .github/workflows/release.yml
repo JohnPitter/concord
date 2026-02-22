@@ -22,9 +22,6 @@ jobs:
           - os: macos-latest
             platform: darwin
             artifact: concord-macos-arm64
-          - os: macos-13
-            platform: darwin
-            artifact: concord-macos-amd64
           - os: windows-latest
             platform: windows
             artifact: concord-windows-amd64
