@@ -139,7 +139,7 @@ class ApiClient {
 const SERVER_URL = import.meta.env.VITE_SERVER_URL as string || ''
 
 // Remote discovery gist — returns dynamic server URL when tunnel changes
-const DISCOVERY_URL = 'https://gist.githubusercontent.com/JohnPitter/94c9a0c3c3220378434783341c4db250/raw/server.json'
+const DISCOVERY_URL = 'https://gist.githubusercontent.com/JohnPitter/ee556dbee0baf301f58e908a5d1ba9b7/raw/server.json'
 
 // Singleton — initialized with the build-time server URL
 export const apiClient = new ApiClient(SERVER_URL)
