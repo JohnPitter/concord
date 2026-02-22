@@ -42,7 +42,6 @@ jobs:
   go-lint:
     name: Go Lint
     runs-on: ubuntu-latest
-    continue-on-error: true  # golangci-lint latest may not support Go 1.25 yet
     steps:
       - uses: actions/checkout@v4
 
@@ -55,9 +54,9 @@ jobs:
         run: mkdir -p frontend/dist && touch frontend/dist/index.html
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.10.1
 
   frontend-check:
     name: Frontend Check
@@ -94,6 +93,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Create frontend dist stub for embed
+        run: mkdir -p frontend/dist && touch frontend/dist/index.html
 
       - name: Build server
         run: CGO_ENABLED=0 go build -o /dev/null ./cmd/server/...

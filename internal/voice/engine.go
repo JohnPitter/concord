@@ -247,12 +247,12 @@ func (e *Engine) AddPeer(peerID, userID, username string) error {
 		"concord-voice",
 	)
 	if err != nil {
-		pc.Close()
+		_ = pc.Close()
 		return fmt.Errorf("voice: create audio track: %w", err)
 	}
 
 	if _, err := pc.AddTrack(audioTrack); err != nil {
-		pc.Close()
+		_ = pc.Close()
 		return fmt.Errorf("voice: add track: %w", err)
 	}
 

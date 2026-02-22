@@ -119,11 +119,14 @@ func (c *Client) Subscribe(ctx context.Context, channel string) *redis.PubSub {
 // Useful for distributed locking and rate limiting.
 // Complexity: O(1)
 func (c *Client) SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
-	ok, err := c.rdb.SetNX(ctx, key, value, ttl).Result()
+	ok, err := c.rdb.SetArgs(ctx, key, value, redis.SetArgs{
+		Mode: "NX",
+		TTL:  ttl,
+	}).Result()
 	if err != nil {
 		return false, fmt.Errorf("failed to setnx key %s: %w", key, err)
 	}
-	return ok, nil
+	return ok == "OK", nil
 }
 
 // Incr atomically increments the integer value of a key by one.

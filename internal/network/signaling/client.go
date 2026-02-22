@@ -141,7 +141,7 @@ func (c *Client) Close() error {
 		if err != nil {
 			c.logger.Debug().Err(err).Msg("close write failed")
 		}
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	c.logger.Info().Msg("signaling client closed")

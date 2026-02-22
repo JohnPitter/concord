@@ -144,14 +144,14 @@ func (s *Service) RestoreSession(ctx context.Context, userID string) (*AuthState
 	encryptedBytes, err := base64.StdEncoding.DecodeString(session.EncryptedRefresh)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to decode refresh token, clearing session")
-		s.repo.DeleteUserSessions(ctx, userID)
+		_ = s.repo.DeleteUserSessions(ctx, userID)
 		return &AuthState{Authenticated: false}, nil
 	}
 
 	refreshTokenBytes, err := s.crypto.DecryptAES(encryptedBytes, s.encryptKey)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("failed to decrypt refresh token, clearing session")
-		s.repo.DeleteUserSessions(ctx, userID)
+		_ = s.repo.DeleteUserSessions(ctx, userID)
 		return &AuthState{Authenticated: false}, nil
 	}
 
@@ -159,7 +159,7 @@ func (s *Service) RestoreSession(ctx context.Context, userID string) (*AuthState
 	tokenPair, err := s.jwt.RefreshAccessToken(string(refreshTokenBytes))
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("refresh token expired, clearing session")
-		s.repo.DeleteUserSessions(ctx, userID)
+		_ = s.repo.DeleteUserSessions(ctx, userID)
 		return &AuthState{Authenticated: false}, nil
 	}
 

@@ -165,7 +165,7 @@ func (c *Client) TranslateStream(ctx context.Context, audioIn <-chan []byte, sou
 			case frame, ok := <-audioIn:
 				if !ok {
 					// Input channel closed, send close message
-					conn.WriteMessage(websocket.CloseMessage,
+					_ = conn.WriteMessage(websocket.CloseMessage,
 						websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 					return
 				}

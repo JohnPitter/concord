@@ -2,9 +2,7 @@ package sqlite
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/stretchr/testify/assert"
@@ -65,7 +63,7 @@ func TestMigrator_Status(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check status again
-	status, err = migrator.Status(ctx)
+	_, err = migrator.Status(ctx)
 	require.NoError(t, err)
 	// Status may be empty if no migration files exist, which is fine for this test
 }
@@ -194,24 +192,3 @@ func TestMigrator_EnsureMigrationsTable(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// setupMigratorTestDB creates a test database for migration tests
-func setupMigratorTestDB(t *testing.T) *DB {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "migrations_test.db")
-
-	logger := observability.NewNopLogger()
-	cfg := Config{
-		Path:            dbPath,
-		MaxOpenConns:    1,
-		MaxIdleConns:    1,
-		ConnMaxLifetime: 1 * time.Hour,
-		WALMode:         false,
-		ForeignKeys:     true,
-		BusyTimeout:     5 * time.Second,
-	}
-
-	db, err := New(cfg, logger)
-	require.NoError(t, err)
-
-	return db
-}

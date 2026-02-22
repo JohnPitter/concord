@@ -103,7 +103,7 @@ func (s *Service) Upload(ctx context.Context, messageID, filename string, data [
 	}
 
 	if err := s.repo.Save(ctx, att); err != nil {
-		s.storage.Delete(localPath)
+		_ = s.storage.Delete(localPath)
 		return nil, err
 	}
 

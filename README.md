@@ -1,185 +1,202 @@
 <p align="center">
-  <img src="frontend/src/assets/logo.svg" alt="Concord Logo" width="96" height="96" />
+  <img src="frontend/src/assets/logo.png" alt="Concord" width="120" height="120" />
 </p>
 
 <h1 align="center">Concord</h1>
 
 <p align="center">
-  <strong>Chat de voz para amigos que jogam com maximo de privacidade. No Scam Bro.</strong>
+  <strong>Privacy. Freedom. Friendship.</strong><br/>
+  Comunicacao para gamers sem coleta de dados. Open-source, peer-to-peer, criptografado.
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
-  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.24"></a>
-  <a href="https://wails.io/"><img src="https://img.shields.io/badge/Wails-v2-red?style=for-the-badge" alt="Wails v2"></a>
-  <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=for-the-badge&logo=svelte&logoColor=white" alt="Svelte 5"></a>
+  <a href="https://github.com/JohnPitter/concord/actions/workflows/ci.yml"><img src="https://github.com/JohnPitter/concord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/JohnPitter/concord/releases/latest"><img src="https://img.shields.io/github/v/release/JohnPitter/concord?style=flat-square&color=16a34a" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <a href="https://johnpitter.github.io/concord/">Site</a> ·
+  <a href="https://github.com/JohnPitter/concord/releases/latest">Download</a> ·
+  <a href="ARCHITECTURE.md">Arquitetura</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
 
-## Por que "Concord"?
+## Por que Concord?
 
 > **Concord** e o oposto de **Discord**. Simples assim.
 >
-> Enquanto Discord significa *discordia, conflito*, **Concord** significa *concordia, harmonia, acordo*.
+> Enquanto Discord significa *discordia*, **Concord** significa *concordia, harmonia*.
 >
-> Este projeto nasceu como resposta direta a imposicao de **coleta de dados biometricos** para verificacao de idade em plataformas de comunicacao. Acreditamos que ninguem deveria ser obrigado a entregar dados biometricos — como scans faciais ou documentos de identidade — apenas para conversar com amigos.
+> Este projeto nasceu como resposta a imposicao de coleta de dados biometricos para verificacao de idade. Ninguem deveria entregar scans faciais ou documentos de identidade apenas para conversar com amigos.
 >
-> **Concord** e uma alternativa open-source, privacy-first, que respeita seus dados e sua liberdade. Sem biometria. Sem rastreamento. Sem scam.
+> **Sem biometria. Sem rastreamento. Sem scam.**
 
 ---
 
-**Concord** is a privacy-first, open-source Discord alternative designed for gamers. Real-time voice chat, text messaging, file sharing, and server management — all running as a native desktop app built with **Go (Wails)** and **Svelte 5**. Voice traffic flows peer-to-peer when possible, through relay servers when NAT traversal fails. A power-up feature enables **real-time voice translation** via NVIDIA PersonaPlex.
+## Download
 
-[Architecture](ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
+| Plataforma | Download |
+|------------|----------|
+| Windows (x64) | [concord-windows-amd64.zip](https://github.com/JohnPitter/concord/releases/latest) |
+| macOS (Apple Silicon) | [concord-macos-arm64.zip](https://github.com/JohnPitter/concord/releases/latest) |
+| macOS (Intel) | [concord-macos-amd64.zip](https://github.com/JohnPitter/concord/releases/latest) |
+| Linux (x64) | [concord-linux-amd64.tar.gz](https://github.com/JohnPitter/concord/releases/latest) |
 
-## How it works
+> Servidor central tambem disponivel nos [releases](https://github.com/JohnPitter/concord/releases/latest) (Linux, macOS, Windows).
+
+---
+
+## Funcionalidades
+
+- **Chat de texto** — mensagens em tempo real, busca full-text, historico
+- **Chat de voz** — peer-to-peer, codec Opus, deteccao de voz, baixa latencia
+- **Compartilhamento de tela** — transmissao direta entre usuarios
+- **Servidores e canais** — crie servidores, organize canais de texto e voz, gerencie membros
+- **Modo P2P** — conexao direta sem servidor central, via mDNS na rede local ou pela internet
+- **Modo Servidor** — servidor central com PostgreSQL e Redis para escala
+- **Traducao em tempo real** — traduza mensagens entre 11 idiomas
+- **Login via GitHub** — OAuth Device Flow, sem senhas
+- **Convites** — codigos de convite com expiracao para servidores
+- **Temas** — modo escuro e modo claro
+
+---
+
+## Como funciona
 
 ```
-┌─────────────────────────────────────────────────────┐
-│               CONCORD DESKTOP APP                   │
-│                                                     │
-│   Go Backend (Wails)  ◄──►  Svelte 5 Frontend      │
-│   ┌──────────────────┐      ┌──────────────────┐   │
-│   │ Auth Service      │      │ Design System    │   │
-│   │ Chat Service      │      │ Voice Controls   │   │
-│   │ Voice Engine      │      │ Chat Interface   │   │
-│   │ P2P Manager       │      │ Server Browser   │   │
-│   │ File Service      │      │ Settings Panel   │   │
-│   │ Translation Svc   │      │ File Manager     │   │
-│   └────────┬─────────┘      └──────────────────┘   │
-│            │                                        │
-│   ┌────────▼─────────┐                              │
-│   │ Networking Layer  │                              │
-│   │  libp2p + Pion   │                              │
-│   └────────┬─────────┘                              │
-└────────────┼────────────────────────────────────────┘
-             │
-    ┌────────▼─────────┐
-    │  Internet / LAN   │
-    │  Signaling Server │
-    │  Relay Server     │
-    │  Auth Server      │
-    └───────────────────┘
+┌───────────────────────────────────────────────┐
+│            CONCORD DESKTOP APP                │
+│                                               │
+│  Go Backend (Wails)  ◄──►  Svelte 5 Frontend │
+│  ┌────────────────┐       ┌────────────────┐  │
+│  │ Auth           │       │ Design System  │  │
+│  │ Chat           │       │ Voice Controls │  │
+│  │ Voice (WebRTC) │       │ Chat UI        │  │
+│  │ P2P (libp2p)   │       │ Server Browser │  │
+│  │ Translation    │       │ Settings       │  │
+│  └───────┬────────┘       └────────────────┘  │
+│          │                                    │
+│  ┌───────▼────────┐                           │
+│  │ Networking      │                           │
+│  │ libp2p + Pion   │                           │
+│  └───────┬────────┘                           │
+└──────────┼────────────────────────────────────┘
+           │
+   ┌───────▼────────┐
+   │ Internet / LAN  │
+   │ Signaling       │
+   │ Relay           │
+   └─────────────────┘
 ```
 
-## Key decisions
+---
 
-| Decision | Choice | Why |
-|---|---|---|
-| Desktop Framework | Wails v2 | Go-native, small binary, OS webview (not Electron) |
-| Frontend | Svelte 5 + TypeScript | Reactive, compiled, small bundle |
-| P2P Layer | libp2p | NAT traversal, QUIC transport, relay circuits |
-| Voice | Pion WebRTC v4 | Pure Go, MIT license, P2P media |
-| Audio Codec | Opus | Pure Go, no CGo, royalty-free |
-| Database (Client) | SQLite (modernc.org) | Pure Go, no CGo, embedded |
-| Database (Server) | PostgreSQL | Scalable, ACID |
-| Auth | GitHub OAuth | Single sign-on, no passwords |
-| Voice Translation | NVIDIA PersonaPlex | ~170ms latency, full-duplex |
-| Logging | zerolog | Zero-allocation structured JSON |
+## Compilar do fonte
 
-## Install
+### Pre-requisitos
 
-### Prerequisites
-
-- [Go 1.24+](https://go.dev/dl/)
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation)
+- [Go 1.25+](https://go.dev/dl/)
 - [Node.js 20+](https://nodejs.org/)
-
-### From source
-
-```bash
-git clone https://github.com/concord-chat/concord.git
-cd concord
-
-# Install dependencies
-go mod download && go mod tidy
-cd frontend && npm install && cd ..
-
-# Run in dev mode (hot reload)
-wails dev
-```
+- [Wails CLI](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 
 ### Build
 
 ```bash
-# Desktop app
-wails build -clean -upx
+git clone https://github.com/JohnPitter/concord.git
+cd concord
 
-# Central server
-make build-server
+# Instalar dependencias
+go mod download
+cd frontend && npm install && cd ..
+
+# Rodar em modo desenvolvimento (hot reload)
+wails dev
+
+# Build desktop app
+wails build -clean
+
+# Build servidor central
+CGO_ENABLED=0 go build -o concord-server ./cmd/server
 ```
 
-## Development
+### Testes
 
 ```bash
-# Dev server with hot reload
-make dev
-
-# Run tests
-make test              # all tests
-make test-unit         # unit only
-make test-integration  # integration only
-
-# Lint & format
-make lint
-make fmt
-
-# Security scan
-make sec
+go test -short ./...          # Testes rapidos
+go test -v -race ./...        # Todos com race detection
 ```
 
-Run `make help` for all available targets.
+### Lint
 
-## Project structure
+```bash
+golangci-lint run ./...       # Go lint (v2)
+go vet ./...                  # Go vet
+```
+
+---
+
+## Estrutura do projeto
 
 ```
 concord/
-├── cmd/
-│   ├── concord/        # Desktop app entry point (Wails)
-│   └── server/         # Central server entry point
+├── cmd/server/          # Servidor central (PostgreSQL + REST API)
 ├── internal/
-│   ├── config/         # Configuration (JSON + env overrides)
-│   ├── observability/  # Logging, metrics, health checks
-│   ├── security/       # Crypto, rate limiting, validation
-│   └── store/sqlite/   # SQLite layer + migrations
-├── pkg/version/        # Public version info
-├── frontend/           # Svelte 5 UI (in progress)
-├── ARCHITECTURE.md     # Full technical specification
-├── Makefile            # Build automation
-└── go.mod
+│   ├── api/             # HTTP handlers + middleware (chi v5)
+│   ├── auth/            # GitHub OAuth + JWT
+│   ├── chat/            # Mensagens + busca
+│   ├── config/          # Configuracao (JSON + env vars)
+│   ├── network/         # P2P (libp2p) + Signaling (WebSocket)
+│   ├── observability/   # Logging (zerolog) + Metrics (Prometheus)
+│   ├── security/        # Crypto, rate limiting, validacao
+│   ├── server/          # Servidores, canais, membros, convites
+│   ├── store/           # SQLite (client) + PostgreSQL (server) + Redis
+│   ├── voice/           # WebRTC + Opus + VAD + jitter buffer
+│   └── translation/     # Traducao de mensagens
+├── frontend/            # Svelte 5 + TypeScript + TailwindCSS v4
+├── deployments/docker/  # Docker Compose (dev + prod com Nginx)
+├── docs/                # Documentacao (SCALING.md, site)
+├── main.go              # Entry point desktop (Wails v2)
+├── ARCHITECTURE.md      # Especificacao tecnica completa
+└── CHANGELOG.md
 ```
+
+---
 
 ## Roadmap
 
-| Phase | Feature | Status |
-|---|---|---|
-| 1 | Foundation (config, logging, SQLite, observability) | Done |
-| 1.2 | Frontend design system "Void" | Done |
-| 1.6 | Layout Shell (4-panel Discord-like UI) | Done |
-| 2 | GitHub OAuth authentication (Device Flow) | Done |
-| 3 | Server management (CRUD, channels, members, invites) | Done |
-| 4 | Real-time text chat (FTS5, pagination) | Done |
-| 5 | P2P networking (libp2p, NAT traversal, signaling) | Done |
-| 6 | Voice chat (WebRTC, Opus, VAD, jitter buffer) | Done |
-| 7 | File sharing (chunking, dedup, scanner) | Done |
-| 8 | Voice translation (PersonaPlex) | Planned |
-| 9 | Central server (PostgreSQL, Redis, REST) | Planned |
-| 10 | Production hardening & release | Planned |
+| Fase | Feature | Status |
+|------|---------|--------|
+| 1 | Foundation (config, logging, SQLite, observability) | Completo |
+| 2 | Design System "Void" + Layout Shell | Completo |
+| 3 | GitHub OAuth (Device Flow) | Completo |
+| 4 | Servidores (CRUD, canais, membros, convites) | Completo |
+| 5 | Chat de texto (FTS5, paginacao) | Completo |
+| 6 | P2P (libp2p, NAT traversal, signaling) | Completo |
+| 7 | Voice (WebRTC, Opus, VAD, jitter buffer) | Completo |
+| 8 | UX (temas, traducao, screen share, VAD visual) | Completo |
+| 9 | Scaling Fase 1 (metrics, rate limit, Docker prod) | Completo |
+| 10 | Traducao de voz (PersonaPlex) | Planejado |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) Section 14 for the full phased build plan.
+Ver [ARCHITECTURE.md](ARCHITECTURE.md) para o plano completo e [docs/SCALING.md](docs/SCALING.md) para o plano de escala ate 100k usuarios.
 
-## Security
+---
 
-- E2EE with X25519 + AES-256-GCM (planned)
-- DTLS on WebRTC, TLS 1.3 on QUIC
-- Prepared statements (SQL injection prevention)
-- Sensitive data sanitization in logs
-- Rate limiting on all endpoints
-- File upload validation (type, size, hash)
+## Seguranca
 
-Report vulnerabilities by opening a private issue.
+- DTLS no WebRTC, TLS 1.3 no QUIC
+- Prepared statements (prevencao SQL injection)
+- Sanitizacao de dados sensiveis nos logs
+- Rate limiting com headers padrao em todos endpoints
+- Validacao de uploads (tipo, tamanho, hash)
+- JWT com refresh token automatico
 
-## License
+Reporte vulnerabilidades abrindo uma issue privada.
+
+---
+
+## Licenca
 
 [MIT](LICENSE) — Copyright (c) 2026 Concord Team

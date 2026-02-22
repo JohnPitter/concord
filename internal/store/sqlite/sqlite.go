@@ -57,7 +57,7 @@ func New(cfg Config, logger zerolog.Logger) (*DB, error) {
 	defer cancel()
 
 	if err := conn.PingContext(ctx); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -69,7 +69,7 @@ func New(cfg Config, logger zerolog.Logger) (*DB, error) {
 
 	// Apply additional pragmas
 	if err := db.applyPragmas(cfg); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to apply pragmas: %w", err)
 	}
 
@@ -342,7 +342,7 @@ func (db *DB) InTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
 
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(p) // re-throw panic after rollback
 		}
 	}()

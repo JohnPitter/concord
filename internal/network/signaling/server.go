@@ -93,7 +93,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			var payload JoinPayload
 			if err := signal.DecodePayload(&payload); err != nil {
 				if currentPC != nil {
-					currentPC.writeJSON(s.makeErrorSignal(400, "invalid join payload"))
+					_ = currentPC.writeJSON(s.makeErrorSignal(400, "invalid join payload"))
 				}
 				continue
 			}
@@ -200,7 +200,7 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, excludePeerID string) {
 		return
 	}
 
-	pc.writeJSON(sig)
+	_ = pc.writeJSON(sig)
 }
 
 func (s *Server) broadcast(channelKey, excludePeerID string, signal *Signal) {
@@ -221,7 +221,7 @@ func (s *Server) broadcast(channelKey, excludePeerID string, signal *Signal) {
 	s.mu.RUnlock()
 
 	for _, pc := range peers {
-		pc.writeJSON(signal)
+		_ = pc.writeJSON(signal)
 	}
 }
 
@@ -240,7 +240,7 @@ func (s *Server) forwardToPeer(channelKey, toPeerID string, signal *Signal) {
 		return
 	}
 
-	pc.writeJSON(signal)
+	_ = pc.writeJSON(signal)
 }
 
 func (s *Server) makeErrorSignal(code int, message string) *Signal {

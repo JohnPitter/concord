@@ -31,10 +31,6 @@ func TestReplacePlaceholders_ComplexQuery(t *testing.T) {
 	input := `INSERT INTO auth_sessions (id, user_id, refresh_token_hash, encrypted_refresh, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
 	expected := `INSERT INTO auth_sessions (id, user_id, refresh_token_hash, encrypted_refresh, expires_at, created_at)
-        Values ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`
-	// The function replaces ? -> $N regardless of case in surrounding text.
-	// The actual expected output preserves the original case of "Values":
-	expected = `INSERT INTO auth_sessions (id, user_id, refresh_token_hash, encrypted_refresh, expires_at, created_at)
         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`
 	assert.Equal(t, expected, replacePlaceholders(input))
 }
