@@ -24,6 +24,9 @@ linters:
         - (*encoding/json.Encoder).Encode
         - os.Remove
   exclusions:
+    paths:
+      - frontend
+      - docs
     rules:
       - path: _test\.go
         linters:
@@ -31,8 +34,3 @@ linters:
       - source: "defer "
         linters:
           - errcheck
-
-issues:
-  exclude-dirs:
-    - frontend
-    - docs
