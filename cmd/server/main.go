@@ -52,7 +52,6 @@ func main() {
 
 	// Initialize metrics
 	metrics := observability.NewMetrics()
-	_ = metrics // Will be wired into middleware in future iteration
 
 	// Initialize health checker
 	health := observability.NewHealthChecker(logger, version.Version)
@@ -133,6 +132,7 @@ func main() {
 		chatSvc,
 		jwtManager,
 		health,
+		metrics,
 		logger,
 	)
 
@@ -160,25 +160,32 @@ func main() {
 		logger.Error().Err(err).Msg("server error, initiating shutdown")
 	}
 
+	logger.Info().Dur("timeout", cfg.Server.ShutdownTimeout).Msg("starting graceful shutdown — draining in-flight requests")
+
 	// Create shutdown context with configured timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer shutdownCancel()
 
-	// Shutdown HTTP server
+	// 1. Stop accepting new connections and drain in-flight requests
 	if err := apiServer.Shutdown(shutdownCtx); err != nil {
-		logger.Error().Err(err).Msg("HTTP server shutdown error")
+		logger.Error().Err(err).Msg("HTTP server shutdown error — some requests may not have completed")
+	} else {
+		logger.Info().Msg("HTTP server drained and stopped")
 	}
 
-	// Close Redis
+	// 2. Close Redis (after HTTP to allow in-flight requests to finish)
 	if redisClient != nil {
 		if err := redisClient.Close(); err != nil {
 			logger.Error().Err(err).Msg("redis close error")
+		} else {
+			logger.Info().Msg("redis connection closed")
 		}
 	}
 
-	// Close PostgreSQL
+	// 3. Close PostgreSQL (last, since other services depend on it)
 	if pgDB != nil {
 		pgDB.Close()
+		logger.Info().Msg("postgresql connection closed")
 	}
 
 	logger.Info().Msg("concord central server shut down successfully")

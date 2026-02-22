@@ -28,6 +28,7 @@ type Server struct {
 	servers    *server.Service
 	chat       *chat.Service
 	health     *observability.HealthChecker
+	metrics    *observability.Metrics
 	logger     zerolog.Logger
 	cfg        config.ServerConfig
 }
@@ -42,6 +43,7 @@ func New(
 	chatSvc *chat.Service,
 	jwtManager *auth.JWTManager,
 	health *observability.HealthChecker,
+	metrics *observability.Metrics,
 	logger zerolog.Logger,
 ) *Server {
 	s := &Server{
@@ -49,6 +51,7 @@ func New(
 		servers: serverSvc,
 		chat:    chatSvc,
 		health:  health,
+		metrics: metrics,
 		logger:  logger.With().Str("component", "api_server").Logger(),
 		cfg:     cfg,
 	}
@@ -64,7 +67,18 @@ func New(
 	r.Use(SecurityHeaders())
 	r.Use(CORSMiddleware(cfg.CORS))
 	r.Use(MaxBodySize(1 << 20)) // 1 MB default body limit
-	r.Use(RateLimitMiddleware(100))
+
+	// Rate limiting with standard headers (config-driven RPS, default 100/s)
+	rps := cfg.RateLimitRPS
+	if rps <= 0 {
+		rps = 100
+	}
+	r.Use(RateLimitWithHeaders(rps))
+
+	// Prometheus HTTP metrics
+	if metrics != nil {
+		r.Use(MetricsMiddleware(metrics))
+	}
 
 	// --- Public endpoints ---
 	r.Get("/health", s.handleHealth)

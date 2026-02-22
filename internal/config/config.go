@@ -98,6 +98,7 @@ type ServerConfig struct {
 	ReadTimeout     time.Duration `json:"read_timeout"`
 	WriteTimeout    time.Duration `json:"write_timeout"`
 	ShutdownTimeout time.Duration `json:"shutdown_timeout"`
+	RateLimitRPS    int           `json:"rate_limit_rps"` // Max requests per second per IP (0 = default 100)
 	CORS            CORSConfig    `json:"cors"`
 }
 

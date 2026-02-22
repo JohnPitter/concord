@@ -37,7 +37,7 @@ func testServer(t *testing.T, jwtManager *auth.JWTManager) *Server {
 		},
 	}
 
-	return New(cfg, nil, nil, nil, jwtManager, health, logger)
+	return New(cfg, nil, nil, nil, jwtManager, health, nil, logger)
 }
 
 // testJWTManager creates a JWTManager for testing with a fixed secret.
@@ -161,7 +161,7 @@ func TestRateLimiting(t *testing.T) {
 		},
 	}
 
-	s := New(cfg, nil, nil, nil, nil, health, logger)
+	s := New(cfg, nil, nil, nil, nil, health, nil, logger)
 
 	// The default rate limit is 100 rps. Send 150 requests rapidly to trigger it.
 	// Since all requests come from the same RemoteAddr in httptest, they share one bucket.

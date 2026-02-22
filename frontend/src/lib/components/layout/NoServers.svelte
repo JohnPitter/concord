@@ -13,7 +13,7 @@
 <div class="flex flex-1 flex-col items-center justify-center gap-6 bg-void-bg-tertiary select-none">
   <!-- Logo mark -->
   <div class="flex h-20 w-20 items-center justify-center rounded-3xl bg-void-bg-secondary shadow-lg">
-    <img src={logoPng} alt="Concord" width="52" height="52" class="rounded-xl" />
+    <img src={logoPng} alt="Concord" width="52" height="52" />
   </div>
 
   <div class="text-center">

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Scaling Phase 1 — Production Readiness (2026-02-21)
+
+- **Prometheus HTTP metrics wired** (`api/middleware.go`, `api/server.go`): `MetricsMiddleware` coleta `concord_http_requests_total`, `concord_http_request_duration_milliseconds` e `concord_http_response_size_bytes` com path normalization para prevenir cardinality explosion
+- **Rate limiting com headers** (`api/middleware.go`): `RateLimitWithHeaders` adiciona `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` e `Retry-After` nas respostas; RPS configuravel via `ServerConfig.RateLimitRPS`
+- **CSP corrigido para WebSocket** (`api/middleware.go`): Content-Security-Policy agora inclui `connect-src 'self' ws: wss:` para permitir conexoes WebSocket
+- **Docker Compose producao** (`deployments/docker/docker-compose.prod.yml`): Nginx reverse proxy com gzip, WebSocket upgrade, resource limits (CPU/RAM) para todos os servicos, PostgreSQL tuning otimizado (shared_buffers=1GB, effective_cache_size=3GB, max_connections=200)
+- **Nginx config** (`deployments/docker/nginx.conf`): reverse proxy com gzip compression, WebSocket support, keepalive connections, security headers
+- **Graceful shutdown melhorado** (`cmd/server/main.go`): drain ordenado — HTTP requests primeiro, depois Redis, depois PostgreSQL, com logging detalhado em cada etapa
+- **Plano de escala 100k usuarios** (`docs/SCALING.md`): documentacao completa com 4 fases (0-5k, 5k-20k, 20k-50k, 50k-100k), sizing de VPS, topologias e prioridades de implementacao
+
 #### UX Improvements Round 6 (2026-02-21)
 
 - **Mode switch cleanup** (`App.svelte`): ao trocar de modo (P2P/Server) ou fazer logout, o app sai do voice channel, reseta chat, reseta voice, fecha modais e limpa navegacao antes de redirecionar ao ModeSelector

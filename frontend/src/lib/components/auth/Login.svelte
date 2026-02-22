@@ -28,7 +28,7 @@
     <!-- Logo / Branding -->
     <div class="text-center">
       <div class="mx-auto mb-4 h-16 w-16">
-        <img src={logoPng} alt="Concord" class="h-16 w-16 rounded-xl" />
+        <img src={logoPng} alt="Concord" class="h-16 w-16" />
       </div>
       <h1 class="text-2xl font-bold text-void-text-primary">Welcome to Concord</h1>
       <p class="mt-2 text-sm text-void-text-muted">Privacy-first communication for gamers</p>
