@@ -4,6 +4,8 @@
   import Button from '../ui/Button.svelte'
   import logoPng from '../../../assets/logo.png'
 
+  let { onBack }: { onBack?: () => void } = $props()
+
   const auth = getAuth()
   const trans = $derived($translations)
 
@@ -104,6 +106,17 @@
         <p class="text-center text-xs text-void-text-muted">
           {t(trans, 'auth.deviceFlow')}
         </p>
+        {#if onBack}
+          <button
+            class="w-full text-center text-xs text-void-text-muted hover:text-void-text-secondary transition-colors"
+            onclick={onBack}
+          >
+            <svg class="mr-1 inline-block h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            {t(trans, 'auth.backToModeSelect')}
+          </button>
+        {/if}
       </div>
     {/if}
   </div>

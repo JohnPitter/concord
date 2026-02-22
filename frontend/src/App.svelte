@@ -268,7 +268,7 @@
   </div>
 
 {:else if !auth.authenticated}
-  <Login />
+  <Login onBack={() => resetMode()} />
 
 {:else}
   <div class="flex h-screen w-screen overflow-hidden">

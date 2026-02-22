@@ -13,6 +13,7 @@
   "auth.completeAuth": "Complete a autorizacao no seu navegador",
   "auth.signInGithub": "Entrar com GitHub",
   "auth.deviceFlow": "Usamos o Device Flow do GitHub — nenhuma senha armazenada localmente.",
+  "auth.backToModeSelect": "Voltar para selecao de modo",
   "auth.dismiss": "Dispensar",
   "auth.copyCode": "Copiar codigo",
 
