@@ -4,6 +4,7 @@
   import { translations, t } from '../../i18n'
   import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
   import { getSettings } from '../../stores/settings.svelte'
+  import * as App from '../../../../../wailsjs/go/main/App'
 
   let {
     message,
@@ -31,27 +32,39 @@
   let showActions = $state(false)
   let translatedText = $state<string | null>(null)
   let translating = $state(false)
+  let autoTranslated = $state(false)
 
-  async function translateMessage() {
-    if (translatedText) {
-      // Toggle off
-      translatedText = null
-      return
-    }
+  async function doTranslate(): Promise<void> {
     translating = true
     try {
       const src = settings.translationSourceLang
       const tgt = settings.translationTargetLang
-      const text = encodeURIComponent(message.content)
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${text}&langpair=${src}|${tgt}`)
-      const data = await res.json()
-      translatedText = data?.responseData?.translatedText ?? null
+      const result = await App.TranslateText(message.content, src, tgt)
+      translatedText = result || null
     } catch {
       translatedText = t(trans, 'chat.translationError')
     } finally {
       translating = false
     }
   }
+
+  async function translateMessage() {
+    if (translatedText) {
+      // Toggle off
+      translatedText = null
+      autoTranslated = false
+      return
+    }
+    await doTranslate()
+  }
+
+  // Auto-translate incoming messages from other users when autoTranslate is on
+  $effect(() => {
+    if (settings.autoTranslate && !isOwn && !translatedText && !autoTranslated) {
+      autoTranslated = true
+      doTranslate()
+    }
+  })
 
   function formatTime(dateStr: string): string {
     const date = new Date(dateStr)

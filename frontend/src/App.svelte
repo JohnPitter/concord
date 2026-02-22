@@ -19,6 +19,7 @@
     setLocalUsername,
   } from './lib/stores/voice.svelte'
   import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode } from './lib/stores/settings.svelte'
+  import { apiClient } from './lib/api/client'
   import {
     getFriends, loadFriends, setFriendsTab, openDM,
     sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
@@ -70,6 +71,13 @@
 
   // Load persisted settings on mount
   $effect(() => { loadSettings() })
+
+  // Initialize API client base URL when in server mode
+  $effect(() => {
+    if (settings.networkMode === 'server' && settings.serverURL) {
+      apiClient.setBaseURL(settings.serverURL)
+    }
+  })
 
   // Initialize auth on mount
   $effect(() => { initAuth() })

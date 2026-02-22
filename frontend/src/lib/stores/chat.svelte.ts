@@ -1,8 +1,10 @@
 // Chat store using Svelte 5 runes
-// Manages messages for the active channel via Wails bindings
+// Manages messages for the active channel — Wails bindings (P2P) or HTTP API (Server)
 
 import * as App from '../../../wailsjs/go/main/App'
 import { ensureValidToken } from './auth.svelte'
+import { isServerMode } from '../api/mode'
+import { apiChat } from '../api/chat'
 
 export interface MessageData {
   id: string
@@ -62,7 +64,12 @@ export async function loadMessages(channelID: string): Promise<void> {
 
   try {
     await ensureValidToken()
-    const result = await App.GetMessages(channelID, '', '', 50)
+    let result
+    if (isServerMode()) {
+      result = await apiChat.getMessages(channelID, '', '', 50)
+    } else {
+      result = await App.GetMessages(channelID, '', '', 50)
+    }
     // API returns newest first, reverse for display (oldest at top)
     const msgs = (result ?? []) as unknown as MessageData[]
     messages = msgs.reverse()
@@ -84,9 +91,14 @@ export async function loadOlderMessages(): Promise<void> {
   loading = true
   try {
     await ensureValidToken()
-    const result = await App.GetMessages(
-      activeChannelId, oldestMessage.id, '', 50
-    )
+    let result
+    if (isServerMode()) {
+      result = await apiChat.getMessages(activeChannelId, oldestMessage.id, '', 50)
+    } else {
+      result = await App.GetMessages(
+        activeChannelId, oldestMessage.id, '', 50
+      )
+    }
     const older = ((result ?? []) as unknown as MessageData[]).reverse()
     messages = [...older, ...messages]
     hasMore = (result?.length ?? 0) >= 50
@@ -103,7 +115,12 @@ export async function sendMessage(channelID: string, authorID: string, content: 
 
   try {
     await ensureValidToken()
-    const msg = await App.SendMessage(channelID, authorID, content)
+    let msg
+    if (isServerMode()) {
+      msg = await apiChat.sendMessage(channelID, content)
+    } else {
+      msg = await App.SendMessage(channelID, authorID, content)
+    }
     const data = msg as unknown as MessageData
     messages = [...messages, data]
     return data
@@ -119,7 +136,12 @@ export async function editMessage(messageID: string, authorID: string, content: 
   error = null
   try {
     await ensureValidToken()
-    const updated = await App.EditMessage(messageID, authorID, content)
+    let updated
+    if (isServerMode()) {
+      updated = await apiChat.editMessage(messageID, content)
+    } else {
+      updated = await App.EditMessage(messageID, authorID, content)
+    }
     const data = updated as unknown as MessageData
     messages = messages.map(m => m.id === messageID ? data : m)
   } catch (e) {
@@ -131,7 +153,11 @@ export async function deleteMessage(messageID: string, actorID: string, isManage
   error = null
   try {
     await ensureValidToken()
-    await App.DeleteMessage(messageID, actorID, isManager)
+    if (isServerMode()) {
+      await apiChat.deleteMessage(messageID, isManager)
+    } else {
+      await App.DeleteMessage(messageID, actorID, isManager)
+    }
     messages = messages.filter(m => m.id !== messageID)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to delete message'
@@ -149,7 +175,12 @@ export async function searchMessages(channelID: string, query: string): Promise<
   error = null
 
   try {
-    const results = await App.SearchMessages(channelID, query, 20)
+    let results
+    if (isServerMode()) {
+      results = await apiChat.searchMessages(channelID, query, 20)
+    } else {
+      results = await App.SearchMessages(channelID, query, 20)
+    }
     searchResults = (results ?? []) as unknown as SearchResultData[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'Search failed'
@@ -166,6 +197,7 @@ export function clearChatError(): void {
   error = null
 }
 
+// File operations — local only, no REST equivalent
 export async function loadAttachments(messageID: string): Promise<void> {
   try {
     const result = await App.GetAttachments(messageID)

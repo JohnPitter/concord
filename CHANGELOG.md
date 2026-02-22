@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### HTTP API Client — Phase 9 Desktop→Server (2026-02-22)
+
+- **API client base** (`frontend/src/lib/api/client.ts`): HTTP client singleton with JWT Bearer auth, automatic token refresh (2min pre-expiry buffer), localStorage token persistence, typed `get`/`post`/`put`/`del` methods, `publicRequest` for unauthenticated endpoints
+- **API service modules** (`frontend/src/lib/api/auth.ts`, `servers.ts`, `chat.ts`): typed wrappers for all REST API endpoints — device-code auth, token exchange, session refresh, servers CRUD, channels, members, invites, messages (pagination, search, edit, delete)
+- **Dual-mode stores**: `auth.svelte.ts`, `servers.svelte.ts`, `chat.svelte.ts` refactored with `isServerMode()` conditional — when `networkMode === 'server'`, calls go to central server REST API via HTTP; in P2P mode, continues using Wails bindings as before
+- **Server URL setting** (`settings.svelte.ts`, `SettingsPanel.svelte`): `serverURL` field persisted to localStorage, configurable input in Settings > Account (visible only in server mode), syncs to `apiClient.setBaseURL()` on change
+- **App initialization** (`App.svelte`): `apiClient.setBaseURL(serverURL)` called on mount when in server mode, before auth init
+- **i18n**: added `settings.serverURL`, `settings.serverURLDesc`, `settings.serverURLPlaceholder` keys in all 5 locales (PT, EN, ES, ZH, JA)
+- **Barrel export** (`frontend/src/lib/api/index.ts`): re-exports client, auth, servers, chat, mode helper
+
+#### Real-time Voice Translation — Phase 8.2 (2026-02-22)
+
+- **STT client** (`internal/voice/stt.go`): HTTP client for OpenAI Whisper-compatible APIs, multipart/form-data upload, configurable model/language/timeout
+- **TTS client** (`internal/voice/tts.go`): HTTP client for OpenAI TTS-compatible APIs, JSON request with model/voice/format selection
+- **VoiceTranslator pipeline** (`internal/voice/translator.go`): orchestrates Opus frame accumulation (2-3s segments) → OGG packing (pion oggwriter) → STT (Whisper) → text translation (LibreTranslate) → TTS → Wails event emission
+- **OGG container packing**: Opus frames wrapped into OGG via `pion/webrtc/v4/pkg/media/oggwriter` with proper RTP headers — avoids CGo Opus decoding
+- **Engine integration** (`internal/voice/engine.go`): `handleRemoteTrack` now feeds Opus payloads to VoiceTranslator when enabled; `SetTranslator()` method added
+- **Config** (`internal/config/`): `VoiceTranslationConfig` struct with STT/TTS URLs, API keys, voice, format, segment length, timeout; env vars `WHISPER_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `TTS_URL`, `TTS_API_KEY`, `TTS_VOICE`, `TTS_FORMAT`
+- **Wails bindings** (`main.go`): `EnableVoiceTranslation`, `DisableVoiceTranslation`, `GetVoiceTranslationStatus`; VoiceTranslator initialized in startup, cleaned up in shutdown
+- **Frontend audio playback** (`voice.svelte.ts`): Wails event listener `voice:translated-audio` decodes base64 MP3 and plays via Web Audio API `decodeAudioData`/`BufferSource`; setup on join, teardown on leave
+- **TranslationToggle updated** (`TranslationToggle.svelte`): calls `EnableVoiceTranslation`/`DisableVoiceTranslation` instead of text-only translation bindings
+- **13 unit tests**: STT client (3), TTS client (3), VoiceTranslator (7 — enable/disable, language validation, OGG packing, full pipeline with mock servers, accumulator flush, disabled push safety)
+
+### Changed
+
+#### LibreTranslate Integration — Phase 8 Refactor (2026-02-22)
+
+- **Translation backend replaced**: PersonaPlex (NVIDIA) → LibreTranslate (open-source, self-hosted)
+- **Client refactored** (`internal/translation/client.go`): request/response structs aligned to LibreTranslate API (`q`/`source`/`target`/`translatedText`), removed WebSocket streaming, removed Bearer auth (uses `api_key` in body), circuit breaker and latency tracking preserved
+- **Streaming pipeline removed** (`internal/translation/stream.go`): deleted — LibreTranslate is HTTP-only, no audio streaming
+- **Service simplified** (`internal/translation/service.go`): removed `StartPipeline`/`StopPipeline`/`PipelineActive`, kept `TranslateText` with cache + circuit breaker
+- **Config updated** (`internal/config/`): `PersonaPlexURL` → `URL` (default `http://localhost:5000`), env vars `LIBRETRANSLATE_URL`/`LIBRETRANSLATE_API_KEY` replace `PERSONAPLEX_*`
+- **New Wails binding** (`main.go`): `TranslateText(text, sourceLang, targetLang)` exposes backend translation to frontend
+- **Frontend unified** (`MessageBubble.svelte`): translation now goes through Go backend (cache + circuit breaker) instead of direct MyMemory API call
+- **Tests updated**: 14 tests covering client, circuit breaker, cache, service, and concurrency — pipeline tests removed
+- **Auto-translate**: new `autoTranslate` setting in Settings > Language — when enabled, incoming messages from other users are automatically translated without clicking the translate button
+- **TranslateTextDirect**: new service method that bypasses the Enable/Disable gate, allowing on-demand translation regardless of service state
+- **i18n**: added `settings.autoTranslate` and `settings.autoTranslateDesc` keys in all 5 locales (PT, EN, ES, ZH, JA)
+
+### Added
+
 #### Internationalization (i18n) — 5 Languages (2026-02-22)
 
 - **i18n core infrastructure** (`frontend/src/lib/i18n/`): lightweight i18n system using Svelte 5 `writable`/`derived` stores with `t()` function, dynamic locale loading with in-memory cache, locale detection chain (localStorage > navigator.language > default 'pt')

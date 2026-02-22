@@ -16,8 +16,10 @@ export interface SettingsData {
   notificationSounds: boolean
   translationSourceLang: string
   translationTargetLang: string
+  autoTranslate: boolean
   networkMode?: NetworkMode | null
   p2pProfile?: P2PProfile | null
+  serverURL?: string
 }
 
 const STORAGE_KEY = 'concord-settings'
@@ -30,6 +32,7 @@ const defaults: SettingsData = {
   notificationSounds: true,
   translationSourceLang: 'en',
   translationTargetLang: 'pt',
+  autoTranslate: false,
 }
 
 let audioInputDevice = $state<string>(defaults.audioInputDevice)
@@ -39,9 +42,11 @@ let notificationsEnabled = $state(defaults.notificationsEnabled)
 let notificationSounds = $state(defaults.notificationSounds)
 let translationSourceLang = $state(defaults.translationSourceLang)
 let translationTargetLang = $state(defaults.translationTargetLang)
+let autoTranslate = $state(defaults.autoTranslate)
 let settingsOpen = $state(false)
 let networkMode = $state<NetworkMode | null>(null)
 let p2pProfile = $state<P2PProfile | null>(null)
+let serverURL = $state<string>('')
 
 export function getSettings() {
   return {
@@ -52,9 +57,11 @@ export function getSettings() {
     get notificationSounds() { return notificationSounds },
     get translationSourceLang() { return translationSourceLang },
     get translationTargetLang() { return translationTargetLang },
+    get autoTranslate() { return autoTranslate },
     get open() { return settingsOpen },
     get networkMode() { return networkMode },
     get p2pProfile() { return p2pProfile },
+    get serverURL() { return serverURL },
   }
 }
 
@@ -67,8 +74,10 @@ function persist(): void {
     notificationSounds,
     translationSourceLang,
     translationTargetLang,
+    autoTranslate,
     networkMode,
     p2pProfile,
+    serverURL,
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -90,8 +99,10 @@ export function loadSettings(): void {
     if (data.notificationSounds !== undefined) notificationSounds = data.notificationSounds
     if (data.translationSourceLang !== undefined) translationSourceLang = data.translationSourceLang
     if (data.translationTargetLang !== undefined) translationTargetLang = data.translationTargetLang
+    if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
     if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
     if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
+    if (data.serverURL !== undefined) serverURL = data.serverURL ?? ''
     applyTheme(theme)
   } catch (e) {
     console.error('Failed to load settings:', e)
@@ -106,8 +117,10 @@ export function saveSettings(data: Partial<SettingsData>): void {
   if (data.notificationSounds !== undefined) notificationSounds = data.notificationSounds
   if (data.translationSourceLang !== undefined) translationSourceLang = data.translationSourceLang
   if (data.translationTargetLang !== undefined) translationTargetLang = data.translationTargetLang
+  if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
   if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
   if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
+  if (data.serverURL !== undefined) serverURL = data.serverURL ?? ''
   persist()
 }
 
@@ -138,6 +151,11 @@ export function setTranslationLangs(source: string, target: string): void {
   persist()
 }
 
+export function setAutoTranslate(enabled: boolean): void {
+  autoTranslate = enabled
+  persist()
+}
+
 export function toggleSettings(): void {
   settingsOpen = !settingsOpen
 }
@@ -157,6 +175,11 @@ export function setNetworkMode(mode: NetworkMode): void {
 
 export function setP2PProfile(profile: P2PProfile): void {
   p2pProfile = profile
+  persist()
+}
+
+export function setServerURL(url: string): void {
+  serverURL = url
   persist()
 }
 

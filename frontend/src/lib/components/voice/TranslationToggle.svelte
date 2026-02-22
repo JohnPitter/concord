@@ -53,7 +53,7 @@
     status = 'loading'
     errorMessage = null
     try {
-      await App.EnableTranslation(srcLang, tgtLang)
+      await App.EnableVoiceTranslation(srcLang, tgtLang)
       translationEnabled = true
       status = 'active'
     } catch (e) {
@@ -65,9 +65,9 @@
 
   async function disableTranslation() {
     try {
-      await App.DisableTranslation()
+      await App.DisableVoiceTranslation()
     } catch (e) {
-      console.error('Failed to disable translation:', e)
+      console.error('Failed to disable voice translation:', e)
     } finally {
       translationEnabled = false
       status = 'idle'

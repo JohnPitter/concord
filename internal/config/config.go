@@ -125,22 +125,37 @@ type P2PConfig struct {
 
 // VoiceConfig contains voice chat settings
 type VoiceConfig struct {
-	SampleRate             int           `json:"sample_rate"`        // Hz (48000)
-	Channels               int           `json:"channels"`           // 1 = mono, 2 = stereo
-	FrameSize              int           `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
-	Bitrate                int           `json:"bitrate"`            // bps (64000)
-	JitterBufferSize       time.Duration `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
-	MaxJitterBuffer        time.Duration `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
-	EnableVAD              bool          `json:"enable_vad"`         // Voice Activity Detection
-	VADThreshold           float32       `json:"vad_threshold"`      // 0.0 - 1.0
-	EnableNoiseSuppression bool          `json:"enable_noise_suppression"`
-	MaxChannelUsers        int           `json:"max_channel_users"` // Max users per voice channel
+	SampleRate             int                      `json:"sample_rate"`        // Hz (48000)
+	Channels               int                      `json:"channels"`           // 1 = mono, 2 = stereo
+	FrameSize              int                      `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
+	Bitrate                int                      `json:"bitrate"`            // bps (64000)
+	JitterBufferSize       time.Duration            `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
+	MaxJitterBuffer        time.Duration            `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
+	EnableVAD              bool                     `json:"enable_vad"`         // Voice Activity Detection
+	VADThreshold           float32                  `json:"vad_threshold"`      // 0.0 - 1.0
+	EnableNoiseSuppression bool                     `json:"enable_noise_suppression"`
+	MaxChannelUsers        int                      `json:"max_channel_users"` // Max users per voice channel
+	VoiceTranslation       VoiceTranslationConfig   `json:"voice_translation"` // Real-time voice translation
 }
 
-// TranslationConfig contains voice translation settings
+// VoiceTranslationConfig contains settings for real-time voice translation (STT + TTS).
+type VoiceTranslationConfig struct {
+	Enabled       bool          `json:"enabled"`
+	STTURL        string        `json:"stt_url"`        // Default: "https://api.openai.com/v1/audio/transcriptions"
+	STTAPIKey     string        `json:"stt_api_key"`
+	STTModel      string        `json:"stt_model"`      // Default: "whisper-1"
+	TTSURL        string        `json:"tts_url"`        // Default: "https://api.openai.com/v1/audio/speech"
+	TTSAPIKey     string        `json:"tts_api_key"`
+	TTSVoice      string        `json:"tts_voice"`      // Default: "alloy"
+	TTSFormat     string        `json:"tts_format"`     // Default: "mp3"
+	SegmentLength time.Duration `json:"segment_length"` // Default: 3s
+	Timeout       time.Duration `json:"timeout"`        // Default: 10s
+}
+
+// TranslationConfig contains text translation settings (LibreTranslate).
 type TranslationConfig struct {
 	Enabled          bool          `json:"enabled"`
-	PersonaPlexURL   string        `json:"personaplex_url"`
+	URL              string        `json:"url"`
 	APIKey           string        `json:"api_key"`
 	DefaultLang      string        `json:"default_lang"`
 	CacheEnabled     bool          `json:"cache_enabled"`
@@ -320,11 +335,11 @@ func (c *Config) loadFromEnv() {
 		c.Security.JWTSecret = v
 	}
 
-	// Translation
-	if v := os.Getenv("PERSONAPLEX_URL"); v != "" {
-		c.Translation.PersonaPlexURL = v
+	// Translation (LibreTranslate)
+	if v := os.Getenv("LIBRETRANSLATE_URL"); v != "" {
+		c.Translation.URL = v
 	}
-	if v := os.Getenv("PERSONAPLEX_API_KEY"); v != "" {
+	if v := os.Getenv("LIBRETRANSLATE_API_KEY"); v != "" {
 		c.Translation.APIKey = v
 	}
 
@@ -340,6 +355,29 @@ func (c *Config) loadFromEnv() {
 	}
 	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
 		c.Cache.Redis.Password = v
+	}
+
+	// Voice Translation (STT/TTS)
+	if v := os.Getenv("WHISPER_URL"); v != "" {
+		c.Voice.VoiceTranslation.STTURL = v
+	}
+	if v := os.Getenv("WHISPER_API_KEY"); v != "" {
+		c.Voice.VoiceTranslation.STTAPIKey = v
+	}
+	if v := os.Getenv("WHISPER_MODEL"); v != "" {
+		c.Voice.VoiceTranslation.STTModel = v
+	}
+	if v := os.Getenv("TTS_URL"); v != "" {
+		c.Voice.VoiceTranslation.TTSURL = v
+	}
+	if v := os.Getenv("TTS_API_KEY"); v != "" {
+		c.Voice.VoiceTranslation.TTSAPIKey = v
+	}
+	if v := os.Getenv("TTS_VOICE"); v != "" {
+		c.Voice.VoiceTranslation.TTSVoice = v
+	}
+	if v := os.Getenv("TTS_FORMAT"); v != "" {
+		c.Voice.VoiceTranslation.TTSFormat = v
 	}
 
 	// Logging

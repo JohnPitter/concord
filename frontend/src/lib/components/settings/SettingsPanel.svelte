@@ -8,7 +8,8 @@
   import {
     getSettings, setAudioInput, setAudioOutput,
     setNotifications, setNotificationSounds,
-    setTranslationLangs, setTheme,
+    setTranslationLangs, setAutoTranslate, setTheme,
+    setServerURL,
   } from '../../stores/settings.svelte'
 
   interface Props {
@@ -71,6 +72,8 @@
   let notifSounds = $state(settings.notificationSounds)
   let srcLang = $state(settings.translationSourceLang)
   let tgtLang = $state(settings.translationTargetLang)
+  let autoTranslateEnabled = $state(settings.autoTranslate)
+  let serverURLInput = $state(settings.serverURL)
 
   // Sync from store when panel opens
   $effect(() => {
@@ -81,6 +84,8 @@
       notifSounds = settings.notificationSounds
       srcLang = settings.translationSourceLang
       tgtLang = settings.translationTargetLang
+      autoTranslateEnabled = settings.autoTranslate
+      serverURLInput = settings.serverURL
     }
   })
 
@@ -90,6 +95,7 @@
   $effect(() => { setNotifications(notifEnabled) })
   $effect(() => { setNotificationSounds(notifSounds) })
   $effect(() => { setTranslationLangs(srcLang, tgtLang) })
+  $effect(() => { setAutoTranslate(autoTranslateEnabled) })
 
   const categoryKeys: { id: Category; labelKey: string; icon: string }[] = [
     { id: 'account', labelKey: 'settings.account', icon: 'user' },
@@ -271,6 +277,21 @@
                   </Button>
                 </div>
               {/if}
+
+              {#if settings.networkMode === 'server'}
+                <div class="border-t border-void-border pt-4">
+                  <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.serverURL')}</h4>
+                  <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.serverURLDesc')}</p>
+                  <input
+                    type="url"
+                    class="w-full rounded-lg border border-void-border bg-void-bg-secondary px-3 py-2 text-sm text-void-text-primary placeholder:text-void-text-muted outline-none focus:border-void-accent transition-colors"
+                    placeholder={t(trans, 'settings.serverURLPlaceholder')}
+                    bind:value={serverURLInput}
+                    onblur={() => setServerURL(serverURLInput)}
+                    onkeydown={(e) => { if (e.key === 'Enter') setServerURL(serverURLInput) }}
+                  />
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -396,6 +417,8 @@
                 <p class="mb-3 text-xs text-void-text-muted">
                   {t(trans, 'settings.translationDesc')}
                 </p>
+                <Toggle bind:checked={autoTranslateEnabled} label={t(trans, 'settings.autoTranslate')} />
+                <p class="mt-1 text-xs text-void-text-muted">{t(trans, 'settings.autoTranslateDesc')}</p>
               </div>
 
               <div>

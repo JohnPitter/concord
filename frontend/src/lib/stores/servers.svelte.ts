@@ -1,8 +1,10 @@
 // Server store using Svelte 5 runes
-// Manages server, channel, and member state via Wails bindings
+// Manages server, channel, and member state — Wails bindings (P2P) or HTTP API (Server)
 
 import * as App from '../../../wailsjs/go/main/App'
 import { ensureValidToken } from './auth.svelte'
+import { isServerMode } from '../api/mode'
+import { apiServers } from '../api/servers'
 
 export interface ServerData {
   id: string
@@ -64,7 +66,12 @@ export async function loadUserServers(userID: string): Promise<void> {
   error = null
   try {
     await ensureValidToken()
-    const result = await App.ListUserServers(userID)
+    let result
+    if (isServerMode()) {
+      result = await apiServers.list()
+    } else {
+      result = await App.ListUserServers(userID)
+    }
     servers = (result ?? []) as unknown as ServerData[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load servers'
@@ -82,7 +89,12 @@ export async function createServer(name: string, ownerID: string): Promise<Serve
   error = null
   try {
     await ensureValidToken()
-    const srv = await App.CreateServer(name, ownerID)
+    let srv
+    if (isServerMode()) {
+      srv = await apiServers.create(name)
+    } else {
+      srv = await App.CreateServer(name, ownerID)
+    }
     const data = srv as unknown as ServerData
     servers = [...servers, data]
     return data
@@ -96,7 +108,11 @@ export async function updateServer(serverID: string, userID: string, name: strin
   error = null
   try {
     await ensureValidToken()
-    await App.UpdateServer(serverID, userID, name, iconURL)
+    if (isServerMode()) {
+      await apiServers.update(serverID, name, iconURL)
+    } else {
+      await App.UpdateServer(serverID, userID, name, iconURL)
+    }
     servers = servers.map(s => s.id === serverID ? { ...s, name, icon_url: iconURL } : s)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to update server'
@@ -107,7 +123,11 @@ export async function deleteServer(serverID: string, userID: string): Promise<vo
   error = null
   try {
     await ensureValidToken()
-    await App.DeleteServer(serverID, userID)
+    if (isServerMode()) {
+      await apiServers.delete(serverID)
+    } else {
+      await App.DeleteServer(serverID, userID)
+    }
     servers = servers.filter(s => s.id !== serverID)
     if (activeServerId === serverID) {
       activeServerId = servers[0]?.id ?? null
@@ -123,7 +143,12 @@ export async function deleteServer(serverID: string, userID: string): Promise<vo
 async function loadChannels(serverID: string): Promise<void> {
   try {
     await ensureValidToken()
-    const result = await App.ListChannels(serverID)
+    let result
+    if (isServerMode()) {
+      result = await apiServers.listChannels(serverID)
+    } else {
+      result = await App.ListChannels(serverID)
+    }
     channels = (result ?? []) as unknown as ChannelData[]
   } catch (e) {
     console.error('Failed to load channels:', e)
@@ -135,7 +160,12 @@ export async function createChannel(serverID: string, userID: string, name: stri
   error = null
   try {
     await ensureValidToken()
-    const ch = await App.CreateChannel(serverID, userID, name, type)
+    let ch
+    if (isServerMode()) {
+      ch = await apiServers.createChannel(serverID, name, type)
+    } else {
+      ch = await App.CreateChannel(serverID, userID, name, type)
+    }
     const data = ch as unknown as ChannelData
     channels = [...channels, data]
     return data
@@ -149,6 +179,7 @@ export async function deleteChannel(serverID: string, userID: string, channelID:
   error = null
   try {
     await ensureValidToken()
+    // No REST equivalent for deleteChannel yet — use Wails binding
     await App.DeleteChannel(serverID, userID, channelID)
     channels = channels.filter(c => c.id !== channelID)
   } catch (e) {
@@ -161,7 +192,12 @@ export async function deleteChannel(serverID: string, userID: string, channelID:
 async function loadMembers(serverID: string): Promise<void> {
   try {
     await ensureValidToken()
-    const result = await App.ListMembers(serverID)
+    let result
+    if (isServerMode()) {
+      result = await apiServers.listMembers(serverID)
+    } else {
+      result = await App.ListMembers(serverID)
+    }
     members = (result ?? []) as unknown as MemberData[]
   } catch (e) {
     console.error('Failed to load members:', e)
@@ -173,7 +209,11 @@ export async function kickMember(serverID: string, actorID: string, targetID: st
   error = null
   try {
     await ensureValidToken()
-    await App.KickMember(serverID, actorID, targetID)
+    if (isServerMode()) {
+      await apiServers.kickMember(serverID, targetID)
+    } else {
+      await App.KickMember(serverID, actorID, targetID)
+    }
     members = members.filter(m => m.user_id !== targetID)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to kick member'
@@ -184,7 +224,11 @@ export async function updateMemberRole(serverID: string, actorID: string, target
   error = null
   try {
     await ensureValidToken()
-    await App.UpdateMemberRole(serverID, actorID, targetID, role)
+    if (isServerMode()) {
+      await apiServers.updateMemberRole(serverID, targetID, role)
+    } else {
+      await App.UpdateMemberRole(serverID, actorID, targetID, role)
+    }
     members = members.map(m => m.user_id === targetID ? { ...m, role: role as MemberData['role'] } : m)
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to update role'
@@ -197,7 +241,13 @@ export async function generateInvite(serverID: string, userID: string): Promise<
   error = null
   try {
     await ensureValidToken()
-    const code: string = await App.GenerateInvite(serverID, userID)
+    let code: string
+    if (isServerMode()) {
+      const result = await apiServers.generateInvite(serverID)
+      code = (result as { invite_code: string }).invite_code
+    } else {
+      code = await App.GenerateInvite(serverID, userID)
+    }
     // Update local server's invite code
     servers = servers.map(s => s.id === serverID ? { ...s, invite_code: code } : s)
     return code
@@ -211,7 +261,12 @@ export async function redeemInvite(code: string, userID: string): Promise<Server
   error = null
   try {
     await ensureValidToken()
-    const srv = await App.RedeemInvite(code, userID)
+    let srv
+    if (isServerMode()) {
+      srv = await apiServers.redeemInvite(code)
+    } else {
+      srv = await App.RedeemInvite(code, userID)
+    }
     const data = srv as unknown as ServerData
     if (!servers.find(s => s.id === data.id)) {
       servers = [...servers, data]
@@ -225,6 +280,7 @@ export async function redeemInvite(code: string, userID: string): Promise<Server
 
 export async function getInviteInfo(code: string): Promise<InviteInfoData | null> {
   try {
+    // getInviteInfo stays local — no REST equivalent
     return await App.GetInviteInfo(code) as unknown as InviteInfoData
   } catch {
     return null

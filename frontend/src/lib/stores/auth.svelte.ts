@@ -1,7 +1,10 @@
 // Auth store using Svelte 5 runes
-// Manages authentication state and communicates with Go backend via Wails bindings
+// Manages authentication state — Wails bindings (P2P) or HTTP API (Server)
 
 import * as App from '../../../wailsjs/go/main/App'
+import { isServerMode } from '../api/mode'
+import { apiStartLogin, apiCompleteLogin, apiRefreshSession } from '../api/auth'
+import { apiClient } from '../api/client'
 
 interface User {
   id: string
@@ -78,13 +81,29 @@ async function refreshAccessToken(): Promise<boolean> {
   if (!user) return false
 
   try {
-    const state: AuthState = await App.RestoreSession(user.id)
-    if (state.authenticated && state.user) {
-      user = state.user
-      accessToken = state.access_token ?? null
-      expiresAt = state.expires_at ?? null
-      scheduleRefresh()
-      return true
+    if (isServerMode()) {
+      const state = await apiRefreshSession(user.id)
+      if (state.authenticated && state.user) {
+        user = state.user
+        accessToken = state.access_token ?? null
+        expiresAt = state.expires_at ?? null
+        apiClient.setTokens({
+          accessToken: state.access_token!,
+          expiresAt: state.expires_at,
+          userId: state.user.id,
+        })
+        scheduleRefresh()
+        return true
+      }
+    } else {
+      const state: AuthState = await App.RestoreSession(user.id)
+      if (state.authenticated && state.user) {
+        user = state.user
+        accessToken = state.access_token ?? null
+        expiresAt = state.expires_at ?? null
+        scheduleRefresh()
+        return true
+      }
     }
     // Session expired — force logout
     await logout()
@@ -102,6 +121,10 @@ async function refreshAccessToken(): Promise<boolean> {
  */
 export async function ensureValidToken(): Promise<boolean> {
   if (!authenticated || !user) return false
+
+  // In server mode, apiClient handles its own token refresh
+  if (isServerMode()) return true
+
   if (!expiresAt) return true // No expiry info, assume valid
 
   const now = Date.now()
@@ -124,7 +147,20 @@ export async function initAuth(): Promise<void> {
       return
     }
 
-    const state: AuthState = await App.RestoreSession(savedUserID)
+    let state: AuthState
+    if (isServerMode()) {
+      state = await apiRefreshSession(savedUserID)
+      if (state.authenticated && state.user && state.access_token) {
+        apiClient.setTokens({
+          accessToken: state.access_token,
+          expiresAt: state.expires_at,
+          userId: state.user.id,
+        })
+      }
+    } else {
+      state = await App.RestoreSession(savedUserID)
+    }
+
     if (state.authenticated && state.user) {
       authenticated = true
       user = state.user
@@ -147,7 +183,12 @@ export async function startLogin(): Promise<void> {
   polling = false
 
   try {
-    const response: DeviceCodeResponse = await App.StartLogin()
+    let response: DeviceCodeResponse
+    if (isServerMode()) {
+      response = await apiStartLogin()
+    } else {
+      response = await App.StartLogin()
+    }
     deviceCode = response
   } catch (e) {
     error = e instanceof Error ? e.message : typeof e === 'string' ? e : 'Failed to start login'
@@ -160,10 +201,22 @@ export async function pollForCompletion(): Promise<void> {
   error = null
 
   try {
-    const state: AuthState = await App.CompleteLogin(
-      deviceCode.device_code,
-      deviceCode.interval
-    )
+    let state: AuthState
+    if (isServerMode()) {
+      state = await apiCompleteLogin(deviceCode.device_code, deviceCode.interval)
+      if (state.authenticated && state.user && state.access_token) {
+        apiClient.setTokens({
+          accessToken: state.access_token,
+          expiresAt: state.expires_at,
+          userId: state.user.id,
+        })
+      }
+    } else {
+      state = await App.CompleteLogin(
+        deviceCode.device_code,
+        deviceCode.interval
+      )
+    }
 
     if (state.authenticated && state.user) {
       authenticated = true
@@ -184,7 +237,11 @@ export async function pollForCompletion(): Promise<void> {
 export async function logout(): Promise<void> {
   try {
     if (user) {
-      await App.Logout(user.id)
+      if (isServerMode()) {
+        apiClient.clearTokens()
+      } else {
+        await App.Logout(user.id)
+      }
     }
   } catch (e) {
     console.error('Logout error:', e)

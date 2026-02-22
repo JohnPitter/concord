@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/rs/zerolog"
 )
@@ -65,6 +66,7 @@ type Engine struct {
 	logger      zerolog.Logger
 	ctx         context.Context
 	cancel      context.CancelFunc
+	translator  *VoiceTranslator
 
 	// Callbacks
 	onStateChange    func(State)
@@ -428,6 +430,13 @@ func (e *Engine) AddICECandidate(peerID string, candidate webrtc.ICECandidateIni
 	return pc.pc.AddICECandidate(candidate)
 }
 
+// SetTranslator sets the voice translator for real-time voice translation.
+func (e *Engine) SetTranslator(vt *VoiceTranslator) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.translator = vt
+}
+
 // handleRemoteTrack processes incoming audio from a peer.
 func (e *Engine) handleRemoteTrack(peerID string, track *webrtc.TrackRemote) {
 	buf := make([]byte, 1500)
@@ -441,14 +450,25 @@ func (e *Engine) handleRemoteTrack(peerID string, track *webrtc.TrackRemote) {
 
 		e.mu.RLock()
 		pc, ok := e.peers[peerID]
+		translator := e.translator
 		e.mu.RUnlock()
 
 		if !ok || e.deafened {
 			continue
 		}
 
+		packet := buf[:n]
+
 		// Push to jitter buffer
-		pc.jitter.Push(buf[:n], 0, 0)
+		pc.jitter.Push(packet, 0, 0)
+
+		// Feed voice translator if enabled
+		if translator != nil && translator.IsEnabled() {
+			var rtpPkt rtp.Packet
+			if err := rtpPkt.Unmarshal(packet); err == nil {
+				translator.PushOpusFrame(peerID, rtpPkt.Payload)
+			}
+		}
 	}
 }
 

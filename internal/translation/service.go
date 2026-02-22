@@ -12,10 +12,9 @@ import (
 
 // Errors returned by the translation service.
 var (
-	ErrTranslationDisabled  = errors.New("translation: service is disabled")
-	ErrAlreadyEnabled       = errors.New("translation: already enabled")
-	ErrNotEnabled           = errors.New("translation: not enabled")
-	ErrPipelineAlreadyActive = errors.New("translation: pipeline already active")
+	ErrTranslationDisabled = errors.New("translation: service is disabled")
+	ErrAlreadyEnabled      = errors.New("translation: already enabled")
+	ErrNotEnabled          = errors.New("translation: not enabled")
 )
 
 // Status represents the current state of the translation service.
@@ -25,16 +24,14 @@ type Status struct {
 	TargetLang         string `json:"target_lang"`
 	CircuitBreakerOpen bool   `json:"circuit_breaker_open"`
 	CacheEntries       int    `json:"cache_entries"`
-	PipelineActive     bool   `json:"pipeline_active"`
 }
 
-// Service wraps the PersonaPlex Client, TranslationCache, and Pipeline
+// Service wraps the LibreTranslate Client and TranslationCache
 // to provide a unified translation API for Wails bindings.
 type Service struct {
 	mu         sync.RWMutex
 	client     *Client
 	cache      *TranslationCache
-	pipeline   *Pipeline
 	cfg        config.TranslationConfig
 	logger     zerolog.Logger
 	enabled    bool
@@ -52,14 +49,11 @@ func NewService(cfg config.TranslationConfig, logger zerolog.Logger) *Service {
 		translationCache = NewTranslationCache(cfg.CacheSize)
 	}
 
-	pipeline := NewPipeline(client, cfg, logger)
-
 	return &Service{
-		client:   client,
-		cache:    translationCache,
-		pipeline: pipeline,
-		cfg:      cfg,
-		logger:   logger.With().Str("component", "translation-service").Logger(),
+		client: client,
+		cache:  translationCache,
+		cfg:    cfg,
+		logger: logger.With().Str("component", "translation-service").Logger(),
 	}
 }
 
@@ -89,7 +83,7 @@ func (s *Service) Enable(sourceLang, targetLang string) error {
 	return nil
 }
 
-// Disable deactivates translation and stops the pipeline if running.
+// Disable deactivates translation.
 // Complexity: O(1)
 func (s *Service) Disable() error {
 	s.mu.Lock()
@@ -99,7 +93,6 @@ func (s *Service) Disable() error {
 		return ErrNotEnabled
 	}
 
-	s.pipeline.Stop()
 	s.enabled = false
 	s.sourceLang = ""
 	s.targetLang = ""
@@ -119,7 +112,6 @@ func (s *Service) GetStatus() Status {
 		SourceLang:         s.sourceLang,
 		TargetLang:         s.targetLang,
 		CircuitBreakerOpen: s.client.IsCircuitOpen(),
-		PipelineActive:     s.pipeline.IsActive(),
 	}
 
 	if s.cache != nil {
@@ -129,7 +121,7 @@ func (s *Service) GetStatus() Status {
 	return st
 }
 
-// TranslateText translates text using the PersonaPlex API with optional caching.
+// TranslateText translates text using the LibreTranslate API with optional caching.
 // If caching is enabled and a cached result exists, returns it without calling the API.
 // Complexity: O(1) for cache hit, O(1) + network for cache miss
 func (s *Service) TranslateText(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
@@ -152,7 +144,7 @@ func (s *Service) TranslateText(ctx context.Context, text, sourceLang, targetLan
 		}
 	}
 
-	// Call PersonaPlex API
+	// Call LibreTranslate API
 	result, err := s.client.TranslateText(ctx, text, sourceLang, targetLang)
 	if err != nil {
 		return "", err
@@ -166,26 +158,33 @@ func (s *Service) TranslateText(ctx context.Context, text, sourceLang, targetLan
 	return result, nil
 }
 
-// StartPipeline starts the streaming audio translation pipeline.
-// Complexity: O(1) for setup
-func (s *Service) StartPipeline(ctx context.Context, audioIn <-chan []byte) (<-chan []byte, error) {
-	s.mu.RLock()
-	enabled := s.enabled
-	src := s.sourceLang
-	tgt := s.targetLang
-	s.mu.RUnlock()
-
-	if !enabled {
-		return nil, ErrTranslationDisabled
+// TranslateTextDirect translates text without requiring the service to be enabled.
+// Used by the frontend for on-demand message translation (always available).
+// Complexity: O(1) for cache hit, O(1) + network for cache miss
+func (s *Service) TranslateTextDirect(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
+	// Check cache
+	if s.cache != nil {
+		if result, ok := s.cache.Get(sourceLang, targetLang, text); ok {
+			s.logger.Debug().
+				Str("source_lang", sourceLang).
+				Str("target_lang", targetLang).
+				Msg("translation cache hit (direct)")
+			return result, nil
+		}
 	}
 
-	return s.pipeline.Start(ctx, audioIn, src, tgt)
-}
+	// Call LibreTranslate API
+	result, err := s.client.TranslateText(ctx, text, sourceLang, targetLang)
+	if err != nil {
+		return "", err
+	}
 
-// StopPipeline stops the streaming translation pipeline.
-// Complexity: O(1)
-func (s *Service) StopPipeline() {
-	s.pipeline.Stop()
+	// Store in cache
+	if s.cache != nil {
+		s.cache.Set(sourceLang, targetLang, text, result)
+	}
+
+	return result, nil
 }
 
 // ResetCircuitBreaker resets the circuit breaker to allow new requests.
@@ -194,7 +193,7 @@ func (s *Service) ResetCircuitBreaker() {
 	s.client.ResetCircuit()
 }
 
-// Client returns the underlying PersonaPlex client (for advanced usage).
+// Client returns the underlying LibreTranslate client (for advanced usage).
 func (s *Service) Client() *Client {
 	return s.client
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/concord-chat/concord/internal/config"
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
 
@@ -23,21 +22,20 @@ const (
 	circuitOpen                       // Requests blocked, waiting for reset
 )
 
-// translateRequest is the HTTP request body for the PersonaPlex translation API.
+// translateRequest is the HTTP request body for the LibreTranslate API.
 type translateRequest struct {
-	Text       string `json:"text"`
-	SourceLang string `json:"source_lang"`
-	TargetLang string `json:"target_lang"`
+	Q      string `json:"q"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	APIKey string `json:"api_key,omitempty"`
 }
 
-// translateResponse is the HTTP response body from the PersonaPlex translation API.
+// translateResponse is the HTTP response body from the LibreTranslate API.
 type translateResponse struct {
-	TranslatedText string `json:"translated_text"`
-	SourceLang     string `json:"source_lang"`
-	TargetLang     string `json:"target_lang"`
+	TranslatedText string `json:"translatedText"`
 }
 
-// Client provides HTTP and WebSocket access to the NVIDIA PersonaPlex translation API.
+// Client provides HTTP access to the LibreTranslate translation API.
 // It includes a circuit breaker that auto-disables when latency exceeds MaxLatency
 // for consecutive FailureThreshold calls.
 type Client struct {
@@ -50,7 +48,7 @@ type Client struct {
 	lastFailure      time.Time
 }
 
-// NewClient creates a new PersonaPlex API client.
+// NewClient creates a new LibreTranslate API client.
 // Complexity: O(1)
 func NewClient(cfg config.TranslationConfig, logger zerolog.Logger) *Client {
 	return &Client{
@@ -58,7 +56,7 @@ func NewClient(cfg config.TranslationConfig, logger zerolog.Logger) *Client {
 		httpClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
-		logger: logger.With().Str("component", "personaplex-client").Logger(),
+		logger: logger.With().Str("component", "libretranslate-client").Logger(),
 		state:  circuitClosed,
 	}
 }
@@ -75,9 +73,12 @@ func (c *Client) TranslateText(ctx context.Context, text, sourceLang, targetLang
 	start := time.Now()
 
 	reqBody := translateRequest{
-		Text:       text,
-		SourceLang: sourceLang,
-		TargetLang: targetLang,
+		Q:      text,
+		Source: sourceLang,
+		Target: targetLang,
+	}
+	if c.cfg.APIKey != "" {
+		reqBody.APIKey = c.cfg.APIKey
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -85,16 +86,13 @@ func (c *Client) TranslateText(ctx context.Context, text, sourceLang, targetLang
 		return "", fmt.Errorf("translation: marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/translate", c.cfg.PersonaPlexURL)
+	url := fmt.Sprintf("%s/translate", c.cfg.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("translation: create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -128,85 +126,6 @@ func (c *Client) TranslateText(ctx context.Context, text, sourceLang, targetLang
 		Msg("translation completed")
 
 	return result.TranslatedText, nil
-}
-
-// TranslateStream opens a WebSocket connection for streaming audio translation.
-// Reads audio frames from audioIn, sends to PersonaPlex, returns translated audio on output channel.
-// If the circuit breaker is open, returns an error immediately.
-// Complexity: O(n) where n = number of audio frames streamed
-func (c *Client) TranslateStream(ctx context.Context, audioIn <-chan []byte, sourceLang, targetLang string) (<-chan []byte, error) {
-	if err := c.checkCircuit(); err != nil {
-		return nil, err
-	}
-
-	wsURL := fmt.Sprintf("%s/translate/stream?source_lang=%s&target_lang=%s",
-		c.cfg.PersonaPlexURL, sourceLang, targetLang)
-
-	header := http.Header{}
-	if c.cfg.APIKey != "" {
-		header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
-
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, header)
-	if err != nil {
-		c.recordFailure()
-		return nil, fmt.Errorf("translation: websocket dial: %w", err)
-	}
-
-	out := make(chan []byte, 64)
-
-	// Writer goroutine: reads from audioIn and sends to WebSocket
-	go func() {
-		defer conn.Close()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case frame, ok := <-audioIn:
-				if !ok {
-					// Input channel closed, send close message
-					_ = conn.WriteMessage(websocket.CloseMessage,
-						websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-					return
-				}
-				start := time.Now()
-				if err := conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
-					c.logger.Warn().Err(err).Msg("translation: websocket write failed")
-					c.recordFailure()
-					return
-				}
-				c.recordLatency(time.Since(start))
-			}
-		}
-	}()
-
-	// Reader goroutine: reads translated audio from WebSocket and sends to output
-	go func() {
-		defer close(out)
-		for {
-			msgType, data, err := conn.ReadMessage()
-			if err != nil {
-				if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-					c.logger.Warn().Err(err).Msg("translation: websocket read failed")
-				}
-				return
-			}
-			if msgType == websocket.BinaryMessage {
-				select {
-				case out <- data:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
-
-	c.logger.Info().
-		Str("source_lang", sourceLang).
-		Str("target_lang", targetLang).
-		Msg("translation stream started")
-
-	return out, nil
 }
 
 // checkCircuit returns an error if the circuit breaker is open.

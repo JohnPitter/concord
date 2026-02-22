@@ -40,6 +40,8 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_SSLMODE=disable
       - REDIS_HOST=redis
+    volumes:
+      - ../../config.server.json:/config.json:ro
     depends_on:
       postgres:
         condition: service_healthy

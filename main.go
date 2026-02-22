@@ -47,8 +47,9 @@ type App struct {
 	authService   *auth.Service
 	serverService *server.Service
 	chatService   *chat.Service
-	voiceEngine   *voice.Engine
-	fileService   *files.Service
+	voiceEngine        *voice.Engine
+	voiceTranslator    *voice.VoiceTranslator
+	fileService        *files.Service
 	translationService *translation.Service
 	p2pHost            *p2p.Host
 	p2pRepo            *sqlite.P2PRepo
@@ -179,6 +180,34 @@ func (a *App) startup(ctx context.Context) {
 		Str("default_lang", cfg.Translation.DefaultLang).
 		Msg("translation service initialized")
 
+	// Initialize voice translator (STT + TTS pipeline)
+	vtCfg := cfg.Voice.VoiceTranslation
+	sttClient := voice.NewSTTClient(voice.STTConfig{
+		APIURL:  vtCfg.STTURL,
+		APIKey:  vtCfg.STTAPIKey,
+		Model:   vtCfg.STTModel,
+		Timeout: vtCfg.Timeout,
+	}, a.logger)
+	ttsClient := voice.NewTTSClient(voice.TTSConfig{
+		APIURL:  vtCfg.TTSURL,
+		APIKey:  vtCfg.TTSAPIKey,
+		Voice:   vtCfg.TTSVoice,
+		Format:  vtCfg.TTSFormat,
+		Timeout: vtCfg.Timeout,
+	}, a.logger)
+	a.voiceTranslator = voice.NewVoiceTranslator(
+		sttClient,
+		ttsClient,
+		a.translationService,
+		func(eventName string, data ...interface{}) {
+			runtime.EventsEmit(a.ctx, eventName, data...)
+		},
+		vtCfg.SegmentLength,
+		a.logger,
+	)
+	a.voiceEngine.SetTranslator(a.voiceTranslator)
+	a.logger.Info().Msg("voice translator initialized")
+
 	a.logger.Info().Msg("Concord started successfully")
 }
 
@@ -186,9 +215,15 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	a.logger.Info().Msg("shutting down Concord")
 
-	// Stop translation service if active
+	// Disable voice translator if active
+	if a.voiceTranslator != nil {
+		_ = a.voiceTranslator.Disable()
+		a.logger.Info().Msg("voice translator stopped")
+	}
+
+	// Disable translation service if active
 	if a.translationService != nil {
-		a.translationService.StopPipeline()
+		_ = a.translationService.Disable()
 		a.logger.Info().Msg("translation service stopped")
 	}
 
@@ -387,6 +422,23 @@ func (a *App) GetVoiceStatus() voice.VoiceStatus {
 	return a.voiceEngine.GetStatus()
 }
 
+// --- Voice Translation Bindings ---
+
+// EnableVoiceTranslation activates real-time voice translation.
+func (a *App) EnableVoiceTranslation(sourceLang, targetLang string) error {
+	return a.voiceTranslator.Enable(sourceLang, targetLang)
+}
+
+// DisableVoiceTranslation deactivates real-time voice translation.
+func (a *App) DisableVoiceTranslation() error {
+	return a.voiceTranslator.Disable()
+}
+
+// GetVoiceTranslationStatus returns the current voice translation status.
+func (a *App) GetVoiceTranslationStatus() voice.VoiceTranslationStatus {
+	return a.voiceTranslator.GetStatus()
+}
+
 // --- File Sharing Bindings ---
 
 // UploadFile validates and stores a file attached to a message.
@@ -412,12 +464,12 @@ func (a *App) DeleteAttachment(attachmentID string) error {
 
 // --- Translation Bindings ---
 
-// EnableTranslation activates voice translation between two languages.
+// EnableTranslation activates text translation between two languages.
 func (a *App) EnableTranslation(sourceLang, targetLang string) error {
 	return a.translationService.Enable(sourceLang, targetLang)
 }
 
-// DisableTranslation deactivates voice translation and stops the pipeline.
+// DisableTranslation deactivates text translation.
 func (a *App) DisableTranslation() error {
 	return a.translationService.Disable()
 }
@@ -425,6 +477,13 @@ func (a *App) DisableTranslation() error {
 // GetTranslationStatus returns the current translation service status.
 func (a *App) GetTranslationStatus() translation.Status {
 	return a.translationService.GetStatus()
+}
+
+// TranslateText translates text using the configured translation service.
+// Unlike EnableTranslation (which gates the service), this always works
+// as long as the LibreTranslate backend is reachable.
+func (a *App) TranslateText(text, sourceLang, targetLang string) (string, error) {
+	return a.translationService.TranslateTextDirect(a.ctx, text, sourceLang, targetLang)
 }
 
 // SelectAvatarFile abre diálogo de seleção de arquivo de imagem e retorna

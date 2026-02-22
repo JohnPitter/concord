@@ -2,6 +2,7 @@
 // Manages voice channel state via Wails bindings
 
 import * as App from '../../../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { ensureValidToken } from './auth.svelte'
 
 export interface SpeakerData {
@@ -216,6 +217,50 @@ function stopVoicePolling() {
   }
 }
 
+// --- Translated Audio Playback ---
+
+interface TranslatedAudioEvent {
+  peerID: string
+  audio: string  // base64
+  format: string // "mp3"
+}
+
+let translatedAudioContext: AudioContext | null = null
+
+function setupTranslatedAudioListener() {
+  EventsOn('voice:translated-audio', (data: TranslatedAudioEvent) => {
+    playTranslatedAudio(data)
+  })
+}
+
+async function playTranslatedAudio(data: TranslatedAudioEvent) {
+  try {
+    if (!translatedAudioContext) {
+      translatedAudioContext = new AudioContext()
+    }
+    const binaryStr = atob(data.audio)
+    const bytes = new Uint8Array(binaryStr.length)
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i)
+    }
+    const audioBuffer = await translatedAudioContext.decodeAudioData(bytes.buffer)
+    const source = translatedAudioContext.createBufferSource()
+    source.buffer = audioBuffer
+    source.connect(translatedAudioContext.destination)
+    source.start()
+  } catch (e) {
+    console.error('Failed to play translated audio:', e)
+  }
+}
+
+function teardownTranslatedAudioListener() {
+  EventsOff('voice:translated-audio')
+  if (translatedAudioContext) {
+    translatedAudioContext.close().catch(() => {})
+    translatedAudioContext = null
+  }
+}
+
 export async function joinVoice(voiceChannelId: string): Promise<void> {
   if (state !== 'disconnected') return
 
@@ -230,6 +275,7 @@ export async function joinVoice(voiceChannelId: string): Promise<void> {
     startTimer()
     startVoicePolling()
     startVoiceActivityDetection()
+    setupTranslatedAudioListener()
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to join voice channel'
     state = 'disconnected'
@@ -247,6 +293,7 @@ export async function leaveVoice(): Promise<void> {
     stopVoicePolling()
     stopVoiceActivityDetection()
     stopScreenShare()
+    teardownTranslatedAudioListener()
     stopTimer()
     state = 'disconnected'
     channelId = null

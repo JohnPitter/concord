@@ -60,7 +60,7 @@
     "max_channel_users": 25
   },
   "auth": {
-    "github_client_id": ""
+    "github_client_id": "Ov23liWDhwBJ6BL202Ap"
   },
   "security": {
     "jwt_secret": "dev-secret-change-in-production-min-32-chars",

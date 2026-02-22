@@ -24,7 +24,7 @@ func testLogger() zerolog.Logger {
 func testConfig(url string) config.TranslationConfig {
 	return config.TranslationConfig{
 		Enabled:          true,
-		PersonaPlexURL:   url,
+		URL:              url,
 		APIKey:           "test-api-key",
 		DefaultLang:      "en",
 		CacheEnabled:     true,
@@ -46,19 +46,17 @@ func TestTranslateText_Success(t *testing.T) {
 	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 
 		var req translateRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
-		assert.Equal(t, "Hello", req.Text)
-		assert.Equal(t, "en", req.SourceLang)
-		assert.Equal(t, "pt", req.TargetLang)
+		assert.Equal(t, "Hello", req.Q)
+		assert.Equal(t, "en", req.Source)
+		assert.Equal(t, "pt", req.Target)
+		assert.Equal(t, "test-api-key", req.APIKey)
 
 		resp := translateResponse{
 			TranslatedText: "Olá",
-			SourceLang:     "en",
-			TargetLang:     "pt",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -66,6 +64,27 @@ func TestTranslateText_Success(t *testing.T) {
 	defer srv.Close()
 
 	cfg := testConfig(srv.URL)
+	client := NewClient(cfg, testLogger())
+
+	result, err := client.TranslateText(context.Background(), "Hello", "en", "pt")
+	require.NoError(t, err)
+	assert.Equal(t, "Olá", result)
+}
+
+func TestTranslateText_NoAPIKey(t *testing.T) {
+	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var req translateRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.Empty(t, req.APIKey)
+
+		resp := translateResponse{TranslatedText: "Olá"}
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.APIKey = "" // No API key
 	client := NewClient(cfg, testLogger())
 
 	result, err := client.TranslateText(context.Background(), "Hello", "en", "pt")
@@ -219,79 +238,6 @@ func TestCache_Eviction(t *testing.T) {
 	assert.Equal(t, "três", result)
 }
 
-func TestPipeline_StartAndStop(t *testing.T) {
-	srv := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		// This handler won't be called for streaming (WebSocket),
-		// but we set it up anyway. The stream will fail gracefully.
-		w.WriteHeader(http.StatusOK)
-	})
-	defer srv.Close()
-
-	cfg := testConfig(srv.URL)
-	cfg.CircuitBreaker = false // Disable to avoid test complexity
-	client := NewClient(cfg, testLogger())
-	pipeline := NewPipeline(client, cfg, testLogger())
-
-	audioIn := make(chan []byte, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start pipeline — WebSocket will fail, should gracefully degrade to pass-through
-	out, err := pipeline.Start(ctx, audioIn, "en", "pt")
-	require.NoError(t, err, "start should succeed even when translation stream fails (graceful degradation)")
-	assert.NotNil(t, out)
-	assert.True(t, pipeline.IsActive())
-
-	// Send a frame through — should pass through since translation is in degraded mode
-	testFrame := []byte("audio-frame-data")
-	audioIn <- testFrame
-
-	select {
-	case received := <-out:
-		assert.Equal(t, testFrame, received, "should receive original frame in pass-through mode")
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for pass-through frame")
-	}
-
-	// Stop pipeline
-	pipeline.Stop()
-	assert.False(t, pipeline.IsActive())
-}
-
-func TestPipeline_GracefulDegradation(t *testing.T) {
-	// Use an invalid URL to ensure connection fails immediately
-	cfg := testConfig("http://invalid-host-that-does-not-exist:1")
-	cfg.Timeout = 100 * time.Millisecond
-	cfg.CircuitBreaker = false
-
-	client := NewClient(cfg, testLogger())
-	pipeline := NewPipeline(client, cfg, testLogger())
-
-	audioIn := make(chan []byte, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Should NOT return an error — graceful degradation kicks in
-	out, err := pipeline.Start(ctx, audioIn, "en", "pt")
-	require.NoError(t, err, "pipeline should start in pass-through mode")
-	require.NotNil(t, out)
-
-	// Send frames — they should pass through unchanged
-	for i := 0; i < 3; i++ {
-		frame := []byte{byte(i), byte(i + 1), byte(i + 2)}
-		audioIn <- frame
-
-		select {
-		case received := <-out:
-			assert.Equal(t, frame, received)
-		case <-time.After(2 * time.Second):
-			t.Fatalf("timeout on frame %d", i)
-		}
-	}
-
-	pipeline.Stop()
-}
-
 func TestService_EnableDisable(t *testing.T) {
 	cfg := testConfig("http://localhost:9999")
 	svc := NewService(cfg, testLogger())
@@ -333,8 +279,6 @@ func TestService_TranslateTextWithCache(t *testing.T) {
 		callCount++
 		resp := translateResponse{
 			TranslatedText: "Olá",
-			SourceLang:     "en",
-			TargetLang:     "pt",
 		}
 		json.NewEncoder(w).Encode(resp)
 	})
