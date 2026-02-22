@@ -153,6 +153,12 @@
   "members.changeRole": "Alterar cargo",
   "members.kick": "Expulsar",
 
+  "server.addServerTitle": "Adicionar Servidor",
+  "server.createOption": "Criar Servidor",
+  "server.createOptionDesc": "Crie um novo servidor e convide seus amigos",
+  "server.joinOption": "Conectar a um Servidor",
+  "server.joinOptionDesc": "Entre com um codigo de convite",
+  "server.back": "Voltar",
   "server.createTitle": "Criar um Servidor",
   "server.createDesc": "De um nome ao seu servidor. Voce pode alterar depois.",
   "server.namePlaceholder": "Meu Servidor Incrivel",
@@ -251,6 +257,23 @@
   "p2p.noPeers": "Nenhum peer encontrado",
   "p2p.onLan": "Na Rede Local",
   "p2p.inRoom": "Na Sala",
+
+  "dm.placeholder": "Mensagem para {name}",
+
+  "welcome.title": "Bem-vindo ao Concord!",
+  "welcome.subtitle": "Seu app de comunicacao com privacidade para gamers. Vamos fazer um tour rapido pelas funcionalidades.",
+  "welcome.serversTitle": "Servidores e Canais",
+  "welcome.serversDesc": "Crie ou entre em servidores para conversar com sua comunidade. Cada servidor tem canais de texto e voz para organizar conversas.",
+  "welcome.friendsTitle": "Amigos e DMs",
+  "welcome.friendsDesc": "Adicione amigos usando o username do GitHub e envie mensagens diretas. Suas conversas sao privadas e seguras.",
+  "welcome.readyTitle": "Tudo pronto!",
+  "welcome.readyDesc": "Comece criando um servidor ou adicionando amigos. Divirta-se!",
+  "welcome.next": "Proximo",
+  "welcome.skip": "Pular",
+  "welcome.finish": "Comecar",
+
+  "friends.removeFriend": "Remover amigo",
+  "friends.blockFriend": "Bloquear",
 
   "common.cancel": "Cancelar",
   "common.close": "Fechar",

@@ -38,6 +38,7 @@
 
   let searchQuery = $state('')
   let addFriendInput = $state('')
+  let openMenuFriendId = $state<string | null>(null)
   const trans = $derived($translations)
 
   const displayed = $derived(() => {
@@ -87,7 +88,18 @@
   }
 
   let showSearch = $state(false)
+
+  function handleWindowClick(e: MouseEvent) {
+    if (openMenuFriendId) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.friend-menu-container')) {
+        openMenuFriendId = null
+      }
+    }
+  }
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <div class="flex flex-1 flex-col bg-void-bg-tertiary overflow-hidden">
   <!-- Header with tabs -->
@@ -392,17 +404,57 @@
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
             </button>
-            <button
-              aria-label={t(trans, 'friends.moreOptions')}
-              class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary transition-colors cursor-pointer"
-              title={t(trans, 'friends.moreOptions')}
-            >
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="1.5"/>
-                <circle cx="12" cy="12" r="1.5"/>
-                <circle cx="12" cy="19" r="1.5"/>
-              </svg>
-            </button>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="relative friend-menu-container">
+              <button
+                aria-label={t(trans, 'friends.moreOptions')}
+                class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary transition-colors cursor-pointer"
+                title={t(trans, 'friends.moreOptions')}
+                onclick={(e) => { e.stopPropagation(); openMenuFriendId = openMenuFriendId === friend.id ? null : friend.id }}
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="1.5"/>
+                  <circle cx="12" cy="12" r="1.5"/>
+                  <circle cx="12" cy="19" r="1.5"/>
+                </svg>
+              </button>
+              {#if openMenuFriendId === friend.id}
+                <div class="absolute right-0 top-full mt-1 w-44 rounded-lg border border-void-border bg-void-bg-primary shadow-lg z-50 py-1 animate-fade-in">
+                  <button
+                    class="flex w-full items-center gap-2 px-3 py-2 text-sm text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary transition-colors cursor-pointer"
+                    onclick={() => { onMessage?.(friend.id); openMenuFriendId = null }}
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    {t(trans, 'friends.sendMsg')}
+                  </button>
+                  <button
+                    class="flex w-full items-center gap-2 px-3 py-2 text-sm text-void-danger hover:bg-void-danger/10 transition-colors cursor-pointer"
+                    onclick={() => { onRemoveFriend?.(friend.id); openMenuFriendId = null }}
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="8.5" cy="7" r="4"/>
+                      <line x1="18" y1="8" x2="23" y2="13"/>
+                      <line x1="23" y1="8" x2="18" y2="13"/>
+                    </svg>
+                    {t(trans, 'friends.removeFriend')}
+                  </button>
+                  <button
+                    class="flex w-full items-center gap-2 px-3 py-2 text-sm text-void-danger hover:bg-void-danger/10 transition-colors cursor-pointer"
+                    onclick={() => { onBlockUser?.(friend.id); openMenuFriendId = null }}
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                    </svg>
+                    {t(trans, 'friends.blockFriend')}
+                  </button>
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
 

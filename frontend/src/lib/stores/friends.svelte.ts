@@ -33,6 +33,14 @@ export interface DMConversation {
   unread?: number
 }
 
+export interface DMMessage {
+  id: string
+  dmId: string
+  senderId: string
+  content: string
+  timestamp: string
+}
+
 type FriendsTab = 'online' | 'all' | 'pending' | 'blocked'
 
 interface FriendsState {
@@ -40,6 +48,7 @@ interface FriendsState {
   pendingRequests: FriendRequest[]
   blocked: string[]
   dms: DMConversation[]
+  dmMessages: Record<string, DMMessage[]>
   tab: FriendsTab
   loading: boolean
   activeDMId: string | null
@@ -49,11 +58,14 @@ interface FriendsState {
 
 const STORAGE_KEY = 'concord_friends'
 
+const DM_MESSAGES_KEY = 'concord_dm_messages'
+
 const state = $state<FriendsState>({
   friends: [],
   pendingRequests: [],
   blocked: [],
   dms: [],
+  dmMessages: {},
   tab: 'online',
   loading: false,
   activeDMId: null,
@@ -75,6 +87,12 @@ function persist() {
   } catch { /* localStorage unavailable */ }
 }
 
+function persistDMMessages() {
+  try {
+    localStorage.setItem(DM_MESSAGES_KEY, JSON.stringify(state.dmMessages))
+  } catch { /* localStorage unavailable */ }
+}
+
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -84,6 +102,10 @@ function loadFromStorage() {
       if (data.pendingRequests) state.pendingRequests = data.pendingRequests
       if (data.blocked) state.blocked = data.blocked
       if (data.dms) state.dms = data.dms
+    }
+    const dmRaw = localStorage.getItem(DM_MESSAGES_KEY)
+    if (dmRaw) {
+      state.dmMessages = JSON.parse(dmRaw)
     }
   } catch { /* ignore parse errors */ }
 }
@@ -95,6 +117,7 @@ export function getFriends() {
     get friends() { return state.friends },
     get pendingRequests() { return state.pendingRequests },
     get dms() { return state.dms },
+    get dmMessages() { return state.dmMessages },
     get tab() { return state.tab },
     get loading() { return state.loading },
     get activeDMId() { return state.activeDMId },
@@ -105,6 +128,10 @@ export function getFriends() {
     },
     get activeDM() {
       return state.dms.find(d => d.id === state.activeDMId) ?? null
+    },
+    get activeDMMessages(): DMMessage[] {
+      if (!state.activeDMId) return []
+      return state.dmMessages[state.activeDMId] ?? []
     },
     get pendingCount() {
       return state.pendingRequests.filter(r => r.direction === 'incoming').length
@@ -134,7 +161,7 @@ export function sendFriendRequest(username: string) {
   state.addFriendError = null
   state.addFriendSuccess = null
 
-  const trimmed = username.trim()
+  const trimmed = username.trim().replace(/^@/, '')
   if (!trimmed) {
     state.addFriendError = 'Digite um nome de usuario.'
     return
@@ -164,11 +191,6 @@ export function sendFriendRequest(username: string) {
   state.pendingRequests = [...state.pendingRequests, request]
   state.addFriendSuccess = `Pedido de amizade enviado para ${trimmed}!`
   persist()
-
-  // Auto-accept after a short delay (simulate the other user accepting)
-  setTimeout(() => {
-    acceptFriendRequest(request.id)
-  }, 1500)
 }
 
 export function acceptFriendRequest(requestId: string) {
@@ -227,4 +249,36 @@ export function unblockUser(username: string) {
 export function clearFriendNotifications() {
   state.addFriendError = null
   state.addFriendSuccess = null
+}
+
+export function sendDMMessage(dmId: string, senderId: string, content: string) {
+  const trimmed = content.trim()
+  if (!trimmed) return
+
+  const msg: DMMessage = {
+    id: `dm-msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    dmId,
+    senderId,
+    content: trimmed,
+    timestamp: new Date().toISOString(),
+  }
+
+  if (!state.dmMessages[dmId]) {
+    state.dmMessages[dmId] = []
+  }
+  state.dmMessages = { ...state.dmMessages, [dmId]: [...(state.dmMessages[dmId] ?? []), msg] }
+
+  // Update lastMessage on the DM conversation
+  const dm = state.dms.find(d => d.id === dmId)
+  if (dm) {
+    dm.lastMessage = trimmed
+    state.dms = [...state.dms]
+    persist()
+  }
+
+  persistDMMessages()
+}
+
+export function getDMMessages(dmId: string): DMMessage[] {
+  return state.dmMessages[dmId] ?? []
 }

@@ -272,6 +272,7 @@ export async function joinVoice(voiceChannelId: string): Promise<void> {
     await App.JoinVoice(voiceChannelId)
     state = 'connected'
     channelId = voiceChannelId
+    playJoinSound()
     startTimer()
     startVoicePolling()
     startVoiceActivityDetection()

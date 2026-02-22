@@ -19,6 +19,7 @@ export interface SettingsData {
   autoTranslate: boolean
   networkMode?: NetworkMode | null
   p2pProfile?: P2PProfile | null
+  hasSeenWelcome?: boolean
 }
 
 const STORAGE_KEY = 'concord-settings'
@@ -45,6 +46,7 @@ let autoTranslate = $state(defaults.autoTranslate)
 let settingsOpen = $state(false)
 let networkMode = $state<NetworkMode | null>(null)
 let p2pProfile = $state<P2PProfile | null>(null)
+let hasSeenWelcome = $state(false)
 
 export function getSettings() {
   return {
@@ -59,6 +61,7 @@ export function getSettings() {
     get open() { return settingsOpen },
     get networkMode() { return networkMode },
     get p2pProfile() { return p2pProfile },
+    get hasSeenWelcome() { return hasSeenWelcome },
   }
 }
 
@@ -74,6 +77,7 @@ function persist(): void {
     autoTranslate,
     networkMode,
     p2pProfile,
+    hasSeenWelcome,
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -98,6 +102,7 @@ export function loadSettings(): void {
     if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
     if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
     if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
+    if (data.hasSeenWelcome !== undefined) hasSeenWelcome = !!data.hasSeenWelcome
     applyTheme(theme)
   } catch (e) {
     console.error('Failed to load settings:', e)
@@ -115,6 +120,7 @@ export function saveSettings(data: Partial<SettingsData>): void {
   if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
   if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
   if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
+  if (data.hasSeenWelcome !== undefined) hasSeenWelcome = !!data.hasSeenWelcome
   persist()
 }
 
@@ -185,5 +191,10 @@ function applyTheme(t: 'dark' | 'light'): void {
 export function setTheme(t: 'dark' | 'light'): void {
   theme = t
   applyTheme(t)
+  persist()
+}
+
+export function markWelcomeSeen(): void {
+  hasSeenWelcome = true
   persist()
 }

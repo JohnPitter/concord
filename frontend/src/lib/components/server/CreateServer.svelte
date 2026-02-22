@@ -7,14 +7,25 @@
   let {
     open = $bindable(false),
     onCreate,
+    onJoin,
   }: {
     open: boolean
     onCreate: (name: string) => void
+    onJoin: (code: string) => void
   } = $props()
 
+  let mode = $state<'choose' | 'create' | 'join'>('choose')
   let serverName = $state('')
+  let inviteCode = $state('')
   let error = $state('')
   const trans = $derived($translations)
+
+  function resetState() {
+    mode = 'choose'
+    serverName = ''
+    inviteCode = ''
+    error = ''
+  }
 
   function handleCreate() {
     const trimmed = serverName.trim()
@@ -28,39 +39,145 @@
     }
     error = ''
     onCreate(trimmed)
-    serverName = ''
+    resetState()
+    open = false
+  }
+
+  function handleJoin() {
+    const trimmed = inviteCode.trim()
+    if (!trimmed) {
+      error = t(trans, 'server.inviteRequired')
+      return
+    }
+    error = ''
+    onJoin(trimmed)
+    resetState()
     open = false
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
-      handleCreate()
+      if (mode === 'create') handleCreate()
+      else if (mode === 'join') handleJoin()
     }
   }
+
+  // Reset mode when modal closes
+  $effect(() => {
+    if (!open) resetState()
+  })
+
+  const modalTitle = $derived(
+    mode === 'create' ? t(trans, 'server.createTitle')
+    : mode === 'join' ? t(trans, 'server.joinTitle')
+    : t(trans, 'server.addServerTitle')
+  )
 </script>
 
-<Modal bind:open title={t(trans, 'server.createTitle')}>
-  <div class="space-y-4">
-    <p class="text-sm text-void-text-secondary">
-      {t(trans, 'server.createDesc')}
-    </p>
+<Modal bind:open title={modalTitle}>
+  {#if mode === 'choose'}
+    <!-- Choose: Create or Join -->
+    <div class="space-y-3">
+      <button
+        onclick={() => { mode = 'create'; error = '' }}
+        class="w-full flex items-center gap-4 rounded-lg border border-void-border bg-void-bg-secondary p-4 transition-colors hover:bg-void-bg-hover hover:border-void-accent/50 cursor-pointer group"
+      >
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-void-accent/10 text-void-accent group-hover:bg-void-accent/20 transition-colors">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </div>
+        <div class="text-left">
+          <p class="font-semibold text-void-text-primary text-sm">{t(trans, 'server.createOption')}</p>
+          <p class="text-xs text-void-text-muted mt-0.5">{t(trans, 'server.createOptionDesc')}</p>
+        </div>
+        <svg class="ml-auto h-4 w-4 text-void-text-muted group-hover:text-void-text-secondary transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
 
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div onkeydown={handleKeydown}>
-      <Input
-        placeholder={t(trans, 'server.namePlaceholder')}
-        bind:value={serverName}
-        error={error || undefined}
-      />
+      <button
+        onclick={() => { mode = 'join'; error = '' }}
+        class="w-full flex items-center gap-4 rounded-lg border border-void-border bg-void-bg-secondary p-4 transition-colors hover:bg-void-bg-hover hover:border-void-accent/50 cursor-pointer group"
+      >
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-void-accent/10 text-void-accent group-hover:bg-void-accent/20 transition-colors">
+          <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+            <polyline points="10 17 15 12 10 7" />
+            <line x1="15" y1="12" x2="3" y2="12" />
+          </svg>
+        </div>
+        <div class="text-left">
+          <p class="font-semibold text-void-text-primary text-sm">{t(trans, 'server.joinOption')}</p>
+          <p class="text-xs text-void-text-muted mt-0.5">{t(trans, 'server.joinOptionDesc')}</p>
+        </div>
+        <svg class="ml-auto h-4 w-4 text-void-text-muted group-hover:text-void-text-secondary transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
     </div>
 
-    <div class="flex justify-end gap-2">
-      <Button variant="ghost" onclick={() => { open = false; serverName = ''; error = '' }}>
-        {t(trans, 'common.cancel')}
-      </Button>
-      <Button variant="solid" onclick={handleCreate} disabled={!serverName.trim()}>
-        {t(trans, 'server.createButton')}
-      </Button>
+  {:else if mode === 'create'}
+    <!-- Create Server form -->
+    <div class="space-y-4">
+      <p class="text-sm text-void-text-secondary">
+        {t(trans, 'server.createDesc')}
+      </p>
+
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div onkeydown={handleKeydown}>
+        <Input
+          placeholder={t(trans, 'server.namePlaceholder')}
+          bind:value={serverName}
+          error={error || undefined}
+        />
+      </div>
+
+      <div class="flex justify-between">
+        <Button variant="ghost" onclick={() => { mode = 'choose'; error = '' }}>
+          {t(trans, 'server.back')}
+        </Button>
+        <div class="flex gap-2">
+          <Button variant="ghost" onclick={() => { open = false }}>
+            {t(trans, 'common.cancel')}
+          </Button>
+          <Button variant="solid" onclick={handleCreate} disabled={!serverName.trim()}>
+            {t(trans, 'server.createButton')}
+          </Button>
+        </div>
+      </div>
     </div>
-  </div>
+
+  {:else}
+    <!-- Join Server form -->
+    <div class="space-y-4">
+      <p class="text-sm text-void-text-secondary">
+        {t(trans, 'server.joinDesc')}
+      </p>
+
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div onkeydown={handleKeydown}>
+        <Input
+          placeholder={t(trans, 'server.invitePlaceholder')}
+          bind:value={inviteCode}
+          error={error || undefined}
+        />
+      </div>
+
+      <div class="flex justify-between">
+        <Button variant="ghost" onclick={() => { mode = 'choose'; error = '' }}>
+          {t(trans, 'server.back')}
+        </Button>
+        <div class="flex gap-2">
+          <Button variant="ghost" onclick={() => { open = false }}>
+            {t(trans, 'common.cancel')}
+          </Button>
+          <Button variant="solid" onclick={handleJoin} disabled={!inviteCode.trim()}>
+            {t(trans, 'server.joinButton')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </Modal>

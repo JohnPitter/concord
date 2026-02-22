@@ -153,6 +153,12 @@
   "members.changeRole": "Change role",
   "members.kick": "Kick",
 
+  "server.addServerTitle": "Add Server",
+  "server.createOption": "Create Server",
+  "server.createOptionDesc": "Create a new server and invite your friends",
+  "server.joinOption": "Join a Server",
+  "server.joinOptionDesc": "Enter an invite code to join",
+  "server.back": "Back",
   "server.createTitle": "Create a Server",
   "server.createDesc": "Give your new server a name. You can always change it later.",
   "server.namePlaceholder": "My Awesome Server",
@@ -251,6 +257,23 @@
   "p2p.noPeers": "No peers found",
   "p2p.onLan": "On Local Network",
   "p2p.inRoom": "In Room",
+
+  "dm.placeholder": "Message {name}",
+
+  "welcome.title": "Welcome to Concord!",
+  "welcome.subtitle": "Your privacy-first communication app for gamers. Let's take a quick tour of the key features.",
+  "welcome.serversTitle": "Servers & Channels",
+  "welcome.serversDesc": "Create or join servers to chat with your community. Each server has text and voice channels to organize conversations.",
+  "welcome.friendsTitle": "Friends & DMs",
+  "welcome.friendsDesc": "Add friends using their GitHub username and send direct messages. Your conversations stay private and secure.",
+  "welcome.readyTitle": "You're all set!",
+  "welcome.readyDesc": "Start by creating a server or adding friends. Have fun!",
+  "welcome.next": "Next",
+  "welcome.skip": "Skip",
+  "welcome.finish": "Get started",
+
+  "friends.removeFriend": "Remove friend",
+  "friends.blockFriend": "Block",
 
   "common.cancel": "Cancel",
   "common.close": "Close",

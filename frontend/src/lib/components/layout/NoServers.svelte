@@ -3,11 +3,9 @@
   import { translations, t } from '../../i18n'
 
   let {
-    onCreateServer,
-    onJoinServer,
+    onAddServer,
   }: {
-    onCreateServer: () => void
-    onJoinServer: () => void
+    onAddServer: () => void
   } = $props()
 
   const trans = $derived($translations)
@@ -26,7 +24,7 @@
 
   <div class="flex flex-col gap-3 w-56">
     <button
-      onclick={onCreateServer}
+      onclick={onAddServer}
       class="flex items-center justify-center gap-2 rounded-lg bg-void-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-void-accent-hover cursor-pointer"
     >
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -36,7 +34,7 @@
       {t(trans, 'noServers.create')}
     </button>
     <button
-      onclick={onJoinServer}
+      onclick={onAddServer}
       class="flex items-center justify-center gap-2 rounded-lg border border-void-border bg-void-bg-secondary px-4 py-2.5 text-sm font-semibold text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
     >
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

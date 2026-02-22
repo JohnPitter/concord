@@ -18,11 +18,11 @@
     toggleNoiseSuppression, toggleScreenSharing,
     setLocalUsername,
   } from './lib/stores/voice.svelte'
-  import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode } from './lib/stores/settings.svelte'
+  import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode, markWelcomeSeen } from './lib/stores/settings.svelte'
   import {
     getFriends, loadFriends, setFriendsTab, openDM,
     sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
-    removeFriend, blockUser, unblockUser,
+    removeFriend, blockUser, unblockUser, sendDMMessage,
   } from './lib/stores/friends.svelte'
 
   import Login from './lib/components/auth/Login.svelte'
@@ -30,7 +30,6 @@
   import P2PProfile from './lib/components/auth/P2PProfile.svelte'
   import P2PApp from './lib/components/p2p/P2PApp.svelte'
   import CreateServerModal from './lib/components/server/CreateServer.svelte'
-  import JoinServerModal from './lib/components/server/JoinServer.svelte'
   import ServerSidebar from './lib/components/layout/ServerSidebar.svelte'
   import ChannelSidebar from './lib/components/layout/ChannelSidebar.svelte'
   import DMSidebar from './lib/components/layout/DMSidebar.svelte'
@@ -41,6 +40,8 @@
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
   import ServerInfoModal from './lib/components/server/ServerInfoModal.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
+  import MessageInput from './lib/components/chat/MessageInput.svelte'
+  import WelcomeModal from './lib/components/onboarding/WelcomeModal.svelte'
   import { translations, t } from './lib/i18n'
 
   const auth = getAuth()
@@ -60,10 +61,10 @@
   let activeServerId = $state<string>('home')
 
   let showCreateServer = $state(false)
-  let showJoinServer = $state(false)
   let showSettings = $state(false)
   let showMembers = $state(false)
   let showServerInfo = $state(false)
+  let showWelcome = $state(false)
   let activeChannelId = $state<string | null>(null)
 
   const isHome = $derived(activeServerId === 'home')
@@ -80,6 +81,9 @@
       loadUserServers(auth.user.id)
       loadFriends()
       setLocalUsername(auth.user.username)
+      if (!settings.hasSeenWelcome) {
+        showWelcome = true
+      }
     }
   })
 
@@ -305,35 +309,54 @@
         onToggleScreenShare={toggleScreenSharing}
         onLeaveVoice={leaveVoice}
         onOpenSettings={() => showSettings = true}
+        onNewDM={() => openDM(null)}
       />
 
       {#if friends.activeDMId && friends.activeDM}
         <!-- DM conversation view -->
         <div class="flex flex-1 flex-col bg-void-bg-tertiary overflow-hidden animate-fade-in">
           <header class="flex h-12 items-center gap-2 border-b border-void-border px-4 shrink-0">
-            <div class="h-6 w-6 rounded-full bg-void-accent flex items-center justify-center text-[10px] font-bold text-white">
-              {friends.activeDM.display_name.slice(0, 2).toUpperCase()}
-            </div>
+            {#if friends.activeDM.avatar_url}
+              <img src={friends.activeDM.avatar_url} alt={friends.activeDM.display_name} class="h-6 w-6 rounded-full object-cover" />
+            {:else}
+              <div class="h-6 w-6 rounded-full bg-void-accent flex items-center justify-center text-[10px] font-bold text-white">
+                {friends.activeDM.display_name.slice(0, 2).toUpperCase()}
+              </div>
+            {/if}
             <span class="font-bold text-void-text-primary text-sm">{friends.activeDM.display_name}</span>
           </header>
-          <div class="flex-1 flex items-center justify-center">
-            <div class="text-center px-6">
-              <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-void-accent/20 flex items-center justify-center">
-                <span class="text-xl font-bold text-void-accent">{friends.activeDM.display_name.slice(0, 2).toUpperCase()}</span>
+          <div class="flex-1 overflow-y-auto px-4 py-4">
+            {#if friends.activeDMMessages.length === 0}
+              <div class="flex flex-col items-center justify-center h-full">
+                <div class="text-center px-6">
+                  <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-void-accent/20 flex items-center justify-center">
+                    <span class="text-xl font-bold text-void-accent">{friends.activeDM.display_name.slice(0, 2).toUpperCase()}</span>
+                  </div>
+                  <h3 class="text-lg font-bold text-void-text-primary mb-1">{friends.activeDM.display_name}</h3>
+                  <p class="text-sm text-void-text-muted">{t(trans, 'app.dmStart', { name: friends.activeDM.display_name })}</p>
+                </div>
               </div>
-              <h3 class="text-lg font-bold text-void-text-primary mb-1">{friends.activeDM.display_name}</h3>
-              <p class="text-sm text-void-text-muted">{t(trans, 'app.dmStart', { name: friends.activeDM.display_name })}</p>
-            </div>
+            {:else}
+              <div class="space-y-3">
+                {#each friends.activeDMMessages as msg}
+                  <div class="flex gap-2 {msg.senderId === auth.user?.id ? 'justify-end' : ''}">
+                    <div class="max-w-[70%] rounded-lg px-3 py-2 {msg.senderId === auth.user?.id ? 'bg-void-accent text-white' : 'bg-void-bg-secondary text-void-text-primary'}">
+                      <p class="text-sm break-words">{msg.content}</p>
+                      <p class="text-[10px] mt-0.5 {msg.senderId === auth.user?.id ? 'text-white/60' : 'text-void-text-muted'}">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
-          <div class="border-t border-void-border p-4 shrink-0">
-            <div class="flex items-center gap-2 rounded-lg bg-void-bg-primary px-3 py-2.5">
-              <input
-                type="text"
-                placeholder={t(trans, 'app.sendMessageTo', { name: friends.activeDM.display_name })}
-                class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
-              />
-            </div>
-          </div>
+          <MessageInput
+            channelName={friends.activeDM.display_name}
+            onSend={(content) => {
+              if (friends.activeDMId && auth.user) {
+                sendDMMessage(friends.activeDMId, auth.user.id, content)
+              }
+            }}
+          />
         </div>
       {:else}
         <!-- Col 3: Friends list (flex-1) -->
@@ -436,10 +459,6 @@
   <CreateServerModal
     bind:open={showCreateServer}
     onCreate={handleCreateServer}
-  />
-
-  <JoinServerModal
-    bind:open={showJoinServer}
     onJoin={handleJoinServer}
   />
 
@@ -464,7 +483,6 @@
       showSettings = false
       showMembers = false
       showCreateServer = false
-      showJoinServer = false
       showServerInfo = false
       resetMode()
     }}
@@ -486,6 +504,12 @@
         activeServerId = 'home'
       }
     }}
+  />
+{/if}
+
+{#if showWelcome}
+  <WelcomeModal
+    onClose={() => { showWelcome = false; markWelcomeSeen() }}
   />
 {/if}
 

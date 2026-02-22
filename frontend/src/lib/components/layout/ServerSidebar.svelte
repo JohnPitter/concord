@@ -2,6 +2,7 @@
   import Avatar from '../ui/Avatar.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
+  import logoImg from '../../../assets/logo.png'
 
   interface Server {
     id: string
@@ -40,32 +41,7 @@
           : 'rounded-2xl bg-void-bg-tertiary text-void-text-primary hover:rounded-xl hover:bg-void-accent hover:text-white'}"
       onclick={() => onSelectServer('home')}
     >
-      <!-- Concord dove logo (mini) -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" class="h-7 w-7">
-        <defs>
-          <linearGradient id="wl-ss" x1="0" y1="20" x2="55" y2="85" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color={isHome ? '#86efac' : '#a3e635'}/>
-            <stop offset="50%" stop-color={isHome ? '#22c55e' : '#22c55e'}/>
-            <stop offset="100%" stop-color={isHome ? '#16a34a' : '#15803d'}/>
-          </linearGradient>
-          <linearGradient id="wr-ss" x1="73" y1="20" x2="128" y2="85" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color={isHome ? '#86efac' : '#4ade80'}/>
-            <stop offset="50%" stop-color={isHome ? '#22c55e' : '#16a34a'}/>
-            <stop offset="100%" stop-color={isHome ? '#16a34a' : '#166534'}/>
-          </linearGradient>
-        </defs>
-        <path d="M56 50 C44 30 20 10 4 22 C16 34 36 50 48 58 Z" fill="url(#wl-ss)" opacity="0.72"/>
-        <path d="M54 60 C38 44 12 30 0 46 C14 52 38 58 50 64 Z" fill="url(#wl-ss)" opacity="0.88"/>
-        <path d="M52 70 C34 58 8 48 0 64 C14 68 40 72 50 74 Z" fill="url(#wl-ss)"/>
-        <path d="M72 50 C84 30 108 10 124 22 C112 34 92 50 80 58 Z" fill="url(#wr-ss)" opacity="0.72"/>
-        <path d="M74 60 C90 44 116 30 128 46 C114 52 90 58 78 64 Z" fill="url(#wr-ss)" opacity="0.88"/>
-        <path d="M76 70 C94 58 120 48 128 64 C114 68 88 72 78 74 Z" fill="url(#wr-ss)"/>
-        <ellipse cx="64" cy="68" rx="14" ry="17" fill={isHome ? '#fff' : '#f0fdf4'}/>
-        <circle cx="64" cy="46" r="11" fill={isHome ? '#fff' : '#f0fdf4'}/>
-        <path d="M55 52 Q64 63 73 52" fill={isHome ? '#fff' : '#f0fdf4'}/>
-        <rect x="55" y="50" width="18" height="16" rx="5" fill={isHome ? '#fff' : '#f0fdf4'}/>
-        <circle cx="64" cy="44" r="2.5" fill={isHome ? '#1a1a2e' : '#1a2e1a'}/>
-      </svg>
+      <img src={logoImg} alt="Concord" class="h-7 w-7 object-contain" />
 
       {#if isHome}
         <span class="absolute -left-1 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-white"></span>
