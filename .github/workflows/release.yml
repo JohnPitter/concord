@@ -51,6 +51,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm ci
 
+      - name: Set server URL for build
+        run: echo "VITE_SERVER_URL=${{ vars.SERVER_URL }}" > frontend/.env
+
       - name: Build (Linux)
         if: matrix.platform == 'linux'
         run: |

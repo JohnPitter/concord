@@ -134,5 +134,9 @@ class ApiClient {
   del<T>(path: string) { return this.request<T>('DELETE', path) }
 }
 
-// Singleton
-export const apiClient = new ApiClient('')
+// Server URL from build-time env var (VITE_SERVER_URL)
+// Set in frontend/.env or CI environment. Fallback to empty string (relative).
+const SERVER_URL = import.meta.env.VITE_SERVER_URL as string || ''
+
+// Singleton — initialized with the build-time server URL
+export const apiClient = new ApiClient(SERVER_URL)

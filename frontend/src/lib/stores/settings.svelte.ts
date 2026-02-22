@@ -19,7 +19,6 @@ export interface SettingsData {
   autoTranslate: boolean
   networkMode?: NetworkMode | null
   p2pProfile?: P2PProfile | null
-  serverURL?: string
 }
 
 const STORAGE_KEY = 'concord-settings'
@@ -46,7 +45,6 @@ let autoTranslate = $state(defaults.autoTranslate)
 let settingsOpen = $state(false)
 let networkMode = $state<NetworkMode | null>(null)
 let p2pProfile = $state<P2PProfile | null>(null)
-let serverURL = $state<string>('')
 
 export function getSettings() {
   return {
@@ -61,7 +59,6 @@ export function getSettings() {
     get open() { return settingsOpen },
     get networkMode() { return networkMode },
     get p2pProfile() { return p2pProfile },
-    get serverURL() { return serverURL },
   }
 }
 
@@ -77,7 +74,6 @@ function persist(): void {
     autoTranslate,
     networkMode,
     p2pProfile,
-    serverURL,
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -102,7 +98,6 @@ export function loadSettings(): void {
     if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
     if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
     if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
-    if (data.serverURL !== undefined) serverURL = data.serverURL ?? ''
     applyTheme(theme)
   } catch (e) {
     console.error('Failed to load settings:', e)
@@ -120,7 +115,6 @@ export function saveSettings(data: Partial<SettingsData>): void {
   if (data.autoTranslate !== undefined) autoTranslate = data.autoTranslate
   if (data.networkMode !== undefined) networkMode = data.networkMode ?? null
   if (data.p2pProfile !== undefined) p2pProfile = data.p2pProfile ?? null
-  if (data.serverURL !== undefined) serverURL = data.serverURL ?? ''
   persist()
 }
 
@@ -175,11 +169,6 @@ export function setNetworkMode(mode: NetworkMode): void {
 
 export function setP2PProfile(profile: P2PProfile): void {
   p2pProfile = profile
-  persist()
-}
-
-export function setServerURL(url: string): void {
-  serverURL = url
   persist()
 }
 
