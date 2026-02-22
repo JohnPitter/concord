@@ -5,7 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-22
+## [0.13.0] - 2026-02-22
+
+### Added
+
+#### UX Improvements Round 7 — DMs, Welcome, Friends, Voice (2026-02-22)
+
+- **DM messaging funcional** (`friends.svelte.ts`, `App.svelte`): mensagens diretas entre amigos com persistência em localStorage, tipo `DMMessage`, lista de mensagens com bolhas estilo chat (enviadas=verde, recebidas=escuro), integração com `MessageInput` (emoji picker, file attach, keyboard handling)
+- **Modal de boas-vindas (onboarding)** (`WelcomeModal.svelte`, `settings.svelte.ts`): 4 etapas em slide — Bem-vindo, Servidores & Canais, Amigos & DMs, Pronto!; indicador de steps (dots), botões Skip/Next/Finish, click-outside-to-close, backdrop blur; `hasSeenWelcome` persistido em settings
+- **Logo oficial no Home button** (`ServerSidebar.svelte`): substituído SVG inline simplificado pela logo oficial `logo.png` (pomba completa)
+- **Botão "Nova DM" funcional** (`DMSidebar.svelte`, `App.svelte`): botão `+` no sidebar de DMs agora navega para a view de Amigos
+- **Menu de opções do amigo** (`FriendsList.svelte`): dropdown context menu nos três-pontos com "Enviar mensagem", "Remover amigo" e "Bloquear"; click-outside fecha
+- **Som ao entrar em voice channel** (`voice.svelte.ts`): `playJoinSound()` chamado ao entrar no voice (incluindo o próprio usuário), não apenas quando outros entram
+- **Sanitização de @username** (`friends.svelte.ts`): `sendFriendRequest()` remove `@` do início do username automaticamente
+- **i18n**: adicionadas keys `dm.placeholder`, `welcome.*` (11 keys), `friends.removeFriend`, `friends.blockFriend` em todos os 5 idiomas (PT, EN, ES, ZH, JA)
+
+#### Dynamic Server URL Discovery (2026-02-22)
+
+- **Server URL via GitHub Gist** (`frontend/src/lib/api/client.ts`): client descobre URL do servidor central automaticamente via GitHub Gist público, com fallback para URL hardcoded; cache em localStorage com TTL de 1h
+
+### Changed
+
+- **Dependências atualizadas**: `pion/webrtc/v4` v4.2.8→v4.2.9, `ipfs/boxo` v0.36.0→v0.37.0, `ipld-prime` v0.21.0→v0.22.0, `multiaddr-dns` v0.4.1→v0.5.0, e diversas `golang.org/x/*` atualizadas
+
+### Security
+
+- **govulncheck**: GO-2026-4479 (`pion/dtls/v2`) e GO-2024-3218 (`go-libp2p-kad-dht`) são vulnerabilidades conhecidas sem fix upstream (Fixed in: N/A). Ambas são issues do ecossistema libp2p/pion que afetam todos os usuários. O código DTLS v2 vulnerável não é utilizado nos code paths do Concord (usamos TCP+QUIC+Noise, não DTLS)
 
 ### Added
 
