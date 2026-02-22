@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -37,6 +38,13 @@ func New(cfg Config, logger zerolog.Logger) (*DB, error) {
 		Bool("wal_mode", cfg.WALMode).
 		Bool("foreign_keys", cfg.ForeignKeys).
 		Msg("initializing sqlite database")
+
+	// Ensure parent directory exists
+	if dir := filepath.Dir(cfg.Path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
+	}
 
 	// Build DSN with pragmas
 	dsn := buildDSN(cfg)
