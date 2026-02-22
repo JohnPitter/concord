@@ -4,7 +4,7 @@
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
   import { getSettings, setTranslationLangs } from '../../stores/settings.svelte'
-  import * as App from '../../../wailsjs/go/main/App'
+  import * as App from '../../../../wailsjs/go/main/App'
 
   let { voiceConnected }: { voiceConnected: boolean } = $props()
 

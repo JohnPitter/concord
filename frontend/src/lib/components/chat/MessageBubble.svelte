@@ -4,7 +4,7 @@
   import { translations, t } from '../../i18n'
   import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
   import { getSettings } from '../../stores/settings.svelte'
-  import * as App from '../../../../../wailsjs/go/main/App'
+  import * as App from '../../../../wailsjs/go/main/App'
 
   let {
     message,
