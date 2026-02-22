@@ -4,7 +4,7 @@
 import * as App from '../../../wailsjs/go/main/App'
 import { isServerMode } from '../api/mode'
 import { apiStartLogin, apiCompleteLogin, apiRefreshSession } from '../api/auth'
-import { apiClient } from '../api/client'
+import { apiClient, discoverServerURL } from '../api/client'
 
 interface User {
   id: string
@@ -141,6 +141,11 @@ export async function initAuth(): Promise<void> {
   error = null
 
   try {
+    // Discover latest server URL before any API call
+    if (isServerMode()) {
+      await discoverServerURL()
+    }
+
     const savedUserID = localStorage.getItem(USER_ID_KEY)
     if (!savedUserID) {
       loading = false
@@ -183,6 +188,11 @@ export async function startLogin(): Promise<void> {
   polling = false
 
   try {
+    // Ensure we have the latest server URL
+    if (isServerMode()) {
+      await discoverServerURL()
+    }
+
     let response: DeviceCodeResponse
     if (isServerMode()) {
       response = await apiStartLogin()

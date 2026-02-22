@@ -138,5 +138,26 @@ class ApiClient {
 // Set in frontend/.env or CI environment. Fallback to empty string (relative).
 const SERVER_URL = import.meta.env.VITE_SERVER_URL as string || ''
 
+// Remote discovery gist — returns dynamic server URL when tunnel changes
+const DISCOVERY_URL = 'https://gist.githubusercontent.com/JohnPitter/94c9a0c3c3220378434783341c4db250/raw/server.json'
+
 // Singleton — initialized with the build-time server URL
 export const apiClient = new ApiClient(SERVER_URL)
+
+/**
+ * Fetches the current server URL from the remote discovery gist.
+ * Falls back to the build-time VITE_SERVER_URL if fetch fails.
+ * Updates apiClient.baseURL in-place so all subsequent calls use the new URL.
+ */
+export async function discoverServerURL(): Promise<string> {
+  try {
+    const res = await fetch(DISCOVERY_URL, { cache: 'no-store' })
+    if (!res.ok) return apiClient.getBaseURL()
+    const data: { server_url?: string } = await res.json()
+    if (data.server_url) {
+      apiClient.setBaseURL(data.server_url)
+      return data.server_url
+    }
+  } catch { /* network error — keep build-time URL */ }
+  return apiClient.getBaseURL()
+}
