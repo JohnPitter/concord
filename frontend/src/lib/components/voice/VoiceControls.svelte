@@ -1,5 +1,6 @@
 <script lang="ts">
   import Tooltip from '../ui/Tooltip.svelte'
+  import { translations, t } from '../../i18n'
   import type { SpeakerData } from '../../stores/voice.svelte'
 
   let {
@@ -29,6 +30,8 @@
     onToggleScreenShare?: () => void
     onDisconnect: () => void
   } = $props()
+
+  const trans = $derived($translations)
 </script>
 
 {#if connected}
@@ -38,13 +41,13 @@
       <div class="flex items-center gap-2 min-w-0">
         <div class="h-2 w-2 shrink-0 rounded-full bg-void-online animate-pulse"></div>
         <div class="min-w-0">
-          <p class="text-xs font-semibold text-void-online">Voice Connected</p>
+          <p class="text-xs font-semibold text-void-online">{t(trans, 'voice.connected')}</p>
           <p class="text-[11px] text-void-text-muted truncate">{channelName}</p>
         </div>
       </div>
-      <Tooltip text="Disconnect" position="top">
+      <Tooltip text={t(trans, 'voice.disconnect')} position="top">
         <button
-          aria-label="Disconnect"
+          aria-label={t(trans, 'voice.disconnect')}
           class="rounded-md p-1.5 text-void-danger transition-colors hover:bg-void-danger/10 cursor-pointer"
           onclick={onDisconnect}
         >
@@ -77,9 +80,9 @@
 
     <!-- Controls -->
     <div class="flex items-center justify-center gap-1 border-t border-void-border px-3 py-1.5">
-      <Tooltip text={noiseSuppression ? 'Desativar supressão de ruído' : 'Ativar supressão de ruído'} position="top">
+      <Tooltip text={noiseSuppression ? t(trans, 'voice.disableNoiseSuppression') : t(trans, 'voice.enableNoiseSuppression')} position="top">
         <button
-          aria-label={noiseSuppression ? 'Disable noise suppression' : 'Enable noise suppression'}
+          aria-label={noiseSuppression ? t(trans, 'voice.disableNoiseSuppression') : t(trans, 'voice.enableNoiseSuppression')}
           class="rounded-md p-2 transition-colors cursor-pointer
             {noiseSuppression
               ? 'text-void-online hover:bg-void-online/10'
@@ -93,9 +96,9 @@
           </svg>
         </button>
       </Tooltip>
-      <Tooltip text={screenSharing ? 'Parar compartilhamento' : 'Compartilhar tela'} position="top">
+      <Tooltip text={screenSharing ? t(trans, 'voice.stopScreenShare') : t(trans, 'voice.shareScreen')} position="top">
         <button
-          aria-label={screenSharing ? 'Stop screen share' : 'Share screen'}
+          aria-label={screenSharing ? t(trans, 'voice.stopScreenShare') : t(trans, 'voice.shareScreen')}
           class="rounded-md p-2 transition-colors cursor-pointer
             {screenSharing
               ? 'bg-void-online/20 text-void-online hover:bg-void-online/30'
@@ -110,9 +113,9 @@
         </button>
       </Tooltip>
       <div class="w-px h-5 bg-void-border mx-0.5"></div>
-      <Tooltip text={muted ? 'Unmute' : 'Mute'} position="top">
+      <Tooltip text={muted ? t(trans, 'voice.unmute') : t(trans, 'voice.mute')} position="top">
         <button
-          aria-label={muted ? 'Unmute' : 'Mute'}
+          aria-label={muted ? t(trans, 'voice.unmute') : t(trans, 'voice.mute')}
           class="rounded-md p-2 transition-colors cursor-pointer
             {muted
               ? 'bg-void-danger/20 text-void-danger hover:bg-void-danger/30'
@@ -137,9 +140,9 @@
           {/if}
         </button>
       </Tooltip>
-      <Tooltip text={deafened ? 'Undeafen' : 'Deafen'} position="top">
+      <Tooltip text={deafened ? t(trans, 'voice.undeafen') : t(trans, 'voice.deafen')} position="top">
         <button
-          aria-label={deafened ? 'Undeafen' : 'Deafen'}
+          aria-label={deafened ? t(trans, 'voice.undeafen') : t(trans, 'voice.deafen')}
           class="rounded-md p-2 transition-colors cursor-pointer
             {deafened
               ? 'bg-void-danger/20 text-void-danger hover:bg-void-danger/30'

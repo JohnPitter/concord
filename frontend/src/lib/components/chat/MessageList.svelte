@@ -1,5 +1,6 @@
 <script lang="ts">
   import MessageBubble from './MessageBubble.svelte'
+  import { translations, t } from '../../i18n'
   import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
 
   let {
@@ -28,6 +29,7 @@
     onDeleteFile?: (id: string) => void
   } = $props()
 
+  const trans = $derived($translations)
   let scrollContainer: HTMLDivElement | undefined = $state()
   let wasAtBottom = $state(true)
 
@@ -75,7 +77,7 @@
           class="text-xs text-void-text-muted transition-colors hover:text-void-accent"
           onclick={() => onLoadMore?.()}
         >
-          Load older messages
+          {t(trans, 'chat.loadOlder')}
         </button>
       {/if}
     </div>
@@ -89,8 +91,8 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
         </svg>
       </div>
-      <h3 class="text-lg font-bold text-void-text-primary">Welcome to #{channelName}!</h3>
-      <p class="mt-1 text-sm text-void-text-muted">This is the beginning of the channel. Send the first message!</p>
+      <h3 class="text-lg font-bold text-void-text-primary">{t(trans, 'chat.welcomeChannel', { channel: channelName })}</h3>
+      <p class="mt-1 text-sm text-void-text-muted">{t(trans, 'chat.welcomeChannelHint')}</p>
     </div>
   {:else}
     <div class="py-2">

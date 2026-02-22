@@ -41,6 +41,7 @@
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
   import ServerInfoModal from './lib/components/server/ServerInfoModal.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
+  import { translations, t } from './lib/i18n'
 
   const auth = getAuth()
   const srv = getServers()
@@ -241,6 +242,8 @@
   const currentUserRole = $derived(
     auth.user ? (srv.members.find(m => m.user_id === auth.user!.id)?.role ?? 'member') : 'member'
   )
+
+  const trans = $derived($translations)
 </script>
 
 {#if needsModeSelection}
@@ -260,7 +263,7 @@
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
     <div class="text-center">
       <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
-      <p class="text-sm text-void-text-muted">Carregando Concord...</p>
+      <p class="text-sm text-void-text-muted">{t(trans, 'app.loading')}</p>
     </div>
   </div>
 
@@ -319,14 +322,14 @@
                 <span class="text-xl font-bold text-void-accent">{friends.activeDM.display_name.slice(0, 2).toUpperCase()}</span>
               </div>
               <h3 class="text-lg font-bold text-void-text-primary mb-1">{friends.activeDM.display_name}</h3>
-              <p class="text-sm text-void-text-muted">Este e o inicio da conversa com <strong class="text-void-text-secondary">{friends.activeDM.display_name}</strong>.</p>
+              <p class="text-sm text-void-text-muted">{t(trans, 'app.dmStart', { name: friends.activeDM.display_name })}</p>
             </div>
           </div>
           <div class="border-t border-void-border p-4 shrink-0">
             <div class="flex items-center gap-2 rounded-lg bg-void-bg-primary px-3 py-2.5">
               <input
                 type="text"
-                placeholder="Enviar mensagem para {friends.activeDM.display_name}"
+                placeholder={t(trans, 'app.sendMessageTo', { name: friends.activeDM.display_name })}
                 class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
               />
             </div>

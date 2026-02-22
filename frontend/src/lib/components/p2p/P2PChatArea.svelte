@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { translations, t } from '../../i18n'
+
+  const trans = $derived($translations)
+
   interface P2PPeer {
     id: string
     displayName: string
@@ -87,7 +91,7 @@
         <circle cx="16" cy="12" r="3"/>
         <line x1="11" y1="12" x2="13" y2="12"/>
       </svg>
-      <p class="text-void-text-muted text-sm">Selecione um peer para conversar</p>
+      <p class="text-void-text-muted text-sm">{t(trans, 'p2p.selectPeer')}</p>
     </div>
   {:else}
     <!-- Header -->
@@ -114,7 +118,7 @@
     <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
       {#if messages.length === 0}
         <div class="flex flex-1 items-center justify-center">
-          <p class="text-void-text-muted text-xs">Nenhuma mensagem ainda. Diga oi!</p>
+          <p class="text-void-text-muted text-xs">{t(trans, 'p2p.noMessages')}</p>
         </div>
       {:else}
         {#each messages as msg (msg.id)}
@@ -142,7 +146,7 @@
         <textarea
           bind:value={inputValue}
           onkeydown={handleKeydown}
-          placeholder="Enviar mensagem para {peerLabel(peer)}"
+          placeholder={t(trans, 'p2p.sendMessageTo', { name: peerLabel(peer) })}
           rows="1"
           class="flex-1 resize-none rounded-lg bg-void-bg-secondary px-3 py-2 text-sm text-void-text-primary placeholder:text-void-text-muted outline-none focus:ring-1 focus:ring-void-accent"
         ></textarea>
@@ -150,7 +154,7 @@
           class="shrink-0 rounded-lg bg-void-accent p-2 text-white hover:bg-void-accent-hover transition-colors cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
           onclick={handleSend}
           disabled={sending || !inputValue.trim()}
-          aria-label="Enviar mensagem"
+          aria-label={t(trans, 'p2p.sendMessage')}
         >
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="22" y1="2" x2="11" y2="13"/>

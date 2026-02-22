@@ -1,5 +1,6 @@
 <script lang="ts">
   import logoPng from '../../../assets/logo.png'
+  import { translations, t } from '../../i18n'
 
   let {
     onCreateServer,
@@ -8,6 +9,8 @@
     onCreateServer: () => void
     onJoinServer: () => void
   } = $props()
+
+  const trans = $derived($translations)
 </script>
 
 <div class="flex flex-1 flex-col items-center justify-center gap-6 bg-void-bg-tertiary select-none">
@@ -17,8 +20,8 @@
   </div>
 
   <div class="text-center">
-    <h2 class="mb-1 text-xl font-bold text-void-text-primary">Bem-vindo ao Concord</h2>
-    <p class="text-sm text-void-text-muted">Crie um servidor ou entre num existente para começar.</p>
+    <h2 class="mb-1 text-xl font-bold text-void-text-primary">{t(trans, 'noServers.welcome')}</h2>
+    <p class="text-sm text-void-text-muted">{t(trans, 'noServers.subtitle')}</p>
   </div>
 
   <div class="flex flex-col gap-3 w-56">
@@ -30,7 +33,7 @@
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
-      Criar um servidor
+      {t(trans, 'noServers.create')}
     </button>
     <button
       onclick={onJoinServer}
@@ -41,7 +44,7 @@
         <polyline points="10 17 15 12 10 7" />
         <line x1="15" y1="12" x2="3" y2="12" />
       </svg>
-      Entrar com convite
+      {t(trans, 'noServers.join')}
     </button>
   </div>
 </div>

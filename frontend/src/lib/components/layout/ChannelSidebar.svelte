@@ -1,6 +1,7 @@
 <script lang="ts">
   import Tooltip from '../ui/Tooltip.svelte'
   import VoiceControls from '../voice/VoiceControls.svelte'
+  import { translations, t } from '../../i18n'
   import type { SpeakerData } from '../../stores/voice.svelte'
 
   interface Channel {
@@ -97,6 +98,7 @@
 
   const textChannels = $derived(channels.filter(c => c.type === 'text'))
   const voiceChannels = $derived(channels.filter(c => c.type === 'voice'))
+  const trans = $derived($translations)
 
   let creatingText = $state(false)
   let creatingVoice = $state(false)
@@ -131,11 +133,11 @@
         <svg class="h-3 w-3 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9" />
         </svg>
-        <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">Text Channels</span>
+        <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">{t(trans, 'channel.textChannels')}</span>
         <button
           class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
           onclick={() => { creatingText = true; creatingVoice = false; newChannelName = '' }}
-          aria-label="Criar text channel"
+          aria-label={t(trans, 'channel.createText')}
         >
           <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -147,7 +149,7 @@
         <input
           type="text"
           bind:value={newChannelName}
-          placeholder="nome-do-canal"
+          placeholder={t(trans, 'channel.namePlaceholder')}
           class="flex-1 min-w-0 rounded-md bg-void-bg-primary px-2 py-1 text-xs text-void-text-primary placeholder:text-void-text-muted outline-none focus:ring-1 focus:ring-void-accent"
           onkeydown={(e) => { if (e.key === 'Enter') submitChannel('text'); if (e.key === 'Escape') creatingText = false }}
         />
@@ -155,7 +157,7 @@
           class="shrink-0 rounded-md bg-void-accent px-2 py-1 text-[10px] font-medium text-white hover:bg-void-accent-hover transition-colors cursor-pointer disabled:opacity-50"
           onclick={() => submitChannel('text')}
           disabled={!newChannelName.trim()}
-        >OK</button>
+        >{t(trans, 'channel.ok')}</button>
       </div>
     {/if}
     {#if textChannels.length > 0}
@@ -188,7 +190,7 @@
             <button
               class="shrink-0 p-1 mr-1 rounded text-void-text-muted opacity-0 group-hover:opacity-100 hover:text-void-danger transition-all cursor-pointer"
               onclick={() => onDeleteChannel?.(channel.id)}
-              aria-label="Delete channel"
+              aria-label={t(trans, 'channel.deleteChannel')}
             >
               <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -204,11 +206,11 @@
         <svg class="h-3 w-3 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9" />
         </svg>
-        <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">Voice Channels</span>
+        <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">{t(trans, 'channel.voiceChannels')}</span>
         <button
           class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
           onclick={() => { creatingVoice = true; creatingText = false; newChannelName = '' }}
-          aria-label="Criar voice channel"
+          aria-label={t(trans, 'channel.createVoice')}
         >
           <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -220,7 +222,7 @@
         <input
           type="text"
           bind:value={newChannelName}
-          placeholder="nome-do-canal"
+          placeholder={t(trans, 'channel.namePlaceholder')}
           class="flex-1 min-w-0 rounded-md bg-void-bg-primary px-2 py-1 text-xs text-void-text-primary placeholder:text-void-text-muted outline-none focus:ring-1 focus:ring-void-accent"
           onkeydown={(e) => { if (e.key === 'Enter') submitChannel('voice'); if (e.key === 'Escape') creatingVoice = false }}
         />
@@ -228,7 +230,7 @@
           class="shrink-0 rounded-md bg-void-accent px-2 py-1 text-[10px] font-medium text-white hover:bg-void-accent-hover transition-colors cursor-pointer disabled:opacity-50"
           onclick={() => submitChannel('voice')}
           disabled={!newChannelName.trim()}
-        >OK</button>
+        >{t(trans, 'channel.ok')}</button>
       </div>
     {/if}
     {#if voiceChannels.length > 0}
@@ -259,7 +261,7 @@
             <button
               class="shrink-0 p-1 mr-1 rounded text-void-text-muted opacity-0 group-hover:opacity-100 hover:text-void-danger transition-all cursor-pointer"
               onclick={() => onDeleteChannel?.(channel.id)}
-              aria-label="Delete channel"
+              aria-label={t(trans, 'channel.deleteChannel')}
             >
               <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -284,7 +286,7 @@
                 </div>
                 <span class="text-xs text-void-text-secondary truncate">{speaker.username}</span>
                 {#if speaker.screenSharing}
-                  <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">AO VIVO</span>
+                  <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
                 <!-- Voice signal icon (green when speaking, animated) -->
                 <svg class="ml-auto h-3.5 w-3.5 shrink-0 {speaker.speaking ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
@@ -347,10 +349,10 @@
       {/if}
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
-        <p class="text-[11px] text-void-online">Online</p>
+        <p class="text-[11px] text-void-online">{t(trans, 'channel.online')}</p>
       </div>
-      <Tooltip text="Settings" position="top">
-        <button aria-label="Settings" class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
+      <Tooltip text={t(trans, 'nav.settings')} position="top">
+        <button aria-label={t(trans, 'nav.settings')} class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
           onclick={() => onOpenSettings?.()}>
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3" />

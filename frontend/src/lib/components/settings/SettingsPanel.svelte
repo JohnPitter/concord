@@ -3,6 +3,8 @@
   import Button from '../ui/Button.svelte'
   import Toggle from '../ui/Toggle.svelte'
   import Dropdown from '../ui/Dropdown.svelte'
+  import { translations, t, LOCALES, setLocale, locale } from '../../i18n'
+  import type { Locale } from '../../i18n'
   import {
     getSettings, setAudioInput, setAudioOutput,
     setNotifications, setNotificationSounds,
@@ -19,6 +21,7 @@
   let { open = $bindable(false), currentUser, onLogout, onSwitchMode }: Props = $props()
 
   const settings = getSettings()
+  const trans = $derived($translations)
 
   type Category = 'account' | 'audio' | 'appearance' | 'notifications' | 'language'
   let activeCategory = $state<Category>('account')
@@ -88,12 +91,12 @@
   $effect(() => { setNotificationSounds(notifSounds) })
   $effect(() => { setTranslationLangs(srcLang, tgtLang) })
 
-  const categories: { id: Category; label: string; icon: string }[] = [
-    { id: 'account', label: 'Account', icon: 'user' },
-    { id: 'audio', label: 'Audio', icon: 'mic' },
-    { id: 'appearance', label: 'Appearance', icon: 'palette' },
-    { id: 'notifications', label: 'Notifications', icon: 'bell' },
-    { id: 'language', label: 'Language', icon: 'globe' },
+  const categoryKeys: { id: Category; labelKey: string; icon: string }[] = [
+    { id: 'account', labelKey: 'settings.account', icon: 'user' },
+    { id: 'audio', labelKey: 'settings.audio', icon: 'mic' },
+    { id: 'appearance', labelKey: 'settings.appearance', icon: 'palette' },
+    { id: 'notifications', labelKey: 'settings.notifications', icon: 'bell' },
+    { id: 'language', labelKey: 'settings.language', icon: 'globe' },
   ]
 
   const languageOptions = [
@@ -130,17 +133,17 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Settings"
+    aria-label={t(trans, 'settings.title')}
     onkeydown={handleKeydown}
   >
     <div class="flex h-[80vh] w-[90vw] max-w-4xl overflow-hidden rounded-lg border border-void-border bg-void-bg-primary shadow-md animate-[settings-in_150ms_ease-out]">
       <!-- Category sidebar -->
       <nav class="flex w-56 shrink-0 flex-col border-r border-void-border bg-void-bg-secondary">
         <div class="px-4 pt-4 pb-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-void-text-muted">Settings</h2>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-void-text-muted">{t(trans, 'settings.title')}</h2>
         </div>
         <div class="flex-1 overflow-y-auto px-2 py-1">
-          {#each categories as cat}
+          {#each categoryKeys as cat}
             <button
               class="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors cursor-pointer mb-0.5
                 {activeCategory === cat.id
@@ -180,7 +183,7 @@
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                 </svg>
               {/if}
-              <span>{cat.label}</span>
+              <span>{t(trans, cat.labelKey)}</span>
             </button>
           {/each}
         </div>
@@ -195,10 +198,10 @@
         <!-- Header with close button -->
         <div class="flex items-center justify-between border-b border-void-border px-6 py-3">
           <h3 class="text-base font-bold text-void-text-primary">
-            {categories.find(c => c.id === activeCategory)?.label ?? 'Settings'}
+            {t(trans, categoryKeys.find(c => c.id === activeCategory)?.labelKey ?? 'settings.title')}
           </h3>
           <button
-            aria-label="Close settings"
+            aria-label={t(trans, 'settings.closeSettings')}
             class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
             onclick={close}
           >
@@ -232,39 +235,39 @@
                 </div>
               {:else}
                 <div class="rounded-lg border border-void-border bg-void-bg-secondary p-4">
-                  <p class="text-sm text-void-text-muted">No user logged in.</p>
+                  <p class="text-sm text-void-text-muted">{t(trans, 'settings.noUser')}</p>
                 </div>
               {/if}
 
               <div class="border-t border-void-border pt-4">
-                <h4 class="mb-3 text-sm font-semibold text-void-text-primary">Account Actions</h4>
+                <h4 class="mb-3 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.accountActions')}</h4>
                 <Button
                   variant="danger"
                   size="sm"
                   onclick={() => { onLogout(); close() }}
                 >
-                  Log Out
+                  {t(trans, 'settings.logOut')}
                 </Button>
               </div>
 
               {#if onSwitchMode}
                 <div class="border-t border-void-border pt-4">
-                  <h4 class="mb-3 text-sm font-semibold text-void-text-primary">Connection Mode</h4>
+                  <h4 class="mb-3 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.connectionMode')}</h4>
                   <div class="flex items-center gap-3 mb-3">
-                    <span class="text-sm text-void-text-secondary">Modo atual:</span>
+                    <span class="text-sm text-void-text-secondary">{t(trans, 'settings.currentMode')}</span>
                     {#if settings.networkMode === 'p2p'}
                       <span class="rounded-full bg-void-online/20 px-2.5 py-0.5 text-xs font-bold text-void-online">P2P</span>
                     {:else}
-                      <span class="rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-bold text-blue-400">Servidor</span>
+                      <span class="rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-bold text-blue-400">{t(trans, 'settings.serverMode')}</span>
                     {/if}
                   </div>
-                  <p class="mb-3 text-xs text-void-text-muted">Voce sera redirecionado para a selecao de modo.</p>
+                  <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.switchModeDesc')}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onclick={() => { onSwitchMode(); close() }}
                   >
-                    Trocar modo
+                    {t(trans, 'settings.switchMode')}
                   </Button>
                 </div>
               {/if}
@@ -275,30 +278,30 @@
           {#if activeCategory === 'audio'}
             <div class="space-y-6">
               <div>
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Input Device</h4>
-                <p class="mb-3 text-xs text-void-text-muted">Select the microphone to use for voice chat.</p>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.inputDevice')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.inputDeviceDesc')}</p>
                 {#if audioInputDevices.length > 0}
                   <Dropdown
                     items={audioInputDevices}
                     bind:selected={selectedInputDevice}
-                    placeholder="Default microphone"
+                    placeholder={t(trans, 'settings.defaultMic')}
                   />
                 {:else}
-                  <p class="text-sm text-void-text-muted">No input devices found. Grant microphone permission to see devices.</p>
+                  <p class="text-sm text-void-text-muted">{t(trans, 'settings.noInputDevices')}</p>
                 {/if}
               </div>
 
               <div class="border-t border-void-border pt-4">
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Output Device</h4>
-                <p class="mb-3 text-xs text-void-text-muted">Select the speaker or headphones to use for audio playback.</p>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.outputDevice')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.outputDeviceDesc')}</p>
                 {#if audioOutputDevices.length > 0}
                   <Dropdown
                     items={audioOutputDevices}
                     bind:selected={selectedOutputDevice}
-                    placeholder="Default speaker"
+                    placeholder={t(trans, 'settings.defaultSpeaker')}
                   />
                 {:else}
-                  <p class="text-sm text-void-text-muted">No output devices found.</p>
+                  <p class="text-sm text-void-text-muted">{t(trans, 'settings.noOutputDevices')}</p>
                 {/if}
               </div>
             </div>
@@ -308,8 +311,8 @@
           {#if activeCategory === 'appearance'}
             <div class="space-y-6">
               <div>
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Theme</h4>
-                <p class="mb-3 text-xs text-void-text-muted">Choose the visual theme for Concord.</p>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.theme')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.themeDesc')}</p>
                 <div class="flex gap-3">
                   <!-- Dark theme -->
                   <button
@@ -322,7 +325,7 @@
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                       </svg>
                     </div>
-                    <span class="text-xs font-medium {settings.theme === 'dark' ? 'text-void-accent' : 'text-void-text-muted'}">Dark</span>
+                    <span class="text-xs font-medium {settings.theme === 'dark' ? 'text-void-accent' : 'text-void-text-muted'}">{t(trans, 'settings.dark')}</span>
                   </button>
                   <!-- Light theme -->
                   <button
@@ -343,7 +346,7 @@
                         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                       </svg>
                     </div>
-                    <span class="text-xs font-medium {settings.theme === 'light' ? 'text-void-accent' : 'text-void-text-muted'}">Light</span>
+                    <span class="text-xs font-medium {settings.theme === 'light' ? 'text-void-accent' : 'text-void-text-muted'}">{t(trans, 'settings.light')}</span>
                   </button>
                 </div>
               </div>
@@ -354,15 +357,15 @@
           {#if activeCategory === 'notifications'}
             <div class="space-y-6">
               <div>
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Desktop Notifications</h4>
-                <p class="mb-3 text-xs text-void-text-muted">Show desktop notifications for new messages and events.</p>
-                <Toggle bind:checked={notifEnabled} label="Enable notifications" />
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.desktopNotifications')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.desktopNotificationsDesc')}</p>
+                <Toggle bind:checked={notifEnabled} label={t(trans, 'settings.enableNotifications')} />
               </div>
 
               <div class="border-t border-void-border pt-4">
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Notification Sounds</h4>
-                <p class="mb-3 text-xs text-void-text-muted">Play a sound when a notification is received.</p>
-                <Toggle bind:checked={notifSounds} label="Enable notification sounds" disabled={!notifEnabled} />
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.notificationSounds')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.notificationSoundsDesc')}</p>
+                <Toggle bind:checked={notifSounds} label={t(trans, 'settings.enableNotificationSounds')} disabled={!notifEnabled} />
               </div>
             </div>
           {/if}
@@ -370,31 +373,48 @@
           <!-- Language -->
           {#if activeCategory === 'language'}
             <div class="space-y-6">
+              <!-- UI Language selector -->
               <div>
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Translation</h4>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.uiLanguage')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.uiLanguageDesc')}</p>
+                <div class="flex flex-wrap gap-2">
+                  {#each LOCALES as loc}
+                    <button
+                      class="flex items-center gap-1.5 rounded-lg border-2 px-3 py-2 text-sm transition-colors cursor-pointer
+                        {$locale === loc.code ? 'border-void-accent bg-void-accent/10 text-void-accent' : 'border-void-border text-void-text-secondary hover:border-void-text-muted hover:text-void-text-primary'}"
+                      onclick={() => setLocale(loc.code)}
+                    >
+                      <span>{loc.flag}</span>
+                      <span class="font-medium">{loc.name}</span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <div class="border-t border-void-border pt-4">
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.translation')}</h4>
                 <p class="mb-3 text-xs text-void-text-muted">
-                  Configure os idiomas de tradução. Para traduzir uma mensagem, passe o mouse sobre ela
-                  e clique no ícone de tradução (<svg class="inline h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.913 17H20.087M12.913 17L11 21M12.913 17L16.5 9L20.087 17M2 5H12M7 2V5M11 5C9.72 8.33 7.5 11.17 5 13.5M8 17C6.18 15.27 4.56 13.42 3.18 11.36" /></svg>).
+                  {t(trans, 'settings.translationDesc')}
                 </p>
               </div>
 
               <div>
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Source Language</h4>
-                <p class="mb-3 text-xs text-void-text-muted">The language you or others are speaking in.</p>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.sourceLanguage')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.sourceLanguageDesc')}</p>
                 <Dropdown
                   items={languageOptions}
                   bind:selected={srcLang}
-                  placeholder="Select source language"
+                  placeholder={t(trans, 'settings.selectSourceLang')}
                 />
               </div>
 
               <div class="border-t border-void-border pt-4">
-                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">Target Language</h4>
-                <p class="mb-3 text-xs text-void-text-muted">The language to translate into.</p>
+                <h4 class="mb-1 text-sm font-semibold text-void-text-primary">{t(trans, 'settings.targetLanguage')}</h4>
+                <p class="mb-3 text-xs text-void-text-muted">{t(trans, 'settings.targetLanguageDesc')}</p>
                 <Dropdown
                   items={languageOptions}
                   bind:selected={tgtLang}
-                  placeholder="Select target language"
+                  placeholder={t(trans, 'settings.selectTargetLang')}
                 />
               </div>
             </div>

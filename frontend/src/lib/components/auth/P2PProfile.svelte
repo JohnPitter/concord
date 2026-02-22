@@ -1,5 +1,6 @@
 <script lang="ts">
   import { SelectAvatarFile } from '../../../../wailsjs/go/main/App'
+  import { translations, t } from '../../i18n'
   import Button from '../ui/Button.svelte'
 
   let {
@@ -12,6 +13,7 @@
   let avatarDataUrl = $state<string | undefined>(undefined)
   let error = $state('')
   let loadingAvatar = $state(false)
+  const trans = $derived($translations)
 
   async function handleSelectAvatar() {
     loadingAvatar = true
@@ -27,8 +29,8 @@
 
   function handleConfirm() {
     const name = displayName.trim()
-    if (name.length < 2) { error = 'Nome deve ter pelo menos 2 caracteres'; return }
-    if (name.length > 32) { error = 'Nome deve ter no máximo 32 caracteres'; return }
+    if (name.length < 2) { error = t(trans, 'p2pProfile.minLength'); return }
+    if (name.length > 32) { error = t(trans, 'p2pProfile.maxLength'); return }
     error = ''
     onConfirm({ displayName: name, avatarDataUrl })
   }
@@ -41,8 +43,8 @@
 <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
   <div class="w-full max-w-sm space-y-6 px-6">
     <div class="text-center">
-      <h1 class="text-xl font-bold text-void-text-primary">Criar seu perfil P2P</h1>
-      <p class="mt-1 text-sm text-void-text-muted">Sua identidade é armazenada apenas localmente.</p>
+      <h1 class="text-xl font-bold text-void-text-primary">{t(trans, 'p2pProfile.title')}</h1>
+      <p class="mt-1 text-sm text-void-text-muted">{t(trans, 'p2pProfile.subtitle')}</p>
     </div>
 
     <!-- Avatar picker -->
@@ -69,25 +71,25 @@
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              <span class="text-[10px] text-void-text-muted">Foto</span>
+              <span class="text-[10px] text-void-text-muted">{t(trans, 'p2pProfile.photo')}</span>
             {/if}
           </div>
         {/if}
       </button>
-      <p class="text-xs text-void-text-muted">Clique para escolher uma foto</p>
+      <p class="text-xs text-void-text-muted">{t(trans, 'p2pProfile.clickPhoto')}</p>
     </div>
 
     <!-- Name input -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div onkeydown={handleKeydown}>
       <label for="p2p-display-name" class="mb-1.5 block text-sm font-medium text-void-text-secondary">
-        Nome de exibição
+        {t(trans, 'p2pProfile.displayName')}
       </label>
       <input
         id="p2p-display-name"
         type="text"
         bind:value={displayName}
-        placeholder="Seu nome..."
+        placeholder={t(trans, 'p2pProfile.namePlaceholder')}
         maxlength="32"
         class="w-full rounded-md border border-void-border bg-void-bg-secondary px-3 py-2 text-sm text-void-text-primary placeholder:text-void-text-muted focus:border-void-accent focus:outline-none focus:ring-2 focus:ring-void-accent {error ? 'border-void-danger focus:ring-void-danger' : ''}"
       />
@@ -97,7 +99,7 @@
     </div>
 
     <Button variant="solid" size="lg" onclick={handleConfirm} disabled={!displayName.trim()}>
-      Entrar no Concord P2P
+      {t(trans, 'p2pProfile.enter')}
     </Button>
   </div>
 </div>

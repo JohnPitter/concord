@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { translations, t } from '../../i18n'
+
+  const trans = $derived($translations)
+
   interface P2PPeer {
     id: string
     displayName: string
@@ -84,14 +88,14 @@
   <!-- Room code card -->
   <div class="mx-2 my-3 rounded-lg bg-void-bg-tertiary p-3">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">Sala</span>
+      <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">{t(trans, 'p2p.room')}</span>
       {#if roomCode}
         <div class="flex items-center gap-1">
           <button
             class="rounded p-1 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
             onclick={onCreateRoom}
-            aria-label="Criar nova sala"
-            title="Nova Sala"
+            aria-label={t(trans, 'p2p.createNewRoom')}
+            title={t(trans, 'p2p.newRoom')}
           >
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/>
@@ -101,7 +105,7 @@
           <button
             class="rounded p-1 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
             onclick={copyRoomCode}
-            aria-label="Copiar codigo da sala"
+            aria-label={t(trans, 'p2p.copyRoomCode')}
           >
           {#if copied}
             <svg class="h-3.5 w-3.5 text-void-online" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -125,7 +129,7 @@
         class="w-full rounded-md bg-void-accent px-3 py-2 text-xs font-medium text-white hover:bg-void-accent-hover transition-colors cursor-pointer mb-3"
         onclick={onCreateRoom}
       >
-        Criar Sala
+        {t(trans, 'p2p.createRoom')}
       </button>
     {/if}
 
@@ -133,7 +137,7 @@
       <input
         type="text"
         bind:value={joinCode}
-        placeholder="Codigo da sala"
+        placeholder={t(trans, 'p2p.roomCodePlaceholder')}
         class="flex-1 min-w-0 rounded-md bg-void-bg-primary px-2 py-1.5 text-xs text-void-text-primary placeholder:text-void-text-muted outline-none focus:ring-1 focus:ring-void-accent"
         onkeydown={(e) => { if (e.key === 'Enter') handleJoin() }}
       />
@@ -142,7 +146,7 @@
         onclick={handleJoin}
         disabled={!joinCode.trim()}
       >
-        Entrar
+        {t(trans, 'p2p.join')}
       </button>
     </div>
   </div>
@@ -150,11 +154,11 @@
   <!-- Peer list -->
   <div class="flex-1 overflow-y-auto px-2">
     {#if peers.length === 0}
-      <p class="px-2 py-4 text-center text-xs text-void-text-muted">Nenhum peer encontrado</p>
+      <p class="px-2 py-4 text-center text-xs text-void-text-muted">{t(trans, 'p2p.noPeers')}</p>
     {:else}
       {#if lanPeers.length > 0}
         <div class="flex items-center gap-1 px-1 pt-2 pb-1">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">Na Rede Local</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">{t(trans, 'p2p.onLan')}</span>
         </div>
         {#each lanPeers as peer (peer.id)}
           <button
@@ -182,7 +186,7 @@
 
       {#if roomPeers.length > 0}
         <div class="flex items-center gap-1 px-1 pt-3 pb-1">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">Na Sala</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-void-text-muted">{t(trans, 'p2p.inRoom')}</span>
         </div>
         {#each roomPeers as peer (peer.id)}
           <button
@@ -220,7 +224,7 @@
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
-      <span>Configuracoes</span>
+      <span>{t(trans, 'nav.settings')}</span>
     </button>
   </div>
 </aside>

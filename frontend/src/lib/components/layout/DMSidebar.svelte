@@ -3,6 +3,7 @@
   import type { SpeakerData } from '../../stores/voice.svelte'
   import VoiceControls from '../voice/VoiceControls.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
+  import { translations, t } from '../../i18n'
 
   interface CurrentUser {
     username: string
@@ -52,6 +53,7 @@
 
   const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
   const initials = $derived(displayName.slice(0, 2).toUpperCase())
+  const trans = $derived($translations)
 
   const statusColor: Record<string, string> = {
     online: 'bg-void-online',
@@ -82,7 +84,7 @@
         <input
           type="text"
           bind:value={searchQuery}
-          placeholder="Pesquisar..."
+          placeholder={t(trans, 'nav.searchPlaceholder')}
           class="flex-1 bg-transparent text-xs text-void-text-primary placeholder:text-void-text-muted outline-none"
           onkeydown={(e) => { if (e.key === 'Escape') { searching = false; searchQuery = '' } }}
         />
@@ -101,13 +103,13 @@
       <button
         class="flex w-full items-center gap-2 rounded-md bg-void-bg-primary px-2 py-1.5 text-xs text-void-text-muted cursor-text hover:bg-void-bg-primary/80 transition-colors"
         onclick={() => searching = true}
-        aria-label="Localizar ou iniciar uma conversa"
+        aria-label={t(trans, 'nav.search')}
       >
         <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <span>Localizar ou iniciar uma conversa</span>
+        <span>{t(trans, 'nav.search')}</span>
       </button>
     {/if}
   </div>
@@ -128,15 +130,15 @@
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
           <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
-        Amigos
+        {t(trans, 'nav.friends')}
       </button>
     </div>
 
     <!-- DM section label -->
     <div class="flex items-center justify-between px-4 pt-3 pb-1">
-      <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted">Mensagens Diretas</span>
-      <Tooltip text="Nova DM" position="top">
-        <button aria-label="Nova DM" class="text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer">
+      <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted">{t(trans, 'nav.directMessages')}</span>
+      <Tooltip text={t(trans, 'nav.newDM')} position="top">
+        <button aria-label={t(trans, 'nav.newDM')} class="text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -186,7 +188,7 @@
           <button
             class="hidden group-hover:flex h-4 w-4 shrink-0 items-center justify-center rounded text-void-text-muted hover:text-void-text-primary transition-colors"
             onclick={(e) => { e.stopPropagation(); }}
-            aria-label="Fechar DM"
+            aria-label={t(trans, 'nav.closeDM')}
           >
             <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18"/>
@@ -226,11 +228,11 @@
       {/if}
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
-        <p class="text-[11px] text-void-online">Online</p>
+        <p class="text-[11px] text-void-online">{t(trans, 'common.online')}</p>
       </div>
-      <Tooltip text="Configurações" position="top">
+      <Tooltip text={t(trans, 'nav.settings')} position="top">
         <button
-          aria-label="Configurações"
+          aria-label={t(trans, 'nav.settings')}
           class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
           onclick={() => onOpenSettings?.()}
         >

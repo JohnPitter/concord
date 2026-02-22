@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Friend } from '../../stores/friends.svelte'
   import type { SpeakerData } from '../../stores/voice.svelte'
+  import { translations, t } from '../../i18n'
 
   let {
     friends,
@@ -35,11 +36,13 @@
   function isFriendInVoice(friend: Friend): boolean {
     return friendsInVoice.some(fv => fv.id === friend.id)
   }
+
+  const trans = $derived($translations)
 </script>
 
 <aside class="flex h-full w-[340px] shrink-0 flex-col border-l border-void-border bg-void-bg-secondary overflow-y-auto">
   <div class="px-4 pt-5 pb-2 shrink-0">
-    <h3 class="text-xs font-bold uppercase tracking-wide text-void-text-primary">Ativo agora</h3>
+    <h3 class="text-xs font-bold uppercase tracking-wide text-void-text-primary">{t(trans, 'active.title')}</h3>
   </div>
 
   {#if active.length === 0}
@@ -50,8 +53,8 @@
           <circle cx="9" cy="7" r="4"/>
         </svg>
       </div>
-      <p class="text-sm font-semibold text-void-text-primary">Está meio quieto por aqui</p>
-      <p class="text-xs text-void-text-muted">Quando um amigo iniciar uma atividade, como jogar um game ou assistir algo, você verá aqui!</p>
+      <p class="text-sm font-semibold text-void-text-primary">{t(trans, 'active.quiet')}</p>
+      <p class="text-xs text-void-text-muted">{t(trans, 'active.quietDesc')}</p>
     </div>
   {:else}
     <div class="flex flex-col gap-3 px-3 pb-4">
@@ -73,7 +76,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-xs font-semibold text-void-text-primary truncate">{friend.display_name}</p>
-                  <p class="text-[11px] text-void-text-muted truncate">Em canal de voz</p>
+                  <p class="text-[11px] text-void-text-muted truncate">{t(trans, 'active.inVoice')}</p>
                 </div>
               </div>
               <div class="flex items-center gap-2 rounded-lg bg-void-bg-primary px-3 py-2">
@@ -81,7 +84,7 @@
                   <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
                 </svg>
                 <span class="text-xs text-void-text-secondary flex-1 min-w-0 truncate">
-                  {currentServerName || 'Servidor'}
+                  {currentServerName || t(trans, 'active.server')}
                 </span>
               </div>
             </div>
@@ -97,7 +100,7 @@
               </div>
               <div class="absolute top-2 left-2 flex items-center gap-1 rounded-md bg-red-600 px-1.5 py-0.5">
                 <span class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
-                <span class="text-[10px] font-bold text-white uppercase tracking-wide">Ao vivo</span>
+                <span class="text-[10px] font-bold text-white uppercase tracking-wide">{t(trans, 'active.live')}</span>
               </div>
               <div class="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5">
                 <svg class="h-3 w-3 text-white" viewBox="0 0 24 24" fill="currentColor">
@@ -158,7 +161,7 @@
                     <p class="text-[11px] text-void-text-muted mt-0.5">{friend.gameSince}</p>
                   {/if}
                   <button class="mt-1.5 rounded bg-void-accent/20 px-2 py-0.5 text-[11px] font-medium text-void-accent hover:bg-void-accent/30 transition-colors cursor-pointer">
-                    Jogar junto
+                    {t(trans, 'active.playTogether')}
                   </button>
                 </div>
               </div>

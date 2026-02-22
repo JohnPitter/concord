@@ -1,5 +1,8 @@
 <script lang="ts">
   import Button from '../ui/Button.svelte'
+  import { translations, t } from '../../i18n'
+
+  const trans = $derived($translations)
 
   interface Props {
     open: boolean
@@ -44,7 +47,7 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Server Info"
+    aria-label={t(trans, 'server.info')}
     onkeydown={handleKeydown}
     onclick={(e) => { if (e.target === e.currentTarget) onClose() }}
   >
@@ -53,7 +56,7 @@
       <div class="flex items-center justify-between border-b border-void-border px-5 py-4">
         <h3 class="text-base font-bold text-void-text-primary">{serverName}</h3>
         <button
-          aria-label="Fechar"
+          aria-label={t(trans, 'common.close')}
           class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"
           onclick={onClose}
         >
@@ -75,13 +78,13 @@
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           <div>
-            <p class="text-sm font-semibold text-void-text-primary">{memberCount} membro{memberCount !== 1 ? 's' : ''}</p>
+            <p class="text-sm font-semibold text-void-text-primary">{t(trans, 'server.memberCount', { count: String(memberCount) })}</p>
           </div>
         </div>
 
         <!-- Invite -->
         <div>
-          <h4 class="mb-2 text-sm font-semibold text-void-text-primary">Convite</h4>
+          <h4 class="mb-2 text-sm font-semibold text-void-text-primary">{t(trans, 'server.invite')}</h4>
           {#if inviteCode}
             <div class="flex items-center gap-2 rounded-lg bg-void-bg-secondary p-3">
               <p class="flex-1 font-mono text-sm text-void-accent select-all truncate">{inviteCode}</p>
@@ -90,12 +93,12 @@
                   {copied ? 'bg-void-online/20 text-void-online' : 'bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary'}"
                 onclick={copyInvite}
               >
-                {copied ? 'Copiado!' : 'Copiar'}
+                {copied ? t(trans, 'common.copied') : t(trans, 'common.copy')}
               </button>
             </div>
           {:else}
             <Button variant="outline" size="sm" onclick={onGenerateInvite}>
-              Gerar convite
+              {t(trans, 'server.generateInvite')}
             </Button>
           {/if}
         </div>
@@ -103,13 +106,13 @@
         <!-- Owner actions -->
         {#if isOwner}
           <div class="border-t border-void-border pt-4">
-            <h4 class="mb-3 text-sm font-semibold text-void-text-primary">Zona de Perigo</h4>
+            <h4 class="mb-3 text-sm font-semibold text-void-text-primary">{t(trans, 'server.dangerZone')}</h4>
             <Button
               variant="danger"
               size="sm"
               onclick={() => { onDeleteServer(); onClose() }}
             >
-              Excluir Servidor
+              {t(trans, 'server.deleteServer')}
             </Button>
           </div>
         {/if}

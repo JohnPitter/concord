@@ -5,9 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-21
+## [Unreleased] - 2026-02-22
 
 ### Added
+
+#### Internationalization (i18n) — 5 Languages (2026-02-22)
+
+- **i18n core infrastructure** (`frontend/src/lib/i18n/`): lightweight i18n system using Svelte 5 `writable`/`derived` stores with `t()` function, dynamic locale loading with in-memory cache, locale detection chain (localStorage > navigator.language > default 'pt')
+- **5 locale files** (`locales/pt.json`, `en.json`, `es.json`, `zh.json`, `ja.json`): ~260 translation keys covering all UI components — Portuguese (default), English, Spanish, Chinese Simplified, Japanese
+- **All 22 components migrated**: Login, ModeSelector, P2PProfile, ServerSidebar, ChannelSidebar, MainContent, DMSidebar, FriendsList, ActiveNow, NoServers, MemberSidebar, MessageInput, MessageList, MessageBubble, FileAttachment, CreateServer, JoinServer, ServerInfoModal, VoiceControls, TranslationToggle, SettingsPanel, P2PChatArea, P2PPeerSidebar, App.svelte
+- **UI language selector** in Settings > Language: flag-labeled buttons for all 5 locales, persisted to localStorage, instant switching without reload
+- **Portuguese translations** fully localized: all previously English-only strings in PT locale now properly translated (auth, chat, channel, settings, voice, etc.)
 
 #### Scaling Phase 1 — Production Readiness (2026-02-21)
 

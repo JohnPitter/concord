@@ -1,6 +1,7 @@
 <script lang="ts">
   import Avatar from '../ui/Avatar.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
+  import { translations, t } from '../../i18n'
 
   interface Server {
     id: string
@@ -25,13 +26,14 @@
 
   const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
   const isHome = $derived(activeServerId === 'home')
+  const trans = $derived($translations)
 </script>
 
 <aside class="flex h-full w-[72px] flex-col items-center gap-2 bg-void-bg-primary py-3 overflow-y-auto overflow-x-hidden scrollbar-none">
   <!-- Home / DMs button -->
-  <Tooltip text="Mensagens Diretas" position="right">
+  <Tooltip text={t(trans, 'nav.directMessages')} position="right">
     <button
-      aria-label="Mensagens Diretas"
+      aria-label={t(trans, 'nav.directMessages')}
       class="relative flex h-12 w-12 items-center justify-center transition-all duration-200 cursor-pointer
         {isHome
           ? 'rounded-xl bg-void-accent text-white'
@@ -99,9 +101,9 @@
   {/each}
 
   <!-- Add server button -->
-  <Tooltip text="Adicionar Servidor" position="right">
+  <Tooltip text={t(trans, 'nav.addServer')} position="right">
     <button
-      aria-label="Adicionar Servidor"
+      aria-label={t(trans, 'nav.addServer')}
       class="flex h-12 w-12 items-center justify-center rounded-2xl bg-void-bg-tertiary text-void-online transition-all duration-200 hover:rounded-xl hover:bg-void-online hover:text-white cursor-pointer"
       onclick={() => onAddServer?.()}
     >

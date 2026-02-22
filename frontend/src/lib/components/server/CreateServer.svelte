@@ -2,6 +2,7 @@
   import Button from '../ui/Button.svelte'
   import Input from '../ui/Input.svelte'
   import Modal from '../ui/Modal.svelte'
+  import { translations, t } from '../../i18n'
 
   let {
     open = $bindable(false),
@@ -13,15 +14,16 @@
 
   let serverName = $state('')
   let error = $state('')
+  const trans = $derived($translations)
 
   function handleCreate() {
     const trimmed = serverName.trim()
     if (!trimmed) {
-      error = 'Server name is required'
+      error = t(trans, 'server.nameRequired')
       return
     }
     if (trimmed.length > 100) {
-      error = 'Server name cannot exceed 100 characters'
+      error = t(trans, 'server.nameMaxLength')
       return
     }
     error = ''
@@ -37,16 +39,16 @@
   }
 </script>
 
-<Modal bind:open title="Create a Server">
+<Modal bind:open title={t(trans, 'server.createTitle')}>
   <div class="space-y-4">
     <p class="text-sm text-void-text-secondary">
-      Give your new server a name. You can always change it later.
+      {t(trans, 'server.createDesc')}
     </p>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div onkeydown={handleKeydown}>
       <Input
-        placeholder="My Awesome Server"
+        placeholder={t(trans, 'server.namePlaceholder')}
         bind:value={serverName}
         error={error || undefined}
       />
@@ -54,10 +56,10 @@
 
     <div class="flex justify-end gap-2">
       <Button variant="ghost" onclick={() => { open = false; serverName = ''; error = '' }}>
-        Cancel
+        {t(trans, 'common.cancel')}
       </Button>
       <Button variant="solid" onclick={handleCreate} disabled={!serverName.trim()}>
-        Create Server
+        {t(trans, 'server.createButton')}
       </Button>
     </div>
   </div>

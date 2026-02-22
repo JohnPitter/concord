@@ -2,12 +2,14 @@
   import Toggle from '../ui/Toggle.svelte'
   import Dropdown from '../ui/Dropdown.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
+  import { translations, t } from '../../i18n'
   import { getSettings, setTranslationLangs } from '../../stores/settings.svelte'
   import * as App from '../../../wailsjs/go/main/App'
 
   let { voiceConnected }: { voiceConnected: boolean } = $props()
 
   const settings = getSettings()
+  const trans = $derived($translations)
 
   let translationEnabled = $state(false)
   let status = $state<'idle' | 'active' | 'loading' | 'error'>('idle')
@@ -56,7 +58,7 @@
       status = 'active'
     } catch (e) {
       status = 'error'
-      errorMessage = e instanceof Error ? e.message : 'Failed to enable translation'
+      errorMessage = e instanceof Error ? e.message : t(trans, 'translation.error')
       translationEnabled = false
     }
   }
@@ -95,7 +97,7 @@
       <div class="flex items-center gap-2">
         <!-- Status indicator -->
         {#if status === 'active'}
-          <Tooltip text="Translation active" position="top">
+          <Tooltip text={t(trans, 'translation.active')} position="top">
             <div class="h-2 w-2 shrink-0 rounded-full bg-void-online"></div>
           </Tooltip>
         {:else if status === 'loading'}
@@ -106,7 +108,7 @@
             </svg>
           </div>
         {:else if status === 'error'}
-          <Tooltip text={errorMessage ?? 'Translation error'} position="top">
+          <Tooltip text={errorMessage ?? t(trans, 'translation.error')} position="top">
             <div class="h-2 w-2 shrink-0 rounded-full bg-void-danger"></div>
           </Tooltip>
         {:else}
@@ -118,7 +120,7 @@
           <line x1="2" y1="12" x2="22" y2="12" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
-        <span class="text-[11px] text-void-text-secondary">Translate</span>
+        <span class="text-[11px] text-void-text-secondary">{t(trans, 'translation.translate')}</span>
       </div>
       <Toggle
         bind:checked={translationEnabled}
@@ -134,7 +136,7 @@
           <Dropdown
             items={languageOptions}
             bind:selected={srcLang}
-            placeholder="From"
+            placeholder={t(trans, 'translation.from')}
           />
         </div>
         <svg class="h-3 w-3 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -145,7 +147,7 @@
           <Dropdown
             items={languageOptions}
             bind:selected={tgtLang}
-            placeholder="To"
+            placeholder={t(trans, 'translation.to')}
           />
         </div>
       </div>

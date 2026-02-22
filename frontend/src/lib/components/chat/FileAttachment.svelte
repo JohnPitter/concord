@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { translations, t } from '../../i18n'
+
   let {
     attachment,
     onDownload,
@@ -22,6 +24,7 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  const trans = $derived($translations)
   const isImage = $derived(attachment.mime_type.startsWith('image/'))
   const isAudio = $derived(attachment.mime_type.startsWith('audio/'))
   const isVideo = $derived(attachment.mime_type.startsWith('video/'))
@@ -90,7 +93,7 @@
       <button
         class="rounded p-1 text-void-text-muted transition-colors hover:bg-void-bg-primary hover:text-void-text-primary"
         onclick={() => onDownload?.(attachment.id)}
-        aria-label="Download file"
+        aria-label={t(trans, 'chat.downloadFile')}
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -103,7 +106,7 @@
       <button
         class="rounded p-1 text-void-text-muted transition-colors hover:bg-void-danger/20 hover:text-void-danger"
         onclick={() => onDelete?.(attachment.id)}
-        aria-label="Delete file"
+        aria-label={t(trans, 'chat.deleteFile')}
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

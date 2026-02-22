@@ -2,6 +2,7 @@
   import Button from '../ui/Button.svelte'
   import Input from '../ui/Input.svelte'
   import Modal from '../ui/Modal.svelte'
+  import { translations, t } from '../../i18n'
 
   let {
     open = $bindable(false),
@@ -13,11 +14,12 @@
 
   let inviteCode = $state('')
   let error = $state('')
+  const trans = $derived($translations)
 
   function handleJoin() {
     const trimmed = inviteCode.trim()
     if (!trimmed) {
-      error = 'Invite code is required'
+      error = t(trans, 'server.inviteRequired')
       return
     }
     error = ''
@@ -33,16 +35,16 @@
   }
 </script>
 
-<Modal bind:open title="Join a Server">
+<Modal bind:open title={t(trans, 'server.joinTitle')}>
   <div class="space-y-4">
     <p class="text-sm text-void-text-secondary">
-      Enter an invite code to join an existing server.
+      {t(trans, 'server.joinDesc')}
     </p>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div onkeydown={handleKeydown}>
       <Input
-        placeholder="Enter invite code"
+        placeholder={t(trans, 'server.invitePlaceholder')}
         bind:value={inviteCode}
         error={error || undefined}
       />
@@ -50,10 +52,10 @@
 
     <div class="flex justify-end gap-2">
       <Button variant="ghost" onclick={() => { open = false; inviteCode = ''; error = '' }}>
-        Cancel
+        {t(trans, 'common.cancel')}
       </Button>
       <Button variant="solid" onclick={handleJoin} disabled={!inviteCode.trim()}>
-        Join Server
+        {t(trans, 'server.joinButton')}
       </Button>
     </div>
   </div>

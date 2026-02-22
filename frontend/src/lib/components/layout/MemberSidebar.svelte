@@ -1,6 +1,7 @@
 <script lang="ts">
   import Avatar from '../ui/Avatar.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
+  import { translations, t } from '../../i18n'
 
   interface Member {
     id: string
@@ -32,6 +33,7 @@
   const offlineMembers = $derived(members.filter(m => m.status === 'offline'))
 
   let roleMenuOpen = $state<string | null>(null)
+  const trans = $derived($translations)
 
   function toggleRoleMenu(memberId: string) {
     roleMenuOpen = roleMenuOpen === memberId ? null : memberId
@@ -45,7 +47,7 @@
     <!-- Online members -->
     {#if onlineMembers.length > 0}
       <h3 class="mb-2 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-        Online — {onlineMembers.length}
+        {t(trans, 'members.online', { count: String(onlineMembers.length) })}
       </h3>
       <div class="space-y-0.5">
         {#each onlineMembers as member}
@@ -77,7 +79,7 @@
             <!-- Role management popover -->
             {#if roleMenuOpen === member.id && canManage && member.role !== 'Owner'}
               <div class="absolute right-0 top-full mt-1 z-30 w-44 rounded-lg border border-void-border bg-void-bg-primary shadow-md p-1 animate-fade-in-down">
-                <p class="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-void-text-muted">Alterar cargo</p>
+                <p class="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-void-text-muted">{t(trans, 'members.changeRole')}</p>
                 {#each availableRoles as role}
                   <button
                     class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors cursor-pointer
@@ -94,7 +96,7 @@
                   class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-void-danger hover:bg-void-danger/10 transition-colors cursor-pointer"
                   onclick={() => { onKickMember?.(member.id); roleMenuOpen = null }}
                 >
-                  Expulsar
+                  {t(trans, 'members.kick')}
                 </button>
               </div>
             {/if}
@@ -106,7 +108,7 @@
     <!-- Offline members -->
     {#if offlineMembers.length > 0}
       <h3 class="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-        Offline — {offlineMembers.length}
+        {t(trans, 'members.offline', { count: String(offlineMembers.length) })}
       </h3>
       <div class="space-y-0.5">
         {#each offlineMembers as member}

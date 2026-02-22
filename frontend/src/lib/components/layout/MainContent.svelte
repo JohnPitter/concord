@@ -1,6 +1,7 @@
 <script lang="ts">
   import MessageList from '../chat/MessageList.svelte'
   import MessageInput from '../chat/MessageInput.svelte'
+  import { translations, t } from '../../i18n'
   import type { MessageData, AttachmentData, SearchResultData } from '../../stores/chat.svelte'
 
   let {
@@ -50,6 +51,7 @@
   let showSearch = $state(false)
   let searchInput = $state('')
   let searchInputEl: HTMLInputElement | undefined = $state()
+  const trans = $derived($translations)
 
   function toggleSearch() {
     showSearch = !showSearch
@@ -79,7 +81,7 @@
     </svg>
     <span class="font-bold text-void-text-primary">{channelName}</span>
     <div class="mx-2 h-6 w-px bg-void-border"></div>
-    <span class="text-sm text-void-text-muted">Welcome to #{channelName}</span>
+    <span class="text-sm text-void-text-muted">{t(trans, 'chat.welcomeChannel', { channel: channelName })}</span>
 
     <!-- Header actions -->
     <div class="ml-auto flex items-center gap-2">
@@ -119,7 +121,7 @@
         bind:this={searchInputEl}
         bind:value={searchInput}
         type="text"
-        placeholder="Pesquisar mensagens..."
+        placeholder={t(trans, 'chat.searchMessages')}
         class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
         onkeydown={(e) => { if (e.key === 'Enter') handleSearch(); if (e.key === 'Escape') toggleSearch() }}
       />
@@ -128,7 +130,7 @@
           class="text-xs text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
           onclick={() => { searchInput = ''; onClearSearch?.() }}
         >
-          Limpar
+          {t(trans, 'chat.clear')}
         </button>
       {/if}
       <button
@@ -136,7 +138,7 @@
         onclick={handleSearch}
         disabled={!searchInput.trim()}
       >
-        Buscar
+        {t(trans, 'chat.search')}
       </button>
     </div>
   {/if}
@@ -146,8 +148,7 @@
     <div class="border-b border-void-border bg-void-bg-secondary px-4 py-2 max-h-60 overflow-y-auto shrink-0 animate-fade-in">
       {#if searchResults.length > 0}
         <p class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted mb-2">
-          {searchResults.length} resultado{searchResults.length !== 1 ? 's' : ''}
-          para "{searchQuery}"
+          {t(trans, 'chat.resultsFor', { count: String(searchResults.length), plural: searchResults.length !== 1 ? 's' : '', query: searchQuery })}
         </p>
         {#each searchResults as result}
           <div class="rounded-md px-3 py-2 mb-1 bg-void-bg-tertiary hover:bg-void-bg-hover transition-colors cursor-pointer">
@@ -164,8 +165,8 @@
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <p class="text-sm text-void-text-muted">Nenhum resultado encontrado para "{searchQuery}"</p>
-          <p class="text-xs text-void-text-muted">Tente pesquisar com outros termos.</p>
+          <p class="text-sm text-void-text-muted">{t(trans, 'chat.noResults', { query: searchQuery })}</p>
+          <p class="text-xs text-void-text-muted">{t(trans, 'chat.noResultsHint')}</p>
         </div>
       {/if}
     </div>

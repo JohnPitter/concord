@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { translations, t } from '../../i18n'
   import logoPng from '../../../assets/logo.png'
 
   let {
@@ -6,6 +7,8 @@
   }: {
     onSelectMode: (mode: 'p2p' | 'server') => void
   } = $props()
+
+  const trans = $derived($translations)
 </script>
 
 <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
@@ -15,8 +18,8 @@
       <div class="mx-auto mb-4 h-16 w-16">
         <img src={logoPng} alt="Concord" class="h-16 w-16" />
       </div>
-      <h1 class="mt-4 text-2xl font-bold text-void-text-primary">Bem-vindo ao Concord</h1>
-      <p class="mt-2 text-sm text-void-text-muted">Como você quer se conectar?</p>
+      <h1 class="mt-4 text-2xl font-bold text-void-text-primary">{t(trans, 'mode.welcome')}</h1>
+      <p class="mt-2 text-sm text-void-text-muted">{t(trans, 'mode.howConnect')}</p>
     </div>
 
     <!-- Cards de escolha -->
@@ -35,25 +38,23 @@
           </svg>
         </div>
         <div class="text-center">
-          <p class="text-base font-bold text-void-text-primary">P2P</p>
-          <p class="mt-1 text-xs text-void-text-muted leading-relaxed">
-            Sem servidor central.<br>
-            Conecte-se direto com amigos<br>
-            na LAN ou via código de sala.
+          <p class="text-base font-bold text-void-text-primary">{t(trans, 'mode.p2p')}</p>
+          <p class="mt-1 text-xs text-void-text-muted leading-relaxed whitespace-pre-line">
+            {t(trans, 'mode.p2pDesc')}
           </p>
         </div>
         <div class="mt-auto flex flex-col gap-1 w-full">
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            Sem conta necessária
+            {t(trans, 'mode.p2pNoAccount')}
           </span>
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            Descoberta automática na LAN
+            {t(trans, 'mode.p2pLanDiscovery')}
           </span>
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            WAN via código de sala
+            {t(trans, 'mode.p2pWanRoom')}
           </span>
         </div>
       </button>
@@ -69,32 +70,30 @@
           </svg>
         </div>
         <div class="text-center">
-          <p class="text-base font-bold text-void-text-primary">Servidor Oficial</p>
-          <p class="mt-1 text-xs text-void-text-muted leading-relaxed">
-            Infraestrutura centralizada.<br>
-            Mensagens persistidas,<br>
-            acesso de qualquer lugar.
+          <p class="text-base font-bold text-void-text-primary">{t(trans, 'mode.server')}</p>
+          <p class="mt-1 text-xs text-void-text-muted leading-relaxed whitespace-pre-line">
+            {t(trans, 'mode.serverDesc')}
           </p>
         </div>
         <div class="mt-auto flex flex-col gap-1 w-full">
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            Login com GitHub
+            {t(trans, 'mode.serverGithub')}
           </span>
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            Mensagens na nuvem
+            {t(trans, 'mode.serverCloud')}
           </span>
           <span class="flex items-center gap-1.5 text-xs text-void-text-muted">
             <svg class="h-3 w-3 text-void-online shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-            Servidores globais
+            {t(trans, 'mode.serverGlobal')}
           </span>
         </div>
       </button>
     </div>
 
     <p class="text-center text-xs text-void-text-muted">
-      Esta escolha pode ser alterada nas configurações.
+      {t(trans, 'mode.canChange')}
     </p>
   </div>
 </div>

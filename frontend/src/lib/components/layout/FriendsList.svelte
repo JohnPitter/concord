@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Friend, FriendStatus, FriendRequest } from '../../stores/friends.svelte'
+  import { translations, t } from '../../i18n'
 
   type Tab = 'online' | 'all' | 'pending' | 'blocked'
 
@@ -37,6 +38,7 @@
 
   let searchQuery = $state('')
   let addFriendInput = $state('')
+  const trans = $derived($translations)
 
   const displayed = $derived(() => {
     const base = tab === 'online'
@@ -56,11 +58,11 @@
   const incomingRequests = $derived(pendingRequests.filter(r => r.direction === 'incoming'))
   const outgoingRequests = $derived(pendingRequests.filter(r => r.direction === 'outgoing'))
 
-  const statusLabel: Record<FriendStatus, string> = {
-    online:  'Online',
-    idle:    'Inativo',
-    dnd:     'Não perturbe',
-    offline: 'Offline',
+  const statusLabelKey: Record<FriendStatus, string> = {
+    online:  'friends.statusOnline',
+    idle:    'friends.statusIdle',
+    dnd:     'friends.statusDnd',
+    offline: 'friends.statusOffline',
   }
 
   const statusDot: Record<FriendStatus, string> = {
@@ -70,12 +72,13 @@
     offline: 'bg-void-text-muted',
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'online',  label: 'Online' },
-    { key: 'all',     label: 'Todos' },
-    { key: 'pending', label: 'Pendente' },
-    { key: 'blocked', label: 'Bloqueado' },
-  ]
+  const tabKeys: Tab[] = ['online', 'all', 'pending', 'blocked']
+  const tabLabelKey: Record<Tab, string> = {
+    online:  'friends.online',
+    all:     'friends.all',
+    pending: 'friends.pending',
+    blocked: 'friends.blocked',
+  }
 
   function handleAddFriend() {
     if (!addFriendInput.trim()) return
@@ -96,21 +99,21 @@
       <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
       <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
     </svg>
-    <span class="font-bold text-void-text-primary text-sm mr-3">Amigos</span>
+    <span class="font-bold text-void-text-primary text-sm mr-3">{t(trans, 'friends.title')}</span>
 
     <div class="h-5 w-px bg-void-border mx-1"></div>
 
     <!-- Tabs -->
-    {#each tabs as t}
+    {#each tabKeys as tabKey}
       <button
         class="relative flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors cursor-pointer
-          {tab === t.key
+          {tab === tabKey
             ? 'bg-void-bg-hover text-void-text-primary'
             : 'text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary'}"
-        onclick={() => onTabChange(t.key)}
+        onclick={() => onTabChange(tabKey)}
       >
-        {t.label}
-        {#if t.key === 'pending' && incomingRequests.length > 0}
+        {t(trans, tabLabelKey[tabKey])}
+        {#if tabKey === 'pending' && incomingRequests.length > 0}
           <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-void-danger px-1 text-[10px] font-bold text-white">
             {incomingRequests.length}
           </span>
@@ -123,13 +126,13 @@
       onclick={() => onTabChange('pending')}
       class="ml-3 rounded-md bg-void-online/20 px-3 py-1 text-sm font-medium text-void-online hover:bg-void-online/30 transition-colors cursor-pointer"
     >
-      Adicionar amigo
+      {t(trans, 'friends.addFriend')}
     </button>
 
     <!-- Right side: search icon -->
     <div class="ml-auto flex items-center gap-2">
       <button
-        aria-label="Pesquisar"
+        aria-label={t(trans, 'friends.searchLabel')}
         class="rounded-md p-1.5 transition-colors cursor-pointer {showSearch ? 'text-void-text-primary bg-void-bg-hover' : 'text-void-text-secondary hover:text-void-text-primary'}"
         onclick={() => { showSearch = !showSearch; if (!showSearch) searchQuery = '' }}
       >
@@ -151,7 +154,7 @@
       <input
         type="text"
         bind:value={searchQuery}
-        placeholder="Pesquisar amigos..."
+        placeholder={t(trans, 'friends.searchFriends')}
         class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted outline-none"
         onkeydown={(e) => { if (e.key === 'Escape') { showSearch = false; searchQuery = '' } }}
       />
@@ -160,7 +163,7 @@
           class="text-xs text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
           onclick={() => searchQuery = ''}
         >
-          Limpar
+          {t(trans, 'friends.searchClear')}
         </button>
       {/if}
     </div>
@@ -169,14 +172,14 @@
   <!-- Add friend bar (shown when tab = pending) -->
   {#if tab === 'pending'}
     <div class="border-b border-void-border px-6 py-4 shrink-0 animate-fade-in">
-      <p class="mb-2 text-sm font-bold text-void-text-primary">ADICIONAR AMIGO</p>
-      <p class="mb-3 text-sm text-void-text-secondary">Digite o nome de usuario do GitHub da pessoa que voce quer adicionar como amigo.</p>
+      <p class="mb-2 text-sm font-bold text-void-text-primary">{t(trans, 'friends.addFriendTitle')}</p>
+      <p class="mb-3 text-sm text-void-text-secondary">{t(trans, 'friends.addFriendDesc')}</p>
       <div class="flex items-center gap-2 rounded-lg border border-void-border bg-void-bg-primary px-3 py-2">
         <span class="text-sm text-void-text-muted shrink-0">@</span>
         <input
           type="text"
           bind:value={addFriendInput}
-          placeholder="username-do-github"
+          placeholder={t(trans, 'friends.githubPlaceholder')}
           class="flex-1 bg-transparent text-sm text-void-text-primary placeholder:text-void-text-muted focus:outline-none"
           onkeydown={(e) => { if (e.key === 'Enter') handleAddFriend() }}
         />
@@ -185,7 +188,7 @@
           onclick={handleAddFriend}
           disabled={!addFriendInput.trim()}
         >
-          Enviar pedido
+          {t(trans, 'friends.sendRequest')}
         </button>
       </div>
       {#if addFriendError}
@@ -197,14 +200,14 @@
 
       <!-- Instructions -->
       <div class="mt-4 rounded-lg bg-void-bg-secondary border border-void-border p-3">
-        <p class="text-xs font-bold text-void-text-primary mb-2">Como funciona?</p>
+        <p class="text-xs font-bold text-void-text-primary mb-2">{t(trans, 'friends.howItWorks')}</p>
         <ol class="text-xs text-void-text-secondary space-y-1.5 list-decimal list-inside">
-          <li>Digite o <strong class="text-void-text-primary">@username do GitHub</strong> da pessoa no campo acima</li>
-          <li>Clique em <strong class="text-void-text-primary">"Enviar pedido"</strong> para enviar o convite</li>
-          <li>O pedido aparecera na secao <strong class="text-void-text-primary">"Enviados"</strong> abaixo</li>
-          <li>Quando a pessoa aceitar, ela aparecera na sua lista de amigos</li>
+          <li>{t(trans, 'friends.howStep1')}</li>
+          <li>{t(trans, 'friends.howStep2')}</li>
+          <li>{t(trans, 'friends.howStep3')}</li>
+          <li>{t(trans, 'friends.howStep4')}</li>
         </ol>
-        <p class="mt-2 text-[11px] text-void-text-muted">Dica: ambos precisam ter uma conta no Concord logada com GitHub.</p>
+        <p class="mt-2 text-[11px] text-void-text-muted">{t(trans, 'friends.howTip')}</p>
       </div>
     </div>
   {/if}
@@ -218,11 +221,11 @@
             <circle cx="12" cy="12" r="10"/>
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
           </svg>
-          <p class="text-void-text-muted text-sm">Ninguem bloqueado.</p>
+          <p class="text-void-text-muted text-sm">{t(trans, 'friends.noBlocked')}</p>
         </div>
       {:else}
         <p class="mb-2 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-          Bloqueados — {blockedUsers.length}
+          {t(trans, 'friends.blockedCount', { count: String(blockedUsers.length) })}
         </p>
         {#each blockedUsers as username}
           <div class="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-void-bg-secondary transition-colors animate-fade-in-up">
@@ -231,13 +234,13 @@
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-void-text-primary truncate">{username}</p>
-              <p class="text-xs text-void-text-muted">Bloqueado</p>
+              <p class="text-xs text-void-text-muted">{t(trans, 'friends.blockedLabel')}</p>
             </div>
             <button
               class="rounded-md px-2.5 py-1 text-xs font-medium bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
               onclick={() => onUnblockUser?.(username)}
             >
-              Desbloquear
+              {t(trans, 'friends.unblock')}
             </button>
           </div>
           <div class="mx-2 h-px bg-void-border/50"></div>
@@ -254,13 +257,13 @@
             <line x1="20" y1="8" x2="20" y2="14"/>
             <line x1="23" y1="11" x2="17" y2="11"/>
           </svg>
-          <p class="text-void-text-muted text-sm">Nenhum pedido de amizade pendente.</p>
-          <p class="text-xs text-void-text-muted">Envie um pedido usando o campo acima!</p>
+          <p class="text-void-text-muted text-sm">{t(trans, 'friends.noPending')}</p>
+          <p class="text-xs text-void-text-muted">{t(trans, 'friends.noPendingHint')}</p>
         </div>
       {:else}
         {#if incomingRequests.length > 0}
           <p class="mb-2 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-            Recebidos — {incomingRequests.length}
+            {t(trans, 'friends.incomingCount', { count: String(incomingRequests.length) })}
           </p>
           {#each incomingRequests as request}
             <div class="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-void-bg-secondary transition-colors animate-fade-in-up">
@@ -269,11 +272,11 @@
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-void-text-primary truncate">{request.display_name}</p>
-                <p class="text-xs text-void-text-muted">Pedido de amizade recebido</p>
+                <p class="text-xs text-void-text-muted">{t(trans, 'friends.incomingLabel')}</p>
               </div>
               <div class="flex items-center gap-1">
                 <button
-                  aria-label="Aceitar"
+                  aria-label={t(trans, 'friends.accept')}
                   class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-online hover:bg-void-online/20 transition-colors cursor-pointer"
                   onclick={() => onAcceptRequest?.(request.id)}
                 >
@@ -282,7 +285,7 @@
                   </svg>
                 </button>
                 <button
-                  aria-label="Rejeitar"
+                  aria-label={t(trans, 'friends.reject')}
                   class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-danger hover:bg-void-danger/20 transition-colors cursor-pointer"
                   onclick={() => onRejectRequest?.(request.id)}
                 >
@@ -298,7 +301,7 @@
 
         {#if outgoingRequests.length > 0}
           <p class="mb-2 mt-3 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-            Enviados — {outgoingRequests.length}
+            {t(trans, 'friends.outgoingCount', { count: String(outgoingRequests.length) })}
           </p>
           {#each outgoingRequests as request}
             <div class="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-void-bg-secondary transition-colors animate-fade-in-up">
@@ -307,10 +310,10 @@
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-void-text-primary truncate">{request.display_name}</p>
-                <p class="text-xs text-void-text-muted">Pedido enviado</p>
+                <p class="text-xs text-void-text-muted">{t(trans, 'friends.outgoingLabel')}</p>
               </div>
               <button
-                aria-label="Cancelar pedido"
+                aria-label={t(trans, 'friends.cancelRequest')}
                 class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-text-muted hover:text-void-danger transition-colors cursor-pointer"
                 onclick={() => onRejectRequest?.(request.id)}
               >
@@ -333,19 +336,19 @@
           <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
         {#if searchQuery.trim()}
-          <p class="text-void-text-muted text-sm">Nenhum amigo encontrado para "{searchQuery}"</p>
-          <p class="text-xs text-void-text-muted">Tente pesquisar com outro nome.</p>
+          <p class="text-void-text-muted text-sm">{t(trans, 'friends.noFriendsSearch', { query: searchQuery })}</p>
+          <p class="text-xs text-void-text-muted">{t(trans, 'friends.noFriendsSearchHint')}</p>
         {:else}
           <p class="text-void-text-muted text-sm">
-            {#if tab === 'online'}Nenhum amigo online no momento.{:else}Voce ainda nao tem amigos adicionados.{/if}
+            {#if tab === 'online'}{t(trans, 'friends.noOnline')}{:else}{t(trans, 'friends.noFriends')}{/if}
           </p>
-          <p class="text-xs text-void-text-muted">Adicione amigos usando a aba "Pendente"!</p>
+          <p class="text-xs text-void-text-muted">{t(trans, 'friends.noFriendsHint')}</p>
         {/if}
       </div>
     {:else}
       <!-- Section header -->
       <p class="mb-2 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
-        {tab === 'online' ? 'Online' : 'Todos os amigos'} — {displayed().length}
+        {tab === 'online' ? t(trans, 'friends.online') : t(trans, 'friends.allFriends')} — {displayed().length}
       </p>
 
       <!-- Friend rows -->
@@ -365,7 +368,7 @@
             {/if}
             <span
               class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-void-bg-tertiary {statusDot[friend.status]}"
-              title={statusLabel[friend.status]}
+              title={t(trans, statusLabelKey[friend.status])}
             ></span>
           </div>
 
@@ -373,16 +376,16 @@
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-void-text-primary truncate">{friend.display_name}</p>
             <p class="text-xs text-void-text-muted truncate">
-              {friend.activity ?? statusLabel[friend.status]}
+              {friend.activity ?? t(trans, statusLabelKey[friend.status])}
             </p>
           </div>
 
           <!-- Action buttons (visible on hover) -->
           <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              aria-label="Mensagem"
+              aria-label={t(trans, 'friends.message')}
               class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary transition-colors cursor-pointer"
-              title="Enviar mensagem"
+              title={t(trans, 'friends.sendMsg')}
               onclick={() => onMessage?.(friend.id)}
             >
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -390,9 +393,9 @@
               </svg>
             </button>
             <button
-              aria-label="Mais opcoes"
+              aria-label={t(trans, 'friends.moreOptions')}
               class="flex h-8 w-8 items-center justify-center rounded-full bg-void-bg-hover text-void-text-secondary hover:text-void-text-primary transition-colors cursor-pointer"
-              title="Mais opcoes"
+              title={t(trans, 'friends.moreOptions')}
             >
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="5" r="1.5"/>

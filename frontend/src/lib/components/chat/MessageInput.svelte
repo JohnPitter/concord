@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { translations, t } from '../../i18n'
+
   let {
     channelName = 'general',
     disabled = false,
@@ -15,12 +17,14 @@
   let pendingFile = $state<{ name: string; data: number[] } | null>(null)
   let fileInput: HTMLInputElement | undefined = $state()
   let showEmoji = $state(false)
+  const trans = $derived($translations)
 
-  const emojiCategories = [
-    { label: 'Carinhas', emojis: ['😀','😂','😍','🥺','😎','🤔','😅','😢','😡','🥳','😱','🤩','😴','🤗','😏','🙄','😬','🤯','🥴','😈'] },
-    { label: 'Gestos', emojis: ['👍','👎','👏','🙏','✌️','🤞','🤟','👌','🤙','💪','👀','🫡','🫶','🤝','👋','✋','🖐️','🤚','🫰','🫳'] },
-    { label: 'Objetos', emojis: ['❤️','🔥','⭐','💯','🎉','🎮','💀','✅','❌','⚡','💡','🚀','🏆','🎯','💎','🔔','📌','💬','🎵','🎶'] },
-    { label: 'Animais', emojis: ['🐱','🐶','🐻','🦊','🐼','🐸','🦁','🐧','🐵','🐝','🦋','🐙','🐰','🐮','🐔','🦄','🐺','🦇','🐍','🐠'] },
+  const emojiCategoryKeys = ['chat.emojiSmileys', 'chat.emojiGestures', 'chat.emojiObjects', 'chat.emojiAnimals']
+  const emojiSets = [
+    ['😀','😂','😍','🥺','😎','🤔','😅','😢','😡','🥳','😱','🤩','😴','🤗','😏','🙄','😬','🤯','🥴','😈'],
+    ['👍','👎','👏','🙏','✌️','🤞','🤟','👌','🤙','💪','👀','🫡','🫶','🤝','👋','✋','🖐️','🤚','🫰','🫳'],
+    ['❤️','🔥','⭐','💯','🎉','🎮','💀','✅','❌','⚡','💡','🚀','🏆','🎯','💎','🔔','📌','💬','🎵','🎶'],
+    ['🐱','🐶','🐻','🦊','🐼','🐸','🦁','🐧','🐵','🐝','🦋','🐙','🐰','🐮','🐔','🦄','🐺','🦇','🐍','🐠'],
   ]
 
   function insertEmoji(emoji: string) {
@@ -102,7 +106,7 @@
       <button
         class="ml-auto shrink-0 rounded p-0.5 text-void-text-muted transition-colors hover:text-void-danger"
         onclick={removePendingFile}
-        aria-label="Remove file"
+        aria-label={t(trans, 'chat.removeFile')}
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -117,7 +121,7 @@
     <button
       class="shrink-0 rounded p-1 text-void-text-muted transition-colors hover:text-void-text-primary"
       onclick={handleAttachClick}
-      aria-label="Attach file"
+      aria-label={t(trans, 'chat.attachFile')}
     >
       <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -127,7 +131,7 @@
     <!-- Text input -->
     <textarea
       class="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-sm text-void-text-primary placeholder-void-text-muted outline-none"
-      placeholder="Message #{channelName}"
+      placeholder={t(trans, 'chat.messagePlaceholder', { channel: channelName })}
       rows="1"
       bind:value={content}
       onkeydown={handleKeydown}
@@ -139,7 +143,7 @@
     <div class="relative emoji-picker-container">
       <button
         class="shrink-0 rounded p-1 transition-colors cursor-pointer {showEmoji ? 'text-void-accent' : 'text-void-text-muted hover:text-void-text-primary'}"
-        aria-label="Emoji"
+        aria-label={t(trans, 'chat.emoji')}
         onclick={() => showEmoji = !showEmoji}
       >
         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -149,11 +153,11 @@
       {#if showEmoji}
         <div class="absolute bottom-full right-0 mb-2 w-72 rounded-lg border border-void-border bg-void-bg-primary shadow-md p-2 z-50 animate-fade-in-up">
           <div class="max-h-56 overflow-y-auto space-y-2">
-            {#each emojiCategories as cat}
+            {#each emojiCategoryKeys as catKey, ci}
               <div>
-                <p class="text-[10px] font-bold uppercase tracking-wide text-void-text-muted px-1 mb-1">{cat.label}</p>
+                <p class="text-[10px] font-bold uppercase tracking-wide text-void-text-muted px-1 mb-1">{t(trans, catKey)}</p>
                 <div class="grid grid-cols-8 gap-0.5">
-                  {#each cat.emojis as emoji}
+                  {#each emojiSets[ci] as emoji}
                     <button
                       class="flex items-center justify-center rounded p-1 text-lg hover:bg-void-bg-hover transition-colors cursor-pointer"
                       onclick={() => insertEmoji(emoji)}
@@ -175,7 +179,7 @@
         class="shrink-0 rounded-lg bg-void-accent p-1.5 text-white transition-colors hover:bg-void-accent-hover disabled:opacity-50"
         onclick={handleSend}
         {disabled}
-        aria-label="Send message"
+        aria-label={t(trans, 'chat.sendMessage')}
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 12h14" />
