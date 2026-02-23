@@ -11,6 +11,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	clientWriteWait      = 10 * time.Second
+	clientPongWait       = 60 * time.Second
+	clientPingPeriod     = 50 * time.Second
+	reconnectInitialWait = 1 * time.Second
+	reconnectMaxWait     = 30 * time.Second
+)
+
 // Client connects to a signaling server via WebSocket.
 type Client struct {
 	mu       sync.RWMutex
@@ -21,6 +29,14 @@ type Client struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan struct{}
+
+	joinState *joinState
+}
+
+type joinState struct {
+	serverID  string
+	channelID string
+	payload   JoinPayload
 }
 
 // SignalHandler is called when a signal of a given type is received.
@@ -47,11 +63,7 @@ func (c *Client) On(sigType SignalType, handler SignalHandler) {
 func (c *Client) Connect(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
-	}
-
-	conn, _, err := dialer.DialContext(c.ctx, c.url, nil)
+	conn, err := c.dial(c.ctx)
 	if err != nil {
 		return fmt.Errorf("signaling: connect to %s: %w", c.url, err)
 	}
@@ -60,38 +72,62 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.conn = conn
 	c.mu.Unlock()
 
+	c.configureConn(conn)
 	c.logger.Info().Str("url", c.url).Msg("connected to signaling server")
 
+	go c.pingLoop()
 	go c.readLoop()
 	return nil
 }
 
+func (c *Client) dial(ctx context.Context) (*websocket.Conn, error) {
+	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	conn, _, err := dialer.DialContext(ctx, c.url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func (c *Client) configureConn(conn *websocket.Conn) {
+	_ = conn.SetReadDeadline(time.Now().Add(clientPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(clientPongWait))
+	})
+}
+
 // Send sends a signal to the server.
 func (c *Client) Send(signal *Signal) error {
-	c.mu.RLock()
-	conn := c.conn
-	c.mu.RUnlock()
-
-	if conn == nil {
-		return ErrNotConnected
-	}
-
 	data, err := json.Marshal(signal)
 	if err != nil {
 		return fmt.Errorf("signaling: marshal signal: %w", err)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+	if err := c.writeMessage(websocket.TextMessage, data); err != nil {
 		return fmt.Errorf("signaling: write: %w", err)
 	}
 
 	return nil
 }
 
+func (c *Client) writeMessage(messageType int, payload []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn == nil {
+		return ErrNotConnected
+	}
+
+	_ = c.conn.SetWriteDeadline(time.Now().Add(clientWriteWait))
+	return c.conn.WriteMessage(messageType, payload)
+}
+
 // JoinChannel sends a join signal for a server channel.
 func (c *Client) JoinChannel(serverID, channelID string, payload JoinPayload) error {
+	c.mu.Lock()
+	c.joinState = &joinState{serverID: serverID, channelID: channelID, payload: payload}
+	c.mu.Unlock()
+
 	sig, err := NewSignal(SignalJoin, payload.UserID, payload)
 	if err != nil {
 		return err
@@ -103,6 +139,10 @@ func (c *Client) JoinChannel(serverID, channelID string, payload JoinPayload) er
 
 // LeaveChannel sends a leave signal.
 func (c *Client) LeaveChannel(serverID, channelID, userID string) error {
+	c.mu.Lock()
+	c.joinState = nil
+	c.mu.Unlock()
+
 	sig, err := NewSignal(SignalLeave, userID, nil)
 	if err != nil {
 		return err
@@ -170,6 +210,7 @@ func (c *Client) Close() error {
 	c.mu.Unlock()
 
 	if conn != nil {
+		_ = conn.SetWriteDeadline(time.Now().Add(clientWriteWait))
 		err := conn.WriteMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
@@ -191,27 +232,59 @@ func (c *Client) Connected() bool {
 	return c.conn != nil
 }
 
+func (c *Client) pingLoop() {
+	ticker := time.NewTicker(clientPingPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			if err := c.writeMessage(websocket.PingMessage, nil); err != nil && err != ErrNotConnected {
+				c.logger.Debug().Err(err).Msg("signaling ping failed")
+			}
+		}
+	}
+}
+
 // readLoop reads messages from the WebSocket.
 func (c *Client) readLoop() {
 	defer close(c.done)
 
 	for {
+		if c.ctx.Err() != nil {
+			return
+		}
+
 		c.mu.RLock()
 		conn := c.conn
 		c.mu.RUnlock()
 
 		if conn == nil {
-			return
+			if !c.reconnect() {
+				return
+			}
+			continue
 		}
 
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
+			if c.ctx.Err() != nil {
+				return
+			}
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				c.logger.Info().Msg("signaling connection closed")
 			} else {
 				c.logger.Warn().Err(err).Msg("signaling read error")
 			}
-			return
+
+			c.clearConn(conn)
+
+			if !c.reconnect() {
+				return
+			}
+			continue
 		}
 
 		var signal Signal
@@ -229,5 +302,64 @@ func (c *Client) readLoop() {
 		} else {
 			c.logger.Debug().Str("type", string(signal.Type)).Msg("unhandled signal type")
 		}
+	}
+}
+
+func (c *Client) clearConn(conn *websocket.Conn) {
+	c.mu.Lock()
+	if c.conn == conn {
+		c.conn = nil
+	}
+	c.mu.Unlock()
+	_ = conn.Close()
+}
+
+func (c *Client) reconnect() bool {
+	backoff := reconnectInitialWait
+
+	for {
+		if c.ctx.Err() != nil {
+			return false
+		}
+
+		select {
+		case <-c.ctx.Done():
+			return false
+		case <-time.After(backoff):
+		}
+
+		conn, err := c.dial(c.ctx)
+		if err != nil {
+			c.logger.Warn().Err(err).Dur("backoff", backoff).Msg("signaling reconnect failed")
+			backoff *= 2
+			if backoff > reconnectMaxWait {
+				backoff = reconnectMaxWait
+			}
+			continue
+		}
+
+		c.configureConn(conn)
+
+		c.mu.Lock()
+		c.conn = conn
+		joinState := c.joinState
+		c.mu.Unlock()
+
+		c.logger.Info().Msg("signaling reconnected")
+
+		if joinState != nil {
+			sig, err := NewSignal(SignalJoin, joinState.payload.UserID, joinState.payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("failed to rebuild join signal after reconnect")
+				return true
+			}
+			sig.ServerID = joinState.serverID
+			sig.ChannelID = joinState.channelID
+			if err := c.Send(sig); err != nil {
+				c.logger.Warn().Err(err).Msg("failed to rejoin channel after reconnect")
+			}
+		}
+
+		return true
 	}
 }

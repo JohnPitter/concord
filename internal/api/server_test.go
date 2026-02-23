@@ -66,6 +66,29 @@ func TestHealthEndpoint(t *testing.T) {
 	assert.Contains(t, body, "status")
 }
 
+func TestLivenessEndpoint(t *testing.T) {
+	s := testServer(t, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	rec := httptest.NewRecorder()
+
+	s.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "alive")
+}
+
+func TestReadinessEndpoint(t *testing.T) {
+	s := testServer(t, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "status")
+}
+
 // TestDeviceCodeEndpoint verifies that the device-code endpoint returns an error
 // when the auth service is nil (no GitHub OAuth configured).
 func TestDeviceCodeEndpoint(t *testing.T) {

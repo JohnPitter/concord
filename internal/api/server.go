@@ -100,6 +100,8 @@ func New(
 
 	// --- Public endpoints ---
 	r.Get("/health", s.handleHealth)
+	r.Get("/health/live", s.handleLiveness)
+	r.Get("/health/ready", s.handleReadiness)
 	r.Handle("/metrics", promhttp.Handler())
 
 	// --- API v1 ---
@@ -226,4 +228,33 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(result)
+}
+
+// handleLiveness reports whether the process is alive.
+// GET /health/live
+func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "alive",
+	})
+}
+
+// handleReadiness reports whether the service is ready to receive traffic.
+// GET /health/ready
+func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
+	if s.health == nil {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "ready",
+		})
+		return
+	}
+
+	result := s.health.Check(r.Context())
+	status := http.StatusOK
+	if result.IsUnhealthy() {
+		status = http.StatusServiceUnavailable
+	}
+
+	writeJSON(w, status, map[string]string{
+		"status": string(result.Status),
+	})
 }
