@@ -261,7 +261,7 @@ function teardownTranslatedAudioListener() {
   }
 }
 
-export async function joinVoice(voiceChannelId: string): Promise<void> {
+export async function joinVoice(serverID: string, channelID: string, userID: string): Promise<void> {
   if (state !== 'disconnected') return
 
   state = 'connecting'
@@ -269,9 +269,9 @@ export async function joinVoice(voiceChannelId: string): Promise<void> {
 
   try {
     await ensureValidToken()
-    await App.JoinVoice(voiceChannelId)
+    await App.JoinVoice(serverID, channelID, userID)
     state = 'connected'
-    channelId = voiceChannelId
+    channelId = channelID
     playJoinSound()
     startTimer()
     startVoicePolling()

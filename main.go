@@ -50,6 +50,7 @@ type App struct {
 	chatService   *chat.Service
 	friendService      *friends.Service
 	voiceEngine        *voice.Engine
+	voiceOrch          *voice.Orchestrator
 	voiceTranslator    *voice.VoiceTranslator
 	fileService        *files.Service
 	translationService *translation.Service
@@ -176,8 +177,9 @@ func (a *App) startup(ctx context.Context) {
 	a.fileService = files.NewService(fileRepo, fileStorage, a.logger)
 	a.logger.Info().Str("storage_dir", storageDir).Msg("file service initialized")
 
-	// Initialize voice engine
+	// Initialize voice engine + orchestrator
 	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
+	a.voiceOrch = voice.NewOrchestrator(a.voiceEngine, a.logger)
 	a.logger.Info().Msg("voice engine initialized")
 
 	// Initialize translation service
@@ -235,8 +237,8 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 
 	// Leave voice channel if connected
-	if a.voiceEngine != nil {
-		if err := a.voiceEngine.LeaveChannel(); err != nil {
+	if a.voiceOrch != nil {
+		if err := a.voiceOrch.Leave(); err != nil {
 			a.logger.Error().Err(err).Msg("failed to leave voice channel")
 		} else {
 			a.logger.Info().Msg("voice engine stopped")
@@ -444,14 +446,16 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 
 // --- Voice Bindings ---
 
-// JoinVoice joins a voice channel.
-func (a *App) JoinVoice(channelID string) error {
-	return a.voiceEngine.JoinChannel(a.ctx, channelID)
+// JoinVoice joins a voice channel via signaling.
+// serverID identifies which server the channel belongs to.
+func (a *App) JoinVoice(serverID, channelID, userID string) error {
+	wsURL := a.cfg.GetPublicURL()
+	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID)
 }
 
 // LeaveVoice leaves the current voice channel.
 func (a *App) LeaveVoice() error {
-	return a.voiceEngine.LeaveChannel()
+	return a.voiceOrch.Leave()
 }
 
 // ToggleMute toggles the microphone mute state.

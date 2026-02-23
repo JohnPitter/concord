@@ -71,6 +71,7 @@ type Engine struct {
 	// Callbacks
 	onStateChange    func(State)
 	onSpeakersChange func([]SpeakerInfo)
+	onICECandidate   func(peerID string, candidate webrtc.ICECandidateInit)
 }
 
 type peerConnection struct {
@@ -132,6 +133,14 @@ func (e *Engine) OnSpeakersChange(fn func([]SpeakerInfo)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onSpeakersChange = fn
+}
+
+// SetOnICECandidate registers a callback for trickle ICE candidates.
+// Called when a new ICE candidate is discovered for a peer connection.
+func (e *Engine) SetOnICECandidate(fn func(peerID string, candidate webrtc.ICECandidateInit)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onICECandidate = fn
 }
 
 // JoinChannel starts the voice connection for a channel.
@@ -276,6 +285,18 @@ func (e *Engine) AddPeer(peerID, userID, username string) error {
 
 		if state == webrtc.ICEConnectionStateFailed || state == webrtc.ICEConnectionStateDisconnected {
 			e.removePeer(peerID)
+		}
+	})
+
+	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			return // gathering complete
+		}
+		e.mu.RLock()
+		cb := e.onICECandidate
+		e.mu.RUnlock()
+		if cb != nil {
+			cb(peerID, c.ToJSON())
 		}
 	})
 

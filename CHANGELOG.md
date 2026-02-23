@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-02-22
+
+### Added
+
+#### Voice Signaling via WebSocket (Central Server Mode)
+
+- **Voice orchestrator** (`internal/voice/orchestrator.go`): new component bridging signaling client and voice engine — manages full WebRTC lifecycle (WS connect → join → SDP offer/answer → ICE trickle → leave) with automatic peer negotiation
+- **SDP/ICE signal types** (`signaling.go`): `sdp_offer`, `sdp_answer`, `ice_candidate` signal types with `SDPPayload` and `ICECandidatePayload` structs for WebRTC session negotiation
+- **Signaling client SDP/ICE methods** (`client.go`): `SendSDPOffer()`, `SendSDPAnswer()`, `SendICECandidate()` for targeted peer-to-peer signaling relay
+- **Voice participants API** (`handlers_voice.go`): `GET /api/v1/servers/{serverID}/channels/{channelID}/voice/participants` REST endpoint to list users in a voice channel
+- **Signaling WebSocket endpoint** (`server.go`): `/ws/signaling` route mounted on isolated sub-router (no timeout/body-limit/rate-limit middleware) for long-lived WebSocket connections
+- **`GetChannelPeers()` method** on signaling server to expose connected peers per channel for the REST API
+
+### Changed
+
+- **Voice engine ICE callback** (`engine.go`): added `onICECandidate` callback field + `SetOnICECandidate()` method + `pc.OnICECandidate` registration in `AddPeer()` for trickle ICE support
+- **Signaling server forwarding** (`server.go`): new signal types (`sdp_offer`, `sdp_answer`, `ice_candidate`) now forwarded to target peers; `peer_left` broadcast on WebSocket disconnect
+- **API server** (`server.go`): accepts `*signaling.Server` parameter; registers signaling WS endpoint on isolated chi sub-router
+- **Central server** (`cmd/server/main.go`): initializes signaling server and passes to API
+- **Wails bindings** (`main.go`): `JoinVoice(serverID, channelID, userID)` now uses orchestrator for real signaling; `LeaveVoice()` and shutdown via orchestrator
+- **Frontend voice store** (`voice.svelte.ts`): `joinVoice()` now accepts `serverID`, `channelID`, `userID` for server-mode signaling
+- **Frontend App** (`App.svelte`): passes `activeServerId` and `auth.user.id` to `joinVoice()`
+
 ## [0.14.2] - 2026-02-22
 
 ### Added

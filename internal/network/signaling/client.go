@@ -122,6 +122,42 @@ func (c *Client) SendOffer(toPeerID string, offer OfferPayload) error {
 	return c.Send(sig)
 }
 
+// SendSDPOffer sends a WebRTC SDP offer to a specific peer.
+func (c *Client) SendSDPOffer(serverID, channelID, toPeerID, sdp string) error {
+	sig, err := NewSignal(SignalSDPOffer, "", SDPPayload{SDP: sdp})
+	if err != nil {
+		return err
+	}
+	sig.To = toPeerID
+	sig.ServerID = serverID
+	sig.ChannelID = channelID
+	return c.Send(sig)
+}
+
+// SendSDPAnswer sends a WebRTC SDP answer to a specific peer.
+func (c *Client) SendSDPAnswer(serverID, channelID, toPeerID, sdp string) error {
+	sig, err := NewSignal(SignalSDPAnswer, "", SDPPayload{SDP: sdp})
+	if err != nil {
+		return err
+	}
+	sig.To = toPeerID
+	sig.ServerID = serverID
+	sig.ChannelID = channelID
+	return c.Send(sig)
+}
+
+// SendICECandidate sends a WebRTC ICE candidate to a specific peer.
+func (c *Client) SendICECandidate(serverID, channelID, toPeerID string, candidate ICECandidatePayload) error {
+	sig, err := NewSignal(SignalICECandidate, "", candidate)
+	if err != nil {
+		return err
+	}
+	sig.To = toPeerID
+	sig.ServerID = serverID
+	sig.ChannelID = channelID
+	return c.Send(sig)
+}
+
 // Close disconnects from the signaling server.
 func (c *Client) Close() error {
 	if c.cancel != nil {

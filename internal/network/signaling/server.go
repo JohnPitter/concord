@@ -3,6 +3,7 @@ package signaling
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -76,6 +77,14 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			}
 			if currentChannel != "" && currentPeerID != "" {
 				s.removePeer(currentChannel, currentPeerID)
+				// Broadcast peer_left so remaining peers clean up
+				parts := splitChannelKey(currentChannel)
+				s.broadcast(currentChannel, currentPeerID, &Signal{
+					Type:      SignalPeerLeft,
+					From:      currentPeerID,
+					ServerID:  parts[0],
+					ChannelID: parts[1],
+				})
 			}
 			return
 		}
@@ -140,7 +149,7 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				currentPC = nil
 			}
 
-		case SignalOffer, SignalAnswer:
+		case SignalOffer, SignalAnswer, SignalSDPOffer, SignalSDPAnswer, SignalICECandidate:
 			// Forward to specific peer
 			if signal.To != "" {
 				s.forwardToPeer(channelKey, signal.To, &signal)
@@ -264,4 +273,35 @@ func (s *Server) PeerCount() int {
 		count += len(ch)
 	}
 	return count
+}
+
+// GetChannelPeers returns the list of peers currently in a voice channel.
+func (s *Server) GetChannelPeers(serverID, channelID string) []PeerEntry {
+	key := serverID + ":" + channelID
+	s.mu.RLock()
+	ch, ok := s.channels[key]
+	if !ok {
+		s.mu.RUnlock()
+		return nil
+	}
+
+	peers := make([]PeerEntry, 0, len(ch))
+	for _, pc := range ch {
+		peers = append(peers, PeerEntry{
+			UserID: pc.userID,
+			PeerID: pc.peerID,
+		})
+	}
+	s.mu.RUnlock()
+
+	return peers
+}
+
+// splitChannelKey splits a "serverID:channelID" key into its parts.
+func splitChannelKey(key string) [2]string {
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) == 2 {
+		return [2]string{parts[0], parts[1]}
+	}
+	return [2]string{key, ""}
 }

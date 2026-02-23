@@ -240,7 +240,7 @@
       await leaveVoice()
     } else {
       if (vc.connected) await leaveVoice()
-      await joinVoice(channelId)
+      await joinVoice(activeServerId, channelId, auth.user?.id ?? '')
     }
   }
 

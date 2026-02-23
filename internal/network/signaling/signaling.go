@@ -18,8 +18,11 @@ const (
 	SignalAnswer     SignalType = "answer"      // Connection answer
 	SignalPeerList   SignalType = "peer_list"   // Current peers in channel
 	SignalPeerJoined SignalType = "peer_joined" // New peer notification
-	SignalPeerLeft   SignalType = "peer_left"   // Peer departed notification
-	SignalError      SignalType = "error"       // Error message
+	SignalPeerLeft      SignalType = "peer_left"      // Peer departed notification
+	SignalError         SignalType = "error"         // Error message
+	SignalSDPOffer      SignalType = "sdp_offer"     // WebRTC SDP offer
+	SignalSDPAnswer     SignalType = "sdp_answer"    // WebRTC SDP answer
+	SignalICECandidate  SignalType = "ice_candidate" // WebRTC ICE candidate
 )
 
 var (
@@ -63,6 +66,18 @@ type PeerEntry struct {
 	PeerID    string   `json:"peer_id"`
 	Addresses []string `json:"addresses"`
 	PublicKey []byte   `json:"public_key,omitempty"`
+}
+
+// SDPPayload carries a WebRTC session description (offer or answer).
+type SDPPayload struct {
+	SDP string `json:"sdp"`
+}
+
+// ICECandidatePayload carries a WebRTC ICE candidate.
+type ICECandidatePayload struct {
+	Candidate     string `json:"candidate"`
+	SDPMid        string `json:"sdp_mid"`
+	SDPMLineIndex uint16 `json:"sdp_mline_index"`
 }
 
 // ErrorPayload carries error details.

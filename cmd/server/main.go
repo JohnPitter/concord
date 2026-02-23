@@ -17,6 +17,7 @@ import (
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/friends"
+	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
@@ -134,6 +135,10 @@ func main() {
 
 	logger.Info().Msg("all services initialized with postgresql backend")
 
+	// --- Signaling Server (voice WebRTC coordination) ---
+	sigServer := signaling.NewServer(logger)
+	logger.Info().Msg("signaling server initialized")
+
 	// --- API Server ---
 	apiServer := api.New(
 		cfg.Server,
@@ -141,6 +146,7 @@ func main() {
 		serverSvc,
 		chatSvc,
 		friendsSvc,
+		sigServer,
 		jwtManager,
 		health,
 		metrics,

@@ -16,6 +16,7 @@ import (
 	"github.com/concord-chat/concord/internal/chat"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/friends"
+	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/server"
 )
@@ -29,6 +30,7 @@ type Server struct {
 	servers    *server.Service
 	chat       *chat.Service
 	friends    *friends.Service
+	signaling  *signaling.Server
 	health     *observability.HealthChecker
 	metrics    *observability.Metrics
 	logger     zerolog.Logger
@@ -44,23 +46,35 @@ func New(
 	serverSvc *server.Service,
 	chatSvc *chat.Service,
 	friendsSvc *friends.Service,
+	sigServer *signaling.Server,
 	jwtManager *auth.JWTManager,
 	health *observability.HealthChecker,
 	metrics *observability.Metrics,
 	logger zerolog.Logger,
 ) *Server {
 	s := &Server{
-		auth:    authSvc,
-		servers: serverSvc,
-		chat:    chatSvc,
-		friends: friendsSvc,
-		health:  health,
-		metrics: metrics,
-		logger:  logger.With().Str("component", "api_server").Logger(),
-		cfg:     cfg,
+		auth:      authSvc,
+		servers:   serverSvc,
+		chat:      chatSvc,
+		friends:   friendsSvc,
+		signaling: sigServer,
+		health:    health,
+		metrics:   metrics,
+		logger:    logger.With().Str("component", "api_server").Logger(),
+		cfg:       cfg,
 	}
 
 	r := chi.NewRouter()
+
+	// --- WebSocket signaling endpoint ---
+	// Mounted on a separate sub-router so it bypasses timeout/body-limit/rate-limit
+	// middleware that would break long-lived WebSocket connections.
+	if sigServer != nil {
+		wsRouter := chi.NewRouter()
+		wsRouter.Use(middleware.Recoverer)
+		wsRouter.Get("/", sigServer.Handler())
+		r.Mount("/ws/signaling", wsRouter)
+	}
 
 	// --- Global middleware stack ---
 	r.Use(middleware.RequestID)
@@ -129,6 +143,9 @@ func New(
 			protected.Put("/messages/{messageID}", s.handleEditMessage)
 			protected.Delete("/messages/{messageID}", s.handleDeleteMessage)
 			protected.Get("/channels/{channelID}/messages/search", s.handleSearchMessages)
+
+			// Voice
+			protected.Get("/servers/{serverID}/channels/{channelID}/voice/participants", s.handleVoiceParticipants)
 
 			// Friends
 			protected.Post("/friends/request", s.handleSendFriendRequest)
