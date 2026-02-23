@@ -17,6 +17,9 @@
 | 2026-02-22 | self | golangci-lint v2: issues.exclude-rules inválido | Mover para linters.exclusions.rules |
 | 2026-02-22 | self | Sempre rodar `golangci-lint config verify` antes de push | CI action verifica schema, local run não |
 | 2026-02-21 | self | svelte-check --ignore só funciona com --no-tsconfig, não com --tsconfig | Instalar @typescript-eslint/types como devDep resolve erros em node_modules/esrap |
+| 2026-02-22 | self | Import wailsjs em components/chat/ usava 5 níveis (../../../../../) e voice/ usava 3 níveis — ambos errados | Contar levels: components/subdir/ → 4 níveis (../../../../wailsjs/), stores/ → 3 níveis (../../../wailsjs/) |
+| 2026-02-22 | self | Criou migration friends só para SQLite, esqueceu PostgreSQL — produção não tinha as tabelas | SEMPRE criar migrations para AMBOS: sqlite/migrations/ E postgres/migrations/ |
+| 2026-02-22 | self | Usou INSERT OR IGNORE (SQLite-only) e *sql.Tx direto em transactions sem placeholder translation | Usar ON CONFLICT DO NOTHING (ambos DBs) e transactor com querier wrapper para PostgreSQL |
 
 ## User Preferences
 - Comunica em português

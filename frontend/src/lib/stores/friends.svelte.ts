@@ -361,6 +361,11 @@ export async function rejectFriendRequest(requestId: string) {
   const uid = currentUserID()
   if (!uid) return
 
+  // Optimistic removal — update UI immediately
+  const previous = state.pendingRequests
+  state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
+  persist()
+
   try {
     await ensureValidToken()
     if (isServerMode()) {
@@ -368,14 +373,9 @@ export async function rejectFriendRequest(requestId: string) {
     } else {
       await App.RejectFriendRequest(requestId, uid)
     }
-
-    // Remove from local state immediately
-    state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
-    persist()
   } catch {
-    // Refresh to get actual state
-    const pending = await fetchPendingFromBackend()
-    state.pendingRequests = pending
+    // Rollback on failure
+    state.pendingRequests = previous
     persist()
   }
 }

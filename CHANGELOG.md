@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-02-22
+
+### Added
+
+- **PostgreSQL friends migration** (`internal/store/postgres/migrations/002_friends.sql`): `friend_requests` and `friends` tables for PostgreSQL — the production server was missing these tables, causing all friend request API calls to fail silently
+
+### Fixed
+
+- **Friend requests not working on production** (root cause): the `008_friends.sql` migration only existed for SQLite; the PostgreSQL production database had no `friend_requests`/`friends` tables — all API calls returned 500 errors
+- **SQL compatibility**: replaced `INSERT OR IGNORE` (SQLite-only) with `INSERT ... ON CONFLICT DO NOTHING` (works on both SQLite and PostgreSQL) in `AcceptRequest`
+- **Transaction placeholder translation**: refactored `transactor` interface to pass `querier` instead of raw `*sql.Tx` — transaction queries now go through the PostgreSQL placeholder adapter (`?` → `$1, $2, ...`), fixing SQL syntax errors on PostgreSQL
+
+### Changed
+
+- **Friends `transactor` interface** (`repository.go`): `InTransaction` callback now receives `querier` instead of `*sql.Tx`; added `txQuerier` adapter, `NewStdlibTransactorWithWrapper` for PostgreSQL placeholder translation in transactions
+- **Exported `Querier` interface** (`repository.go`): the friends querier is now exported so `cmd/server` can wrap it with `postgres.QuerierAdapter` for placeholder translation
+- **PostgreSQL adapter** (`adapter.go`): added `QuerierAdapter` that wraps any querier-compatible type with `?` → `$N` placeholder translation
+
+## [0.14.1] - 2026-02-22
+
+### Fixed
+
+- **Cancel outgoing friend request** (`friends.svelte.ts`): `rejectFriendRequest` now performs optimistic removal before the async backend call with rollback on error — previously the UI did nothing when canceling sent requests
+- **Member visibility after server join** (`servers.svelte.ts`): added 15s member polling (`startMemberPolling`/`stopMemberPolling`) that begins when selecting a server and stops when leaving; new members joining the server now appear without page refresh
+- **Real-time message updates** (`chat.svelte.ts`): added 5s message polling (`pollNewMessages`/`startMessagePolling`/`stopMessagePolling`) with deduplication; removed early return guard in `loadMessages` that prevented channel re-entry; `resetChat` now stops polling timer
+
 ## [0.14.0] - 2026-02-22
 
 ### Added

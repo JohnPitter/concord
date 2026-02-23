@@ -125,8 +125,11 @@ func main() {
 	chatRepo := chat.NewRepository(pgAdapter, logger)
 	chatSvc := chat.NewService(chatRepo, logger)
 
-	// Friends service (use stdlib DB wrapper for transactions)
-	friendRepo := friends.NewRepository(pgAdapter, friends.NewStdlibTransactor(stdlibDB), logger)
+	// Friends service — wrap transactions with pgAdapter-style placeholder translation
+	friendTx := friends.NewStdlibTransactorWithWrapper(stdlibDB, func(q friends.Querier) friends.Querier {
+		return postgres.NewQuerierAdapter(q)
+	})
+	friendRepo := friends.NewRepository(pgAdapter, friendTx, logger)
 	friendsSvc := friends.NewService(friendRepo, logger)
 
 	logger.Info().Msg("all services initialized with postgresql backend")

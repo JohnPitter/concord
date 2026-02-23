@@ -9,19 +9,27 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type querier interface {
+// Querier is the database query interface used by the friends repository.
+// Exported so callers (e.g. cmd/server) can wrap it for placeholder translation.
+type Querier interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
+// querier is an alias for internal use.
+type querier = Querier
+
 type transactor interface {
-	InTransaction(ctx context.Context, fn func(*sql.Tx) error) error
+	InTransaction(ctx context.Context, fn func(querier) error) error
 }
 
 // StdlibTransactor wraps a *sql.DB to implement the transactor interface.
+// It provides a querier-compatible wrapper around *sql.Tx so that the caller
+// does not need to know about placeholder differences between SQLite and PostgreSQL.
 type StdlibTransactor struct {
-	db *sql.DB
+	db      *sql.DB
+	wrapper func(querier) querier // optional wrapper applied to the tx (e.g. placeholder translation)
 }
 
 // NewStdlibTransactor creates a transactor from a standard *sql.DB.
@@ -29,13 +37,40 @@ func NewStdlibTransactor(db *sql.DB) *StdlibTransactor {
 	return &StdlibTransactor{db: db}
 }
 
+// NewStdlibTransactorWithWrapper creates a transactor that wraps each transaction's
+// querier with the given function (e.g. for placeholder translation on PostgreSQL).
+func NewStdlibTransactorWithWrapper(db *sql.DB, wrapper func(querier) querier) *StdlibTransactor {
+	return &StdlibTransactor{db: db, wrapper: wrapper}
+}
+
+// txQuerier adapts *sql.Tx to the querier interface.
+type txQuerier struct {
+	tx *sql.Tx
+}
+
+func (t *txQuerier) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return t.tx.ExecContext(ctx, query, args...)
+}
+
+func (t *txQuerier) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return t.tx.QueryRowContext(ctx, query, args...)
+}
+
+func (t *txQuerier) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return t.tx.QueryContext(ctx, query, args...)
+}
+
 // InTransaction runs fn inside a database transaction.
-func (t *StdlibTransactor) InTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
+func (t *StdlibTransactor) InTransaction(ctx context.Context, fn func(querier) error) error {
 	tx, err := t.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	if err := fn(tx); err != nil {
+	var q querier = &txQuerier{tx: tx}
+	if t.wrapper != nil {
+		q = t.wrapper(q)
+	}
+	if err := fn(q); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -142,10 +177,10 @@ func (r *Repository) GetPendingRequests(ctx context.Context, userID string) ([]F
 // Only the receiver can accept.
 // Complexity: O(1).
 func (r *Repository) AcceptRequest(ctx context.Context, requestID, userID string) error {
-	return r.tx.InTransaction(ctx, func(tx *sql.Tx) error {
+	return r.tx.InTransaction(ctx, func(q querier) error {
 		// Verify the request exists, is pending, and user is the receiver
 		var senderID, receiverID string
-		err := tx.QueryRowContext(ctx,
+		err := q.QueryRowContext(ctx,
 			`SELECT sender_id, receiver_id FROM friend_requests WHERE id = ? AND status = 'pending'`,
 			requestID,
 		).Scan(&senderID, &receiverID)
@@ -161,7 +196,7 @@ func (r *Repository) AcceptRequest(ctx context.Context, requestID, userID string
 		}
 
 		// Update status
-		_, err = tx.ExecContext(ctx,
+		_, err = q.ExecContext(ctx,
 			`UPDATE friend_requests SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 			requestID,
 		)
@@ -170,8 +205,9 @@ func (r *Repository) AcceptRequest(ctx context.Context, requestID, userID string
 		}
 
 		// Create bidirectional friendship
-		_, err = tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?), (?, ?)`,
+		_, err = q.ExecContext(ctx,
+			`INSERT INTO friends (user_id, friend_id) VALUES (?, ?), (?, ?)
+			 ON CONFLICT DO NOTHING`,
 			senderID, receiverID, receiverID, senderID,
 		)
 		if err != nil {
@@ -243,8 +279,8 @@ func (r *Repository) GetFriends(ctx context.Context, userID string) ([]FriendVie
 // RemoveFriend removes a bidirectional friendship.
 // Complexity: O(1).
 func (r *Repository) RemoveFriend(ctx context.Context, userID, friendID string) error {
-	return r.tx.InTransaction(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx,
+	return r.tx.InTransaction(ctx, func(q querier) error {
+		_, err := q.ExecContext(ctx,
 			`DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
 			userID, friendID, friendID, userID,
 		)
@@ -253,7 +289,7 @@ func (r *Repository) RemoveFriend(ctx context.Context, userID, friendID string) 
 		}
 
 		// Also clean up any accepted friend_request between them
-		_, err = tx.ExecContext(ctx,
+		_, err = q.ExecContext(ctx,
 			`DELETE FROM friend_requests
 			 WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)`,
 			userID, friendID, friendID, userID,
@@ -270,9 +306,9 @@ func (r *Repository) RemoveFriend(ctx context.Context, userID, friendID string) 
 // BlockUser blocks a user. Removes any existing friendship and marks the request as blocked.
 // Complexity: O(1).
 func (r *Repository) BlockUser(ctx context.Context, userID, targetID string) error {
-	return r.tx.InTransaction(ctx, func(tx *sql.Tx) error {
+	return r.tx.InTransaction(ctx, func(q querier) error {
 		// Remove friendship if exists
-		_, err := tx.ExecContext(ctx,
+		_, err := q.ExecContext(ctx,
 			`DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
 			userID, targetID, targetID, userID,
 		)
@@ -281,7 +317,7 @@ func (r *Repository) BlockUser(ctx context.Context, userID, targetID string) err
 		}
 
 		// Upsert friend_request as blocked
-		_, err = tx.ExecContext(ctx,
+		_, err = q.ExecContext(ctx,
 			`INSERT INTO friend_requests (id, sender_id, receiver_id, status)
 			 VALUES (?, ?, ?, 'blocked')
 			 ON CONFLICT(sender_id, receiver_id) DO UPDATE SET status = 'blocked', updated_at = CURRENT_TIMESTAMP`,

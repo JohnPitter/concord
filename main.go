@@ -157,7 +157,7 @@ func (a *App) startup(ctx context.Context) {
 	a.logger.Info().Msg("server service initialized")
 
 	// Initialize friends service
-	friendRepo := friends.NewRepository(a.db, a.db, a.logger)
+	friendRepo := friends.NewRepository(a.db, friends.NewStdlibTransactor(a.db.Conn()), a.logger)
 	a.friendService = friends.NewService(friendRepo, a.logger)
 	a.logger.Info().Msg("friends service initialized")
 

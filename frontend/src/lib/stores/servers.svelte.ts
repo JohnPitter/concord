@@ -40,12 +40,15 @@ export interface InviteInfoData {
   member_count: number
 }
 
+const MEMBER_POLL_INTERVAL = 15_000 // 15s polling for members
+
 let servers = $state<ServerData[]>([])
 let activeServerId = $state<string | null>(null)
 let channels = $state<ChannelData[]>([])
 let members = $state<MemberData[]>([])
 let loading = $state(false)
 let error = $state<string | null>(null)
+let memberPollTimer: ReturnType<typeof setInterval> | null = null
 
 export function getServers() {
   return {
@@ -83,6 +86,7 @@ export async function loadUserServers(userID: string): Promise<void> {
 export async function selectServer(serverID: string): Promise<void> {
   activeServerId = serverID
   await Promise.all([loadChannels(serverID), loadMembers(serverID)])
+  startMemberPolling(serverID)
 }
 
 export async function createServer(name: string, ownerID: string): Promise<ServerData | null> {
@@ -130,6 +134,7 @@ export async function deleteServer(serverID: string, userID: string): Promise<vo
     }
     servers = servers.filter(s => s.id !== serverID)
     if (activeServerId === serverID) {
+      stopMemberPolling()
       activeServerId = servers[0]?.id ?? null
       if (activeServerId) await selectServer(activeServerId)
     }
@@ -284,6 +289,26 @@ export async function getInviteInfo(code: string): Promise<InviteInfoData | null
     return await App.GetInviteInfo(code) as unknown as InviteInfoData
   } catch {
     return null
+  }
+}
+
+// --- Member Polling ---
+
+function startMemberPolling(serverID: string) {
+  stopMemberPolling()
+  memberPollTimer = setInterval(async () => {
+    try {
+      await loadMembers(serverID)
+    } catch {
+      // Silently ignore polling errors
+    }
+  }, MEMBER_POLL_INTERVAL)
+}
+
+export function stopMemberPolling() {
+  if (memberPollTimer) {
+    clearInterval(memberPollTimer)
+    memberPollTimer = null
   }
 }
 

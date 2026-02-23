@@ -38,6 +38,36 @@ func (a *Adapter) DB() *sql.DB {
 	return a.db
 }
 
+// genericQuerier is a minimal interface for wrapping any querier-compatible type.
+type genericQuerier interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+}
+
+// QuerierAdapter wraps any querier and translates SQLite-style ? placeholders to PostgreSQL $N.
+// Used to wrap transaction queriers inside friends repository.
+type QuerierAdapter struct {
+	inner genericQuerier
+}
+
+// NewQuerierAdapter creates a placeholder-translating wrapper around any querier.
+func NewQuerierAdapter(q genericQuerier) *QuerierAdapter {
+	return &QuerierAdapter{inner: q}
+}
+
+func (a *QuerierAdapter) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return a.inner.ExecContext(ctx, replacePlaceholders(query), args...)
+}
+
+func (a *QuerierAdapter) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return a.inner.QueryRowContext(ctx, replacePlaceholders(query), args...)
+}
+
+func (a *QuerierAdapter) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return a.inner.QueryContext(ctx, replacePlaceholders(query), args...)
+}
+
 // replacePlaceholders replaces SQLite-style ? placeholders with PostgreSQL $1, $2, ... style.
 // It correctly handles ? inside single-quoted string literals by skipping them.
 // Complexity: O(n) where n is the length of the query string.

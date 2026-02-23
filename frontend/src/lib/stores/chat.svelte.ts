@@ -29,6 +29,8 @@ export interface SearchResultData extends MessageData {
   snippet: string
 }
 
+const MESSAGE_POLL_INTERVAL = 5_000 // 5s polling for new messages
+
 let messages = $state<MessageData[]>([])
 let activeChannelId = $state<string | null>(null)
 let loading = $state(false)
@@ -38,6 +40,7 @@ let searchResults = $state<SearchResultData[]>([])
 let searchQuery = $state('')
 let error = $state<string | null>(null)
 let attachmentsByMessage = $state<Record<string, AttachmentData[]>>({})
+let messagePollTimer: ReturnType<typeof setInterval> | null = null
 
 export function getChat() {
   return {
@@ -54,7 +57,8 @@ export function getChat() {
 }
 
 export async function loadMessages(channelID: string): Promise<void> {
-  if (activeChannelId === channelID && messages.length > 0) return
+  // Stop polling for previous channel
+  stopMessagePolling()
 
   activeChannelId = channelID
   loading = true
@@ -80,6 +84,9 @@ export async function loadMessages(channelID: string): Promise<void> {
   } finally {
     loading = false
   }
+
+  // Start polling for new messages
+  startMessagePolling(channelID)
 }
 
 export async function loadOlderMessages(): Promise<void> {
@@ -250,7 +257,51 @@ export async function deleteAttachment(attachmentID: string): Promise<void> {
   }
 }
 
+// --- Message Polling ---
+
+async function pollNewMessages(channelID: string) {
+  if (!channelID || activeChannelId !== channelID) return
+
+  try {
+    await ensureValidToken()
+    const lastMsg = messages[messages.length - 1]
+    const after = lastMsg?.id ?? ''
+    let result
+    if (isServerMode()) {
+      result = await apiChat.getMessages(channelID, '', after, 50)
+    } else {
+      result = await App.GetMessages(channelID, '', after, 50)
+    }
+    const newMsgs = (result ?? []) as unknown as MessageData[]
+    if (newMsgs.length > 0) {
+      // API returns newest first — reverse for chronological order
+      const reversed = newMsgs.reverse()
+      // Deduplicate: only add messages not already in state
+      const existingIds = new Set(messages.map(m => m.id))
+      const fresh = reversed.filter(m => !existingIds.has(m.id))
+      if (fresh.length > 0) {
+        messages = [...messages, ...fresh]
+      }
+    }
+  } catch {
+    // Silently ignore polling errors
+  }
+}
+
+function startMessagePolling(channelID: string) {
+  stopMessagePolling()
+  messagePollTimer = setInterval(() => pollNewMessages(channelID), MESSAGE_POLL_INTERVAL)
+}
+
+export function stopMessagePolling() {
+  if (messagePollTimer) {
+    clearInterval(messagePollTimer)
+    messagePollTimer = null
+  }
+}
+
 export function resetChat(): void {
+  stopMessagePolling()
   messages = []
   activeChannelId = null
   hasMore = true
