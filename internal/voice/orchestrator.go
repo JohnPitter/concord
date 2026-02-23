@@ -21,21 +21,33 @@ type Orchestrator struct {
 	serverID  string
 	channelID string
 	userID    string
+	username  string
+	avatarURL string
 	peerID    string
 	logger    zerolog.Logger
 	mu        sync.Mutex
+
+	// peerInfo maps peerID → user info for resolving names on SDP signals
+	peerInfo map[string]peerMeta
+}
+
+type peerMeta struct {
+	userID    string
+	username  string
+	avatarURL string
 }
 
 // NewOrchestrator creates a new voice orchestrator.
 func NewOrchestrator(engine *Engine, logger zerolog.Logger) *Orchestrator {
 	return &Orchestrator{
-		engine: engine,
-		logger: logger.With().Str("component", "voice-orchestrator").Logger(),
+		engine:   engine,
+		peerInfo: make(map[string]peerMeta),
+		logger:   logger.With().Str("component", "voice-orchestrator").Logger(),
 	}
 }
 
 // Join connects to the signaling server and begins peer negotiation.
-func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, userID string) error {
+func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, userID, username, avatarURL string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -46,7 +58,10 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 	o.serverID = serverID
 	o.channelID = channelID
 	o.userID = userID
+	o.username = username
+	o.avatarURL = avatarURL
 	o.peerID = uuid.New().String()
+	o.peerInfo = make(map[string]peerMeta)
 
 	// Build WebSocket URL for signaling
 	sigURL := buildSignalingURL(wsURL)
@@ -55,6 +70,7 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 		Str("server_id", serverID).
 		Str("channel_id", channelID).
 		Str("peer_id", o.peerID).
+		Str("username", username).
 		Str("ws_url", sigURL).
 		Msg("joining voice channel via signaling")
 
@@ -102,10 +118,12 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 
 	o.sigClient = client
 
-	// Send join signal
+	// Send join signal with username and avatar
 	joinPayload := signaling.JoinPayload{
-		UserID: userID,
-		PeerID: o.peerID,
+		UserID:    userID,
+		PeerID:    o.peerID,
+		Username:  username,
+		AvatarURL: avatarURL,
 	}
 	if err := client.JoinChannel(serverID, channelID, joinPayload); err != nil {
 		_ = client.Close()
@@ -113,6 +131,9 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 		o.sigClient = nil
 		return fmt.Errorf("voice: send join: %w", err)
 	}
+
+	// Add self as speaker so local user appears in the list
+	o.engine.AddSelfSpeaker(o.peerID, userID, username)
 
 	o.logger.Info().Msg("voice signaling join sent")
 	return nil
@@ -149,7 +170,10 @@ func (o *Orchestrator) Leave() error {
 	o.serverID = ""
 	o.channelID = ""
 	o.userID = ""
+	o.username = ""
+	o.avatarURL = ""
 	o.peerID = ""
+	o.peerInfo = make(map[string]peerMeta)
 
 	return err
 }
@@ -167,7 +191,16 @@ func (o *Orchestrator) registerHandlers(client *signaling.Client) {
 		o.logger.Info().Int("count", len(payload.Peers)).Msg("received peer list")
 
 		for _, peer := range payload.Peers {
-			o.initiatePeerOffer(peer.PeerID, peer.UserID)
+			// Store peer info for later SDP resolution
+			o.mu.Lock()
+			o.peerInfo[peer.PeerID] = peerMeta{
+				userID:    peer.UserID,
+				username:  peer.Username,
+				avatarURL: peer.AvatarURL,
+			}
+			o.mu.Unlock()
+
+			o.initiatePeerOffer(peer.PeerID, peer.UserID, peer.Username)
 		}
 	})
 
@@ -181,11 +214,20 @@ func (o *Orchestrator) registerHandlers(client *signaling.Client) {
 
 		o.logger.Info().
 			Str("peer_id", payload.PeerID).
-			Str("user_id", payload.UserID).
+			Str("username", payload.Username).
 			Msg("peer joined — waiting for their offer")
 
+		// Store peer info for later SDP resolution
+		o.mu.Lock()
+		o.peerInfo[payload.PeerID] = peerMeta{
+			userID:    payload.UserID,
+			username:  payload.Username,
+			avatarURL: payload.AvatarURL,
+		}
+		o.mu.Unlock()
+
 		// Pre-add the peer so engine is ready when the offer arrives
-		if err := o.engine.AddPeer(payload.PeerID, payload.UserID, payload.UserID); err != nil {
+		if err := o.engine.AddPeer(payload.PeerID, payload.UserID, payload.Username); err != nil {
 			o.logger.Error().Err(err).Str("peer_id", payload.PeerID).Msg("failed to add peer")
 		}
 	})
@@ -201,8 +243,20 @@ func (o *Orchestrator) registerHandlers(client *signaling.Client) {
 		fromPeerID := sig.From
 		o.logger.Debug().Str("from", fromPeerID).Msg("received SDP offer")
 
-		// Ensure peer exists in engine
-		_ = o.engine.AddPeer(fromPeerID, fromPeerID, fromPeerID)
+		// Resolve peer info from stored metadata
+		o.mu.Lock()
+		meta, ok := o.peerInfo[fromPeerID]
+		o.mu.Unlock()
+
+		userID := fromPeerID
+		username := fromPeerID
+		if ok {
+			userID = meta.userID
+			username = meta.username
+		}
+
+		// Ensure peer exists in engine with correct username
+		_ = o.engine.AddPeer(fromPeerID, userID, username)
 
 		answerSDP, err := o.engine.HandleOffer(fromPeerID, payload.SDP)
 		if err != nil {
@@ -269,13 +323,18 @@ func (o *Orchestrator) registerHandlers(client *signaling.Client) {
 	client.On(signaling.SignalPeerLeft, func(sig *signaling.Signal) {
 		fromPeerID := sig.From
 		o.logger.Info().Str("peer_id", fromPeerID).Msg("peer left voice channel")
+
+		o.mu.Lock()
+		delete(o.peerInfo, fromPeerID)
+		o.mu.Unlock()
+
 		o.engine.RemovePeer(fromPeerID)
 	})
 }
 
 // initiatePeerOffer adds a peer and creates + sends an SDP offer.
-func (o *Orchestrator) initiatePeerOffer(peerID, userID string) {
-	if err := o.engine.AddPeer(peerID, userID, userID); err != nil {
+func (o *Orchestrator) initiatePeerOffer(peerID, userID, username string) {
+	if err := o.engine.AddPeer(peerID, userID, username); err != nil {
 		o.logger.Error().Err(err).Str("peer_id", peerID).Msg("failed to add peer")
 		return
 	}

@@ -261,7 +261,7 @@ function teardownTranslatedAudioListener() {
   }
 }
 
-export async function joinVoice(serverID: string, channelID: string, userID: string): Promise<void> {
+export async function joinVoice(serverID: string, channelID: string, userID: string, username: string, avatarURL: string): Promise<void> {
   if (state !== 'disconnected') return
 
   state = 'connecting'
@@ -269,7 +269,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
 
   try {
     await ensureValidToken()
-    await App.JoinVoice(serverID, channelID, userID)
+    await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
     state = 'connected'
     channelId = channelID
     playJoinSound()
@@ -369,6 +369,55 @@ function isLocalUser(speaker: SpeakerData): boolean {
   return speaker.username === localUsername
 }
 
+// Channel participants cache: maps channelID -> participants list
+// This shows who's in voice channels even when the local user is NOT connected.
+let channelParticipants = $state<Record<string, SpeakerData[]>>({})
+let participantsPolling: ReturnType<typeof setInterval> | null = null
+
+export function getChannelParticipants(channelId: string): SpeakerData[] {
+  return channelParticipants[channelId] ?? []
+}
+
+export async function refreshChannelParticipants(serverID: string, channelIDs: string[]): Promise<void> {
+  try {
+    const updated: Record<string, SpeakerData[]> = {}
+    for (const chID of channelIDs) {
+      const peers = await App.GetVoiceParticipants(serverID, chID)
+      if (peers && peers.length > 0) {
+        updated[chID] = peers.map((p: any) => ({
+          peer_id: p.peer_id || '',
+          user_id: p.user_id || '',
+          username: p.username || '',
+          avatar_url: p.avatar_url || '',
+          volume: 0,
+          speaking: false,
+        }))
+      }
+    }
+    channelParticipants = updated
+  } catch (e) {
+    console.error('Failed to refresh channel participants:', e)
+  }
+}
+
+export function startParticipantsPolling(serverID: string, channelIDs: string[]): void {
+  stopParticipantsPolling()
+  if (channelIDs.length === 0) return
+  // Initial fetch
+  refreshChannelParticipants(serverID, channelIDs)
+  participantsPolling = setInterval(() => {
+    refreshChannelParticipants(serverID, channelIDs)
+  }, 3000)
+}
+
+export function stopParticipantsPolling(): void {
+  if (participantsPolling) {
+    clearInterval(participantsPolling)
+    participantsPolling = null
+  }
+  channelParticipants = {}
+}
+
 export function resetVoice(): void {
   state = 'disconnected'
   channelId = null
@@ -376,4 +425,5 @@ export function resetVoice(): void {
   deafened = false
   speakers = []
   error = null
+  stopParticipantsPolling()
 }

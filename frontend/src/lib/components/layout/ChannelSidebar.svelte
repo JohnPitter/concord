@@ -45,6 +45,7 @@
     voiceNoiseSuppression = true,
     voiceScreenSharing = false,
     voiceLocalSpeaking = false,
+    getChannelParticipants,
     onJoinVoice,
     onLeaveVoice,
     onToggleMute,
@@ -73,6 +74,7 @@
     voiceNoiseSuppression?: boolean
     voiceScreenSharing?: boolean
     voiceLocalSpeaking?: boolean
+    getChannelParticipants?: (channelId: string) => SpeakerData[]
     onJoinVoice?: (channelId: string) => void
     onLeaveVoice?: () => void
     onToggleMute?: () => void
@@ -270,51 +272,32 @@
           {/if}
         </div>
         <!-- Connected users in this voice channel -->
-        {#if voiceChannelId === channel.id && voiceSpeakers.length > 0}
+        {@const isMyChannel = voiceChannelId === channel.id}
+        {@const channelSpeakers = isMyChannel ? voiceSpeakers : (getChannelParticipants?.(channel.id) ?? [])}
+        {#if channelSpeakers.length > 0}
           <div class="ml-4 mb-1 space-y-0.5">
-            {#each voiceSpeakers as speaker}
+            {#each channelSpeakers as speaker}
               {@const avatarUrl = getAvatarForSpeaker(speaker)}
+              {@const isLocal = isMyChannel && speaker.username === currentUser?.username}
               <div class="flex items-center gap-2 rounded-md py-1 px-2 hover:bg-void-bg-hover/50 transition-colors">
                 <div class="relative shrink-0">
                   {#if avatarUrl}
                     <img src={avatarUrl} alt={speaker.username} class="h-6 w-6 rounded-full object-cover" />
                   {:else}
                     <div class="h-6 w-6 rounded-full bg-void-accent/30 flex items-center justify-center text-[9px] font-bold text-void-accent">
-                      {speaker.username.slice(0, 2).toUpperCase()}
+                      {(speaker.username || '??').slice(0, 2).toUpperCase()}
                     </div>
                   {/if}
                 </div>
                 <span class="text-xs text-void-text-secondary truncate">{speaker.username}</span>
-                {#if speaker.screenSharing}
+                {#if speaker.screenSharing || (isLocal && voiceScreenSharing)}
                   <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
-                <!-- Voice signal icon (green when speaking, animated) -->
-                <svg class="ml-auto h-3.5 w-3.5 shrink-0 {speaker.speaking ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
+                <svg class="ml-auto h-3.5 w-3.5 shrink-0 {(speaker.speaking || (isLocal && voiceLocalSpeaking)) ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
                 </svg>
               </div>
             {/each}
-          </div>
-        {:else if voiceChannelId === channel.id && voiceConnected}
-          <div class="ml-4 mb-1 space-y-0.5">
-            <div class="flex items-center gap-2 rounded-md py-1 px-2 hover:bg-void-bg-hover/50 transition-colors">
-              <div class="relative shrink-0">
-                {#if currentUser?.avatar_url}
-                  <img src={currentUser.avatar_url} alt={githubUsername} class="h-6 w-6 rounded-full object-cover" />
-                {:else}
-                  <div class="h-6 w-6 rounded-full bg-void-accent/30 flex items-center justify-center text-[9px] font-bold text-void-accent">
-                    {initials}
-                  </div>
-                {/if}
-              </div>
-              <span class="text-xs text-void-text-secondary truncate">{githubUsername}</span>
-              {#if voiceScreenSharing}
-                <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">AO VIVO</span>
-              {/if}
-              <svg class="ml-auto h-3.5 w-3.5 shrink-0 {voiceLocalSpeaking ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
-              </svg>
-            </div>
           </div>
         {/if}
       {/each}

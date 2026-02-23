@@ -44,6 +44,8 @@ type Signal struct {
 type JoinPayload struct {
 	UserID    string   `json:"user_id"`
 	PeerID    string   `json:"peer_id"`
+	Username  string   `json:"username,omitempty"`
+	AvatarURL string   `json:"avatar_url,omitempty"`
 	Addresses []string `json:"addresses"`
 	PublicKey []byte   `json:"public_key,omitempty"`
 }
@@ -64,6 +66,8 @@ type PeerListPayload struct {
 type PeerEntry struct {
 	UserID    string   `json:"user_id"`
 	PeerID    string   `json:"peer_id"`
+	Username  string   `json:"username,omitempty"`
+	AvatarURL string   `json:"avatar_url,omitempty"`
 	Addresses []string `json:"addresses"`
 	PublicKey []byte   `json:"public_key,omitempty"`
 }

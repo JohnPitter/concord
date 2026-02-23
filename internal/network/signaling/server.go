@@ -23,10 +23,12 @@ type Server struct {
 }
 
 type peerConn struct {
-	conn    *websocket.Conn
-	userID  string
-	peerID  string
-	mu      sync.Mutex
+	conn      *websocket.Conn
+	userID    string
+	peerID    string
+	username  string
+	avatarURL string
+	mu        sync.Mutex
 }
 
 // writeJSON serializes and writes a message, holding the per-connection mutex.
@@ -110,9 +112,11 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			currentChannel = channelKey
 			currentPeerID = payload.PeerID
 			currentPC = &peerConn{
-				conn:   conn,
-				userID: payload.UserID,
-				peerID: payload.PeerID,
+				conn:      conn,
+				userID:    payload.UserID,
+				peerID:    payload.PeerID,
+				username:  payload.Username,
+				avatarURL: payload.AvatarURL,
 			}
 
 			s.addPeer(channelKey, currentPC)
@@ -197,8 +201,10 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, excludePeerID string) {
 			continue
 		}
 		peers = append(peers, PeerEntry{
-			UserID: p.userID,
-			PeerID: p.peerID,
+			UserID:    p.userID,
+			PeerID:    p.peerID,
+			Username:  p.username,
+			AvatarURL: p.avatarURL,
 		})
 	}
 	s.mu.RUnlock()
@@ -288,8 +294,10 @@ func (s *Server) GetChannelPeers(serverID, channelID string) []PeerEntry {
 	peers := make([]PeerEntry, 0, len(ch))
 	for _, pc := range ch {
 		peers = append(peers, PeerEntry{
-			UserID: pc.userID,
-			PeerID: pc.peerID,
+			UserID:    pc.userID,
+			PeerID:    pc.peerID,
+			Username:  pc.username,
+			AvatarURL: pc.avatarURL,
 		})
 	}
 	s.mu.RUnlock()

@@ -344,6 +344,18 @@ func (e *Engine) removePeer(peerID string) {
 	}
 }
 
+// AddSelfSpeaker adds the local user as a speaker so they appear in the
+// speakers list without needing a real peer connection.
+func (e *Engine) AddSelfSpeaker(peerID, userID, username string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.speakers[peerID] = &SpeakerInfo{
+		PeerID:   peerID,
+		UserID:   userID,
+		Username: username,
+	}
+}
+
 // GetActiveSpeakers returns the list of currently active speakers.
 func (e *Engine) GetActiveSpeakers() []SpeakerInfo {
 	e.mu.RLock()

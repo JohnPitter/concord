@@ -17,6 +17,8 @@
     toggleMute, toggleDeafen, resetVoice,
     toggleNoiseSuppression, toggleScreenSharing,
     setLocalUsername,
+    startParticipantsPolling, stopParticipantsPolling,
+    getChannelParticipants,
   } from './lib/stores/voice.svelte'
   import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode, markWelcomeSeen } from './lib/stores/settings.svelte'
   import {
@@ -91,6 +93,19 @@
   $effect(() => {
     if (!isHome && srv.list.length > 0 && !srv.activeId) {
       selectServer(srv.list[0].id)
+    }
+  })
+
+  // Poll voice channel participants when viewing a server
+  $effect(() => {
+    if (!isHome && srv.activeId) {
+      const voiceChIDs = srv.channels.filter(c => c.type === 'voice').map(c => c.id)
+      if (voiceChIDs.length > 0) {
+        startParticipantsPolling(srv.activeId, voiceChIDs)
+      }
+      return () => { stopParticipantsPolling() }
+    } else {
+      stopParticipantsPolling()
     }
   })
 
@@ -240,7 +255,13 @@
       await leaveVoice()
     } else {
       if (vc.connected) await leaveVoice()
-      await joinVoice(activeServerId, channelId, auth.user?.id ?? '')
+      await joinVoice(
+        activeServerId,
+        channelId,
+        auth.user?.id ?? '',
+        auth.user?.username ?? '',
+        auth.user?.avatar_url ?? '',
+      )
     }
   }
 
@@ -417,6 +438,7 @@
         voiceNoiseSuppression={vc.noiseSuppression}
         voiceScreenSharing={vc.screenSharing}
         voiceLocalSpeaking={vc.localSpeaking}
+        {getChannelParticipants}
         onJoinVoice={handleJoinVoice}
         onLeaveVoice={leaveVoice}
         onToggleMute={toggleMute}

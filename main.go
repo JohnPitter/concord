@@ -477,10 +477,10 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 
 // JoinVoice joins a voice channel via signaling.
 // serverID identifies which server the channel belongs to.
-func (a *App) JoinVoice(serverID, channelID, userID string) error {
+func (a *App) JoinVoice(serverID, channelID, userID, username, avatarURL string) error {
 	// Use the local embedded signaling server
 	wsURL := fmt.Sprintf("http://%s", a.sigListener.Addr().String())
-	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID)
+	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID, username, avatarURL)
 }
 
 // LeaveVoice leaves the current voice channel.
@@ -503,6 +503,19 @@ func (a *App) ToggleDeafen() bool {
 // GetVoiceStatus returns the current voice status.
 func (a *App) GetVoiceStatus() voice.VoiceStatus {
 	return a.voiceEngine.GetStatus()
+}
+
+// GetVoiceParticipants returns the list of peers currently in a voice channel.
+// This works for any user browsing the server, not just those connected.
+func (a *App) GetVoiceParticipants(serverID, channelID string) []signaling.PeerEntry {
+	if a.sigServer == nil {
+		return []signaling.PeerEntry{}
+	}
+	peers := a.sigServer.GetChannelPeers(serverID, channelID)
+	if peers == nil {
+		return []signaling.PeerEntry{}
+	}
+	return peers
 }
 
 // --- Voice Translation Bindings ---
