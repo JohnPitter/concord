@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-02-22
+
+### Fixed
+
+- **Friend request delete "reappears"**: rejected/cancelled friend requests no longer reappear after optimistic removal — polling now skips recently-rejected IDs to avoid race condition with backend round-trip
+- **Voice channel join does nothing**: desktop app now starts an embedded local signaling server on a random port so the voice orchestrator has a WebSocket endpoint to connect to — previously it tried to connect to a non-existent server at `0.0.0.0:8080` and silently failed
+
+### Changed
+
+- **Local signaling server** (`main.go`): embedded `net/http` + `signaling.Server` on `127.0.0.1:0` (random free port) started in `startup()`, stopped in `shutdown()`
+- **`JoinVoice`** (`main.go`): now uses the local signaling server address instead of `cfg.GetPublicURL()`
+
 ## [0.15.0] - 2026-02-22
 
 ### Added

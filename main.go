@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"errors"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"github.com/concord-chat/concord/internal/files"
 	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/network/p2p"
+	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
@@ -52,6 +55,8 @@ type App struct {
 	voiceEngine        *voice.Engine
 	voiceOrch          *voice.Orchestrator
 	voiceTranslator    *voice.VoiceTranslator
+	sigServer          *signaling.Server
+	sigListener        net.Listener
 	fileService        *files.Service
 	translationService *translation.Service
 	p2pHost            *p2p.Host
@@ -177,6 +182,24 @@ func (a *App) startup(ctx context.Context) {
 	a.fileService = files.NewService(fileRepo, fileStorage, a.logger)
 	a.logger.Info().Str("storage_dir", storageDir).Msg("file service initialized")
 
+	// Initialize local signaling server for voice WebRTC coordination
+	a.sigServer = signaling.NewServer(a.logger)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/signaling", a.sigServer.Handler())
+
+	sigListener, err := net.Listen("tcp", "127.0.0.1:0") // random free port
+	if err != nil {
+		a.logger.Fatal().Err(err).Msg("failed to start signaling listener")
+	}
+	a.sigListener = sigListener
+	go func() {
+		if err := http.Serve(sigListener, mux); err != nil && !errors.Is(err, net.ErrClosed) {
+			a.logger.Error().Err(err).Msg("signaling HTTP server error")
+		}
+	}()
+	sigAddr := sigListener.Addr().String()
+	a.logger.Info().Str("addr", sigAddr).Msg("local signaling server started")
+
 	// Initialize voice engine + orchestrator
 	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
 	a.voiceOrch = voice.NewOrchestrator(a.voiceEngine, a.logger)
@@ -243,6 +266,12 @@ func (a *App) shutdown(ctx context.Context) {
 		} else {
 			a.logger.Info().Msg("voice engine stopped")
 		}
+	}
+
+	// Stop local signaling server
+	if a.sigListener != nil {
+		_ = a.sigListener.Close()
+		a.logger.Info().Msg("signaling server stopped")
 	}
 
 	// Close database
@@ -449,7 +478,8 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 // JoinVoice joins a voice channel via signaling.
 // serverID identifies which server the channel belongs to.
 func (a *App) JoinVoice(serverID, channelID, userID string) error {
-	wsURL := a.cfg.GetPublicURL()
+	// Use the local embedded signaling server
+	wsURL := fmt.Sprintf("http://%s", a.sigListener.Addr().String())
 	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID)
 }
 

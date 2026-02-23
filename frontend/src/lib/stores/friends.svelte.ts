@@ -72,6 +72,9 @@ const POLL_INTERVAL = 30_000 // 30s polling for pending requests
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+// Track recently rejected request IDs so polling doesn't re-add them
+const recentlyRejected = new Set<string>()
+
 const state = $state<FriendsState>({
   friends: [],
   pendingRequests: [],
@@ -280,7 +283,8 @@ function startPolling() {
         fetchPendingFromBackend(),
       ])
       state.friends = friends
-      state.pendingRequests = pending
+      // Filter out recently rejected requests to avoid the "reappear" glitch
+      state.pendingRequests = pending.filter(r => !recentlyRejected.has(r.id))
       syncDMsFromFriends(friends)
       persist()
     } catch {
@@ -361,6 +365,9 @@ export async function rejectFriendRequest(requestId: string) {
   const uid = currentUserID()
   if (!uid) return
 
+  // Mark as recently rejected so polling won't re-add it
+  recentlyRejected.add(requestId)
+
   // Optimistic removal — update UI immediately
   const previous = state.pendingRequests
   state.pendingRequests = state.pendingRequests.filter(r => r.id !== requestId)
@@ -373,8 +380,11 @@ export async function rejectFriendRequest(requestId: string) {
     } else {
       await App.RejectFriendRequest(requestId, uid)
     }
+    // Backend confirmed — clear guard after next poll cycle
+    setTimeout(() => recentlyRejected.delete(requestId), POLL_INTERVAL + 5000)
   } catch {
     // Rollback on failure
+    recentlyRejected.delete(requestId)
     state.pendingRequests = previous
     persist()
   }
