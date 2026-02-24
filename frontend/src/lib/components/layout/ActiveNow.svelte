@@ -1,15 +1,18 @@
 <script lang="ts">
   import type { Friend } from '../../stores/friends.svelte'
   import type { SpeakerData } from '../../stores/voice.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import { translations, t } from '../../i18n'
 
   let {
     friends,
+    loading = false,
     voiceSpeakers = [],
     voiceConnected = false,
     currentServerName = '',
   }: {
     friends: Friend[]
+    loading?: boolean
     voiceSpeakers?: SpeakerData[]
     voiceConnected?: boolean
     currentServerName?: string
@@ -18,7 +21,7 @@
   // Friends who are in the same voice channel (match by username)
   const friendsInVoice = $derived(
     voiceConnected
-      ? friends.filter(f => voiceSpeakers.some(s => s.username === f.username))
+      ? friends.filter(f => voiceSpeakers.some(s => s.user_id === f.id || s.username === f.username))
       : []
   )
 
@@ -45,7 +48,22 @@
     <h3 class="text-xs font-bold uppercase tracking-wide text-void-text-primary">{t(trans, 'active.title')}</h3>
   </div>
 
-  {#if active.length === 0}
+  {#if loading}
+    <div class="flex flex-col gap-3 px-3 pb-4">
+      {#each Array.from({ length: 4 }) as _, i (`active-sk-${i}`)}
+        <div class="rounded-xl bg-void-bg-tertiary p-3">
+          <div class="mb-3 flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-24 rounded-md" />
+              <Skeleton className="h-3 w-20 rounded-md" />
+            </div>
+          </div>
+          <Skeleton className="h-20 w-full rounded-lg" />
+        </div>
+      {/each}
+    </div>
+  {:else if active.length === 0}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
       <div class="flex h-16 w-16 items-center justify-center rounded-full bg-void-bg-hover">
         <svg class="h-8 w-8 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

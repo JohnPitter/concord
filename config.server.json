@@ -57,7 +57,13 @@
     "enable_vad": true,
     "vad_threshold": 0.3,
     "enable_noise_suppression": false,
-    "max_channel_users": 25
+    "max_channel_users": 25,
+    "turn_enabled": false,
+    "turn_host": "",
+    "turn_port": 3478,
+    "turn_tls_port": 0,
+    "turn_secret": "",
+    "turn_credential_ttl": 43200000000000
   },
   "auth": {
     "github_client_id": "Ov23liWDhwBJ6BL202Ap"

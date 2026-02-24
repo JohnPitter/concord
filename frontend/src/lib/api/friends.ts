@@ -16,7 +16,12 @@ export interface FriendView {
   username: string
   display_name: string
   avatar_url: string
-  status: string
+  status: 'online' | 'idle' | 'dnd' | 'offline' | string
+  activity?: string
+  game?: string
+  gameSince?: string
+  streaming?: boolean
+  streamTitle?: string
 }
 
 export const apiFriends = {

@@ -41,6 +41,7 @@
   import ActiveNow from './lib/components/layout/ActiveNow.svelte'
   import SettingsPanel from './lib/components/settings/SettingsPanel.svelte'
   import ServerInfoModal from './lib/components/server/ServerInfoModal.svelte'
+  import Skeleton from './lib/components/ui/Skeleton.svelte'
   import Toast from './lib/components/ui/Toast.svelte'
   import MessageInput from './lib/components/chat/MessageInput.svelte'
   import WelcomeModal from './lib/components/onboarding/WelcomeModal.svelte'
@@ -82,7 +83,7 @@
     if (auth.authenticated && auth.user) {
       loadUserServers(auth.user.id)
       loadFriends()
-      setLocalUsername(auth.user.username)
+      setLocalUsername(auth.user.username, auth.user.id)
       if (!settings.hasSeenWelcome) {
         showWelcome = true
       }
@@ -267,7 +268,7 @@
 
   const currentUserProp = $derived(
     auth.user
-      ? { username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url }
+      ? { id: auth.user.id, username: auth.user.username, display_name: auth.user.display_name, avatar_url: auth.user.avatar_url }
       : null
   )
 
@@ -293,9 +294,63 @@
 
 {:else if auth.loading}
   <div class="flex h-screen w-screen items-center justify-center bg-void-bg-primary">
-    <div class="text-center">
-      <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-void-accent border-t-transparent"></div>
-      <p class="text-sm text-void-text-muted">{t(trans, 'app.loading')}</p>
+    <div class="grid h-full w-full grid-cols-[72px_240px_1fr_240px] gap-0">
+      <div class="border-r border-void-border bg-void-bg-primary p-3">
+        <div class="space-y-2">
+          <Skeleton className="h-12 w-12 rounded-xl" />
+          <Skeleton className="h-12 w-12 rounded-xl" />
+          <Skeleton className="h-12 w-12 rounded-xl" />
+          <Skeleton className="h-12 w-12 rounded-xl" />
+        </div>
+      </div>
+      <div class="border-r border-void-border bg-void-bg-secondary p-4">
+        <Skeleton className="mb-4 h-8 w-full rounded-lg" />
+        <div class="space-y-2">
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+        </div>
+      </div>
+      <div class="bg-void-bg-tertiary p-4">
+        <Skeleton className="mb-4 h-8 w-1/3 rounded-md" />
+        <div class="space-y-4">
+          <div class="flex gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-24 rounded-md" />
+              <Skeleton className="h-3 w-2/3 rounded-md" />
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-28 rounded-md" />
+              <Skeleton className="h-3 w-3/4 rounded-md" />
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-20 rounded-md" />
+              <Skeleton className="h-3 w-1/2 rounded-md" />
+            </div>
+          </div>
+        </div>
+        <div class="mt-6">
+          <Skeleton className="h-12 w-full rounded-lg" />
+        </div>
+      </div>
+      <div class="bg-void-bg-secondary p-4">
+        <Skeleton className="mb-3 h-4 w-20 rounded-md" />
+        <div class="space-y-2">
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-full rounded-md" />
+        </div>
+      </div>
     </div>
   </div>
 
@@ -309,6 +364,7 @@
     <ServerSidebar
       servers={sidebarServers}
       activeServerId={activeServerId}
+      loading={srv.loading}
       onSelectServer={handleSelectServer}
       onAddServer={() => showCreateServer = true}
       currentUser={currentUserProp}
@@ -321,6 +377,7 @@
       <DMSidebar
         dms={friends.dms}
         activeDMId={friends.activeDMId}
+        loading={friends.loading}
         onSelectDM={(id) => openDM(id)}
         onOpenFriends={() => openDM(null)}
         currentUser={currentUserProp}
@@ -344,17 +401,38 @@
         <!-- DM conversation view -->
         <div class="flex flex-1 flex-col bg-void-bg-tertiary overflow-hidden animate-fade-in">
           <header class="flex h-12 items-center gap-2 border-b border-void-border px-4 shrink-0">
-            {#if friends.activeDM.avatar_url}
+            {#if friends.loading}
+              <Skeleton className="h-6 w-6 rounded-full" />
+            {:else if friends.activeDM.avatar_url}
               <img src={friends.activeDM.avatar_url} alt={friends.activeDM.display_name} class="h-6 w-6 rounded-full object-cover" />
             {:else}
               <div class="h-6 w-6 rounded-full bg-void-accent flex items-center justify-center text-[10px] font-bold text-white">
                 {friends.activeDM.display_name.slice(0, 2).toUpperCase()}
               </div>
             {/if}
-            <span class="font-bold text-void-text-primary text-sm">{friends.activeDM.display_name}</span>
+            {#if friends.loading}
+              <Skeleton className="h-4 w-28 rounded-md" />
+            {:else}
+              <span class="font-bold text-void-text-primary text-sm">{friends.activeDM.display_name}</span>
+            {/if}
           </header>
           <div class="flex-1 overflow-y-auto px-4 py-4">
-            {#if friends.activeDMMessages.length === 0}
+            {#if friends.loading}
+              <div class="space-y-4">
+                {#each Array.from({ length: 6 }) as _, i (`dm-msg-sk-${i}`)}
+                  <div class="flex gap-3 {i % 2 === 0 ? '' : 'justify-end'}">
+                    {#if i % 2 === 0}
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                    {/if}
+                    <div class="min-w-[180px] max-w-[70%]">
+                      <Skeleton className="mb-1 h-3.5 w-20 rounded-md" />
+                      <Skeleton className="mb-1 h-3.5 w-full rounded-md" />
+                      <Skeleton className="h-3.5 w-2/3 rounded-md" />
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else if friends.activeDMMessages.length === 0}
               <div class="flex flex-col items-center justify-center h-full">
                 <div class="text-center px-6">
                   <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-void-accent/20 flex items-center justify-center">
@@ -377,20 +455,31 @@
               </div>
             {/if}
           </div>
-          <MessageInput
-            channelName={friends.activeDM.display_name}
-            onSend={(content) => {
-              if (friends.activeDMId && auth.user) {
-                sendDMMessage(friends.activeDMId, auth.user.id, content)
-              }
-            }}
-          />
+          {#if friends.loading}
+            <div class="border-t border-void-border px-4 py-4">
+              <div class="flex items-end gap-2 rounded-lg bg-void-bg-secondary px-4 py-3">
+                <Skeleton className="h-5 w-5 rounded-sm" />
+                <Skeleton className="h-5 flex-1 rounded-md" />
+                <Skeleton className="h-5 w-5 rounded-sm" />
+              </div>
+            </div>
+          {:else}
+            <MessageInput
+              channelName={friends.activeDM.display_name}
+              onSend={(content) => {
+                if (friends.activeDMId && auth.user) {
+                  sendDMMessage(friends.activeDMId, auth.user.id, content)
+                }
+              }}
+            />
+          {/if}
         </div>
       {:else}
         <!-- Col 3: Friends list (flex-1) -->
         <FriendsList
           friends={friends.friends}
           pendingRequests={friends.pendingRequests}
+          loading={friends.loading}
           tab={friends.tab}
           addFriendError={friends.addFriendError}
           addFriendSuccess={friends.addFriendSuccess}
@@ -407,6 +496,7 @@
         <!-- Col 4: Active Now (340px) -->
         <ActiveNow
           friends={friends.friends}
+          loading={friends.loading}
           voiceSpeakers={vc.speakers}
           voiceConnected={vc.connected}
           currentServerName={srv.active?.name ?? ''}
@@ -420,6 +510,7 @@
       <ChannelSidebar
         serverName={srv.active?.name ?? 'Servidor'}
         channels={sidebarChannels}
+        loading={srv.channelsLoading}
         activeChannelId={activeChannelId ?? ''}
         onSelectChannel={(id) => activeChannelId = id}
         onCreateChannel={(name, type) => srv.activeId && auth.user && createChannel(srv.activeId, auth.user.id, name, type)}
@@ -453,7 +544,7 @@
         channelName={activeChannel?.name ?? 'geral'}
         messages={chat.messages}
         currentUserId={auth.user?.id ?? ''}
-        loading={chat.loading}
+        loading={chat.loading || srv.channelsLoading}
         hasMore={chat.hasMore}
         sending={chat.sending}
         attachmentsByMessage={chat.attachmentsByMessage}
@@ -475,6 +566,7 @@
       {#if showMembers}
         <MemberSidebar
           members={sidebarMembers}
+          loading={srv.membersLoading}
           currentUserId={auth.user?.id ?? ''}
           currentUserRole={currentUserRole}
           onUpdateRole={(memberId, role) => srv.activeId && auth.user && updateMemberRole(srv.activeId, auth.user.id, memberId, role)}

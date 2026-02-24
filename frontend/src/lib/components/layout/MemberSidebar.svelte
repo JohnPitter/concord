@@ -1,5 +1,6 @@
 <script lang="ts">
   import Avatar from '../ui/Avatar.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
 
@@ -13,12 +14,14 @@
 
   let {
     members,
+    loading = false,
     currentUserId = '',
     currentUserRole = 'member',
     onUpdateRole,
     onKickMember,
   }: {
     members: Member[]
+    loading?: boolean
     currentUserId?: string
     currentUserRole?: string
     onUpdateRole?: (memberId: string, role: string) => void
@@ -44,6 +47,20 @@
 
 <aside class="flex h-full w-60 flex-col bg-void-bg-secondary overflow-y-auto">
   <div class="p-4">
+    {#if loading}
+      <div class="space-y-2">
+        <Skeleton className="h-3 w-20 rounded-md mb-2" />
+        {#each Array.from({ length: 8 }) as _, i (`member-sk-${i}`)}
+          <div class="flex items-center gap-2.5 rounded-md px-2 py-1.5">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-20 rounded-md" />
+              <Skeleton className="h-3 w-14 rounded-md" />
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else}
     <!-- Online members -->
     {#if onlineMembers.length > 0}
       <h3 class="mb-2 text-[11px] font-bold uppercase tracking-wide text-void-text-muted">
@@ -129,6 +146,7 @@
           </button>
         {/each}
       </div>
+    {/if}
     {/if}
   </div>
 </aside>

@@ -23,6 +23,7 @@ import (
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/postgres"
 	"github.com/concord-chat/concord/internal/store/redis"
+	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
 )
 
@@ -152,6 +153,22 @@ func main() {
 		metrics,
 		logger,
 	)
+
+	iceProvider := voice.NewICECredentialsProvider(
+		cfg.Voice.TURNHost,
+		cfg.Voice.TURNPort,
+		cfg.Voice.TURNTLSPort,
+		cfg.Voice.TURNSecret,
+		cfg.Voice.TURNCredentialTTL,
+	)
+	if cfg.Voice.TURNEnabled && iceProvider.Enabled() {
+		apiServer.SetVoiceICEProvider(iceProvider)
+		logger.Info().
+			Str("turn_host", cfg.Voice.TURNHost).
+			Int("turn_port", cfg.Voice.TURNPort).
+			Int("turn_tls_port", cfg.Voice.TURNTLSPort).
+			Msg("voice TURN credentials endpoint enabled")
+	}
 
 	// Start HTTP server in a goroutine
 	errCh := make(chan error, 1)

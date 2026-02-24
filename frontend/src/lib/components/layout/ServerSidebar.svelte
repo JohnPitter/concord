@@ -1,5 +1,6 @@
 <script lang="ts">
   import Avatar from '../ui/Avatar.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
   import logoImg from '../../../assets/logo.png'
@@ -17,12 +18,13 @@
     avatar_url: string
   }
 
-  let { servers, activeServerId, onSelectServer, onAddServer, currentUser = null }: {
+  let { servers, activeServerId, onSelectServer, onAddServer, currentUser = null, loading = false }: {
     servers: Server[]
     activeServerId: string   // 'home' | server.id
     onSelectServer: (id: string) => void
     onAddServer?: () => void
     currentUser?: CurrentUser | null
+    loading?: boolean
   } = $props()
 
   const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
@@ -52,49 +54,61 @@
   <div class="mx-3 h-px w-8 bg-void-border"></div>
 
   <!-- Server list -->
-  {#each servers as server}
-    <Tooltip text={server.name} position="right">
-      <button
-        class="relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 hover:rounded-xl cursor-pointer
-          {server.id === activeServerId
-            ? 'rounded-xl bg-void-accent text-white'
-            : 'bg-void-bg-tertiary text-void-text-primary hover:bg-void-accent-hover hover:text-white'}"
-        onclick={() => onSelectServer(server.id)}
-      >
-        {#if server.iconUrl}
-          <img src={server.iconUrl} alt={server.name} class="h-full w-full rounded-[inherit] object-cover" />
-        {:else}
-          <span class="text-sm font-bold">{server.name.slice(0, 2).toUpperCase()}</span>
-        {/if}
+  {#if loading}
+    {#each Array.from({ length: 5 }) as _, i (`sk-${i}`)}
+      <Skeleton className="h-12 w-12 rounded-2xl" />
+    {/each}
+  {:else}
+    {#each servers as server}
+      <Tooltip text={server.name} position="right">
+        <button
+          class="relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200 hover:rounded-xl cursor-pointer
+            {server.id === activeServerId
+              ? 'rounded-xl bg-void-accent text-white'
+              : 'bg-void-bg-tertiary text-void-text-primary hover:bg-void-accent-hover hover:text-white'}"
+          onclick={() => onSelectServer(server.id)}
+        >
+          {#if server.iconUrl}
+            <img src={server.iconUrl} alt={server.name} class="h-full w-full rounded-[inherit] object-cover" />
+          {:else}
+            <span class="text-sm font-bold">{server.name.slice(0, 2).toUpperCase()}</span>
+          {/if}
 
-        {#if server.id === activeServerId}
-          <span class="absolute -left-1 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-white"></span>
-        {:else if server.hasNotification}
-          <span class="absolute -left-1 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-white"></span>
-        {/if}
-      </button>
-    </Tooltip>
-  {/each}
+          {#if server.id === activeServerId}
+            <span class="absolute -left-1 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full bg-white"></span>
+          {:else if server.hasNotification}
+            <span class="absolute -left-1 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-white"></span>
+          {/if}
+        </button>
+      </Tooltip>
+    {/each}
+  {/if}
 
   <!-- Add server button -->
-  <Tooltip text={t(trans, 'nav.addServer')} position="right">
-    <button
-      aria-label={t(trans, 'nav.addServer')}
-      class="flex h-12 w-12 items-center justify-center rounded-2xl bg-void-bg-tertiary text-void-online transition-all duration-200 hover:rounded-xl hover:bg-void-online hover:text-white cursor-pointer"
-      onclick={() => onAddServer?.()}
-    >
-      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-    </button>
-  </Tooltip>
+  {#if loading}
+    <Skeleton className="h-12 w-12 rounded-2xl" />
+  {:else}
+    <Tooltip text={t(trans, 'nav.addServer')} position="right">
+      <button
+        aria-label={t(trans, 'nav.addServer')}
+        class="flex h-12 w-12 items-center justify-center rounded-2xl bg-void-bg-tertiary text-void-online transition-all duration-200 hover:rounded-xl hover:bg-void-online hover:text-white cursor-pointer"
+        onclick={() => onAddServer?.()}
+      >
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+    </Tooltip>
+  {/if}
 
   <div class="flex-1 shrink-0"></div>
 
   <!-- User avatar -->
   <div class="pb-1 shrink-0">
-    {#if currentUser?.avatar_url}
+    {#if loading}
+      <Skeleton className="h-10 w-10 rounded-full" />
+    {:else if currentUser?.avatar_url}
       <div class="relative">
         <img src={currentUser.avatar_url} alt={displayName} class="h-10 w-10 rounded-full object-cover" />
         <span class="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-void-bg-primary bg-void-online"></span>

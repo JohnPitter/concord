@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Skeleton from '../ui/Skeleton.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
   import VoiceControls from '../voice/VoiceControls.svelte'
   import { translations, t } from '../../i18n'
@@ -19,6 +20,7 @@
   }
 
   interface CurrentUser {
+    id?: string
     username: string
     display_name: string
     avatar_url: string
@@ -32,6 +34,7 @@
     onCreateChannel,
     onDeleteChannel,
     onServerInfo,
+    loading = false,
     currentUser = null,
     serverMembers = [],
     currentUserRole = 'member',
@@ -61,6 +64,7 @@
     onCreateChannel?: (name: string, type: 'text' | 'voice') => void
     onDeleteChannel?: (channelId: string) => void
     onServerInfo?: () => void
+    loading?: boolean
     currentUser?: CurrentUser | null
     serverMembers?: ServerMember[]
     currentUserRole?: string
@@ -122,7 +126,11 @@
     class="flex h-12 items-center justify-between border-b border-void-border px-4 transition-colors hover:bg-void-bg-hover cursor-pointer"
     onclick={() => onServerInfo?.()}
   >
-    <span class="text-sm font-bold text-void-text-primary truncate">{serverName}</span>
+    {#if loading}
+      <Skeleton className="h-4 w-36 rounded-md" />
+    {:else}
+      <span class="text-sm font-bold text-void-text-primary truncate">{serverName}</span>
+    {/if}
     <svg class="h-4 w-4 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polyline points="6 9 12 15 18 9" />
     </svg>
@@ -130,6 +138,45 @@
 
   <!-- Channel list -->
   <div class="flex-1 overflow-y-auto px-2 pt-4">
+    {#if loading}
+      <div class="space-y-5 px-1">
+        <div>
+          <div class="mb-2 flex items-center gap-2">
+            <Skeleton className="h-3 w-3 rounded-sm" />
+            <Skeleton className="h-3 w-24 rounded-md" />
+          </div>
+          <div class="space-y-1">
+            {#each Array.from({ length: 4 }) as _, i (`text-sk-${i}`)}
+              <div class="flex items-center gap-2 px-2 py-1.5">
+                <Skeleton className="h-4 w-4 rounded-sm" />
+                <Skeleton className="h-3 w-32 rounded-md" />
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-2 flex items-center gap-2">
+            <Skeleton className="h-3 w-3 rounded-sm" />
+            <Skeleton className="h-3 w-24 rounded-md" />
+          </div>
+          <div class="space-y-1">
+            {#each Array.from({ length: 3 }) as _, i (`voice-sk-${i}`)}
+              <div class="flex items-center gap-2 px-2 py-1.5">
+                <Skeleton className="h-4 w-4 rounded-sm" />
+                <Skeleton className="h-3 w-28 rounded-md" />
+              </div>
+              <div class="ml-5 mb-1 space-y-1">
+                <div class="flex items-center gap-2 px-2 py-1">
+                  <Skeleton className="h-6 w-6 rounded-full" />
+                  <Skeleton className="h-3 w-20 rounded-md" />
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {:else}
     <!-- Text channels -->
       <div class="mb-1 flex items-center gap-1 px-1">
         <svg class="h-3 w-3 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -279,7 +326,10 @@
             {#each channelSpeakers as speaker (speaker.peer_id || speaker.user_id || speaker.username)}
               {@const avatarUrl = getAvatarForSpeaker(speaker)}
               {@const displaySpeakerName = speaker.username || speaker.user_id || speaker.peer_id || 'user'}
-              {@const isLocal = isMyChannel && speaker.username === currentUser?.username}
+              {@const isLocal = isMyChannel && (
+                (currentUser?.id && speaker.user_id === currentUser.id) ||
+                speaker.username === currentUser?.username
+              )}
               <div class="flex items-center gap-2 rounded-md py-1 px-2 hover:bg-void-bg-hover/50 transition-colors">
                 <div class="relative shrink-0">
                   {#if avatarUrl}
@@ -303,6 +353,7 @@
         {/if}
       {/each}
     {/if}
+    {/if}
   </div>
 
   <!-- Voice controls panel (shows when connected to voice) -->
@@ -313,7 +364,6 @@
     deafened={voiceDeafened}
     noiseSuppression={voiceNoiseSuppression}
     screenSharing={voiceScreenSharing}
-    speakers={voiceSpeakers}
     onToggleMute={() => onToggleMute?.()}
     onToggleDeafen={() => onToggleDeafen?.()}
     onToggleNoiseSuppression={() => onToggleNoiseSuppression?.()}
@@ -324,7 +374,9 @@
   <!-- User panel -->
   <div class="border-t border-void-border bg-void-bg-primary p-2">
     <div class="flex items-center gap-2 rounded-md px-2 py-1.5">
-      {#if currentUser?.avatar_url}
+      {#if loading}
+        <Skeleton className="h-8 w-8 rounded-full" />
+      {:else if currentUser?.avatar_url}
         <img src={currentUser.avatar_url} alt={displayName} class="h-8 w-8 shrink-0 rounded-full object-cover" />
       {:else}
         <div class="h-8 w-8 shrink-0 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
@@ -332,8 +384,13 @@
         </div>
       {/if}
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
-        <p class="text-[11px] text-void-online">{t(trans, 'channel.online')}</p>
+        {#if loading}
+          <Skeleton className="h-3.5 w-24 rounded-md mb-1" />
+          <Skeleton className="h-3 w-14 rounded-md" />
+        {:else}
+          <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
+          <p class="text-[11px] text-void-online">{t(trans, 'channel.online')}</p>
+        {/if}
       </div>
       <Tooltip text={t(trans, 'nav.settings')} position="top">
         <button aria-label={t(trans, 'nav.settings')} class="rounded-md p-1.5 text-void-text-secondary transition-colors hover:bg-void-bg-hover hover:text-void-text-primary cursor-pointer"

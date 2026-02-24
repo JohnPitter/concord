@@ -32,6 +32,7 @@ interface VoiceJoinOptions {
   avatarURL: string
   inputDeviceId?: string
   outputDeviceId?: string
+  authToken?: string
 }
 
 interface SignalMessage {
@@ -48,11 +49,22 @@ interface PeerConnectionState {
   audio: HTMLAudioElement
   stream: MediaStream
   analyser: AnalyserNode | null
-  analyserData: Uint8Array | null
+  analyserData: Uint8Array<ArrayBuffer> | null
   sourceNode: MediaStreamAudioSourceNode | null
+  pendingICE: RTCIceCandidateInit[]
 }
 
-const ICE_SERVERS: RTCIceServer[] = [
+interface IceConfigServer {
+  urls?: unknown
+  username?: unknown
+  credential?: unknown
+}
+
+interface IceConfigResponse {
+  servers?: unknown
+}
+
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302'] },
   { urls: ['stun:stun1.l.google.com:19302'] },
 ]
@@ -72,6 +84,8 @@ export class VoiceRTCClient {
   private outputDeviceId = ''
   private audioContext: AudioContext | null = null
   private speakingLoop: ReturnType<typeof setInterval> | null = null
+  private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private iceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS
 
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
@@ -104,6 +118,7 @@ export class VoiceRTCClient {
       this.localStream = await this.createLocalStream(opts.inputDeviceId)
       this.applyMuteState()
       this.initAudioAnalysis()
+      this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
 
       const wsURL = this.toSignalingURL(opts.baseURL)
       this.ws = await this.openWebSocket(wsURL)
@@ -365,6 +380,7 @@ export class VoiceRTCClient {
 
     const state = await this.ensurePeerConnection(fromPeerID)
     await state.pc.setRemoteDescription({ type: 'offer', sdp })
+    await this.flushPendingICE(fromPeerID)
     const answer = await state.pc.createAnswer()
     await state.pc.setLocalDescription(answer)
 
@@ -385,21 +401,36 @@ export class VoiceRTCClient {
     const peer = this.peers.get(fromPeerID)
     if (!peer) return
     await peer.pc.setRemoteDescription({ type: 'answer', sdp })
+    await this.flushPendingICE(fromPeerID)
   }
 
   private async onICECandidate(fromPeerID: string, payload: unknown): Promise<void> {
     const candidate = this.extractICE(payload)
     if (!candidate) return
     const peer = this.peers.get(fromPeerID)
-    if (!peer) return
-    await peer.pc.addIceCandidate(candidate)
+    if (!peer) {
+      const state = await this.ensurePeerConnection(fromPeerID)
+      state.pendingICE.push(candidate)
+      return
+    }
+
+    if (!peer.pc.remoteDescription) {
+      peer.pendingICE.push(candidate)
+      return
+    }
+
+    try {
+      await peer.pc.addIceCandidate(candidate)
+    } catch {
+      peer.pendingICE.push(candidate)
+    }
   }
 
   private async ensurePeerConnection(peerID: string): Promise<PeerConnectionState> {
     const existing = this.peers.get(peerID)
     if (existing) return existing
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers })
     const stream = new MediaStream()
     const audio = new Audio()
     audio.autoplay = true
@@ -450,7 +481,30 @@ export class VoiceRTCClient {
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
-      if (s === 'failed' || s === 'disconnected' || s === 'closed') {
+
+      if (s === 'connected') {
+        this.clearDisconnectTimer(peerID)
+        return
+      }
+
+      if (s === 'disconnected') {
+        this.clearDisconnectTimer(peerID)
+        const timer = setTimeout(() => {
+          const current = this.peers.get(peerID)
+          if (!current) return
+          const currentState = current.pc.connectionState
+          if (currentState === 'connected') return
+          this.removePeer(peerID)
+          this.participants.delete(peerID)
+          this.peersMeta.delete(peerID)
+          this.emitStatus()
+        }, 8_000)
+        this.disconnectTimers.set(peerID, timer)
+        return
+      }
+
+      if (s === 'failed' || s === 'closed') {
+        this.clearDisconnectTimer(peerID)
         this.removePeer(peerID)
         this.participants.delete(peerID)
         this.peersMeta.delete(peerID)
@@ -465,12 +519,14 @@ export class VoiceRTCClient {
       analyser: null,
       analyserData: null,
       sourceNode: null,
+      pendingICE: [],
     }
     this.peers.set(peerID, state)
     return state
   }
 
   private removePeer(peerID: string): void {
+    this.clearDisconnectTimer(peerID)
     const peer = this.peers.get(peerID)
     if (!peer) return
     this.peers.delete(peerID)
@@ -497,8 +553,35 @@ export class VoiceRTCClient {
   }
 
   private cleanupPeers(): void {
+    for (const timer of this.disconnectTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.disconnectTimers.clear()
+
     for (const peerID of this.peers.keys()) {
       this.removePeer(peerID)
+    }
+  }
+
+  private clearDisconnectTimer(peerID: string): void {
+    const timer = this.disconnectTimers.get(peerID)
+    if (!timer) return
+    clearTimeout(timer)
+    this.disconnectTimers.delete(peerID)
+  }
+
+  private async flushPendingICE(peerID: string): Promise<void> {
+    const peer = this.peers.get(peerID)
+    if (!peer || !peer.pc.remoteDescription || peer.pendingICE.length === 0) return
+
+    const pending = [...peer.pendingICE]
+    peer.pendingICE = []
+    for (const candidate of pending) {
+      try {
+        await peer.pc.addIceCandidate(candidate)
+      } catch {
+        // Ignore invalid/stale candidates after reconnect churn.
+      }
     }
   }
 
@@ -634,6 +717,68 @@ export class VoiceRTCClient {
     })
   }
 
+  private async resolveIceServers(baseURL: string, authToken?: string): Promise<RTCIceServer[]> {
+    const trimmed = baseURL.replace(/\/$/, '')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4000)
+
+    try {
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      }
+      const token = (authToken || '').trim()
+      if (token) headers.Authorization = `Bearer ${token}`
+
+      const res = await fetch(`${trimmed}/api/v1/voice/ice-config`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers,
+        signal: controller.signal,
+      })
+      if (!res.ok) return DEFAULT_ICE_SERVERS
+
+      const data = (await res.json()) as IceConfigResponse
+      const rawServers = Array.isArray(data.servers) ? data.servers as IceConfigServer[] : []
+      const parsed: RTCIceServer[] = []
+
+      for (const raw of rawServers) {
+        if (!raw || typeof raw !== 'object') continue
+        const urls = this.normalizeIceURLs(raw.urls)
+        if (urls.length === 0) continue
+
+        const server: RTCIceServer = { urls }
+        const username = this.safeString(raw.username)
+        const credential = this.safeString(raw.credential)
+        if (username) server.username = username
+        if (credential) server.credential = credential
+        parsed.push(server)
+      }
+
+      return parsed.length > 0 ? parsed : DEFAULT_ICE_SERVERS
+    } catch {
+      return DEFAULT_ICE_SERVERS
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  private normalizeIceURLs(raw: unknown): string[] {
+    if (typeof raw === 'string') {
+      const url = raw.trim()
+      return url ? [url] : []
+    }
+    if (!Array.isArray(raw)) return []
+
+    const urls: string[] = []
+    for (const entry of raw) {
+      if (typeof entry !== 'string') continue
+      const url = entry.trim()
+      if (!url) continue
+      urls.push(url)
+    }
+    return urls
+  }
+
   private safeString(value: unknown): string {
     return typeof value === 'string' ? value.trim() : ''
   }
@@ -686,7 +831,7 @@ export class VoiceRTCClient {
 
       peer.sourceNode = source
       peer.analyser = analyser
-      peer.analyserData = new Uint8Array(analyser.frequencyBinCount)
+      peer.analyserData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>
     } catch {
       // Keep voice functional even if analyser fails.
     }

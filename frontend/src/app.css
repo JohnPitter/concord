@@ -35,6 +35,10 @@
   --color-void-danger: #ef4444;
   --color-void-danger-hover: #dc2626;
 
+  /* Skeleton */
+  --color-void-skeleton-base: #1d2b22;
+  --color-void-skeleton-highlight: #304638;
+
   /* Success / Warning */
   --color-void-success: #22c55e;
   --color-void-warning: #f59e0b;
@@ -99,6 +103,8 @@ html.light {
   --color-void-border-active: #16a34a;
   --color-void-danger: #ef4444;
   --color-void-danger-hover: #dc2626;
+  --color-void-skeleton-base: #e8ebf0;
+  --color-void-skeleton-highlight: #d6dce4;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -146,6 +152,22 @@ html.light ::-webkit-scrollbar-thumb:hover {
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-void-skeleton-base) 20%,
+    var(--color-void-skeleton-highlight) 40%,
+    var(--color-void-skeleton-base) 60%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
 }
 
 /* Utility animation classes */

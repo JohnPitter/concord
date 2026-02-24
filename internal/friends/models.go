@@ -36,5 +36,5 @@ type FriendView struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url"`
-	Status      string `json:"status"` // always "offline" for now
+	Status      string `json:"status"` // "online" | "offline"
 }

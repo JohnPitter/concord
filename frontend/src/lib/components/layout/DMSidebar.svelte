@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DMConversation } from '../../stores/friends.svelte'
   import type { SpeakerData } from '../../stores/voice.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import VoiceControls from '../voice/VoiceControls.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
@@ -16,6 +17,7 @@
     activeDMId = null,
     onSelectDM,
     onOpenFriends,
+    loading = false,
     currentUser = null,
     voiceConnected = false,
     voiceChannelName = '',
@@ -30,11 +32,13 @@
     onToggleScreenShare,
     onLeaveVoice,
     onOpenSettings,
+    onNewDM,
   }: {
     dms: DMConversation[]
     activeDMId?: string | null
     onSelectDM: (id: string | null) => void
     onOpenFriends: () => void
+    loading?: boolean
     currentUser?: CurrentUser | null
     voiceConnected?: boolean
     voiceChannelName?: string
@@ -91,6 +95,7 @@
         />
         {#if searchQuery}
           <button
+            aria-label={t(trans, 'chat.clear')}
             class="text-void-text-muted hover:text-void-text-primary cursor-pointer"
             onclick={() => { searchQuery = '' }}
           >
@@ -153,56 +158,70 @@
     </div>
 
     <!-- DM list -->
-    {#each filteredDms as dm}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div class="px-2">
-        <div
-          class="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer
-            {activeDMId === dm.id
-              ? 'bg-void-bg-hover text-void-text-primary'
-              : 'text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary'}"
-          onclick={() => onSelectDM(dm.id)}
-        >
-          <!-- Avatar with status -->
-          <div class="relative shrink-0">
-            {#if dm.avatar_url}
-              <img src={dm.avatar_url} alt={dm.display_name} class="h-8 w-8 rounded-full object-cover" />
-            {:else}
-              <div class="h-8 w-8 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
-                {dm.display_name.slice(0, 2).toUpperCase()}
-              </div>
-            {/if}
-            <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-void-bg-secondary {statusColor[dm.status] ?? 'bg-void-text-muted'}"></span>
+    {#if loading}
+      <div class="space-y-1 px-2 py-1">
+        {#each Array.from({ length: 7 }) as _, i (`dm-sk-${i}`)}
+          <div class="flex items-center gap-2 rounded-md px-2 py-1.5">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-24 rounded-md" />
+              <Skeleton className="h-3 w-32 rounded-md" />
+            </div>
           </div>
-
-          <div class="flex-1 min-w-0 text-left">
-            <p class="truncate text-sm font-medium leading-tight">{dm.display_name}</p>
-            {#if dm.lastMessage}
-              <p class="truncate text-[11px] text-void-text-muted leading-tight">{dm.lastMessage}</p>
-            {/if}
-          </div>
-
-          {#if dm.unread}
-            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-void-danger px-1 text-[10px] font-bold text-white">
-              {dm.unread}
-            </span>
-          {/if}
-
-          <!-- Close button on hover -->
-          <button
-            class="hidden group-hover:flex h-4 w-4 shrink-0 items-center justify-center rounded text-void-text-muted hover:text-void-text-primary transition-colors"
-            onclick={(e) => { e.stopPropagation(); }}
-            aria-label={t(trans, 'nav.closeDM')}
-          >
-            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
+        {/each}
       </div>
-    {/each}
+    {:else}
+      {#each filteredDms as dm}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="px-2">
+          <div
+            class="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer
+              {activeDMId === dm.id
+                ? 'bg-void-bg-hover text-void-text-primary'
+                : 'text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary'}"
+            onclick={() => onSelectDM(dm.id)}
+          >
+            <!-- Avatar with status -->
+            <div class="relative shrink-0">
+              {#if dm.avatar_url}
+                <img src={dm.avatar_url} alt={dm.display_name} class="h-8 w-8 rounded-full object-cover" />
+              {:else}
+                <div class="h-8 w-8 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
+                  {dm.display_name.slice(0, 2).toUpperCase()}
+                </div>
+              {/if}
+              <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-void-bg-secondary {statusColor[dm.status] ?? 'bg-void-text-muted'}"></span>
+            </div>
+
+            <div class="flex-1 min-w-0 text-left">
+              <p class="truncate text-sm font-medium leading-tight">{dm.display_name}</p>
+              {#if dm.lastMessage}
+                <p class="truncate text-[11px] text-void-text-muted leading-tight">{dm.lastMessage}</p>
+              {/if}
+            </div>
+
+            {#if dm.unread}
+              <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-void-danger px-1 text-[10px] font-bold text-white">
+                {dm.unread}
+              </span>
+            {/if}
+
+            <!-- Close button on hover -->
+            <button
+              class="hidden group-hover:flex h-4 w-4 shrink-0 items-center justify-center rounded text-void-text-muted hover:text-void-text-primary transition-colors"
+              onclick={(e) => { e.stopPropagation(); }}
+              aria-label={t(trans, 'nav.closeDM')}
+            >
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      {/each}
+    {/if}
   </div>
 
   <!-- Voice controls (when in voice) -->
@@ -213,7 +232,6 @@
     deafened={voiceDeafened}
     noiseSuppression={voiceNoiseSuppression}
     screenSharing={voiceScreenSharing}
-    speakers={voiceSpeakers}
     onToggleMute={() => onToggleMute?.()}
     onToggleDeafen={() => onToggleDeafen?.()}
     onToggleNoiseSuppression={() => onToggleNoiseSuppression?.()}
@@ -224,7 +242,9 @@
   <!-- User panel -->
   <div class="border-t border-void-border bg-void-bg-primary p-2 shrink-0">
     <div class="flex items-center gap-2 rounded-md px-2 py-1.5">
-      {#if currentUser?.avatar_url}
+      {#if loading}
+        <Skeleton className="h-8 w-8 rounded-full" />
+      {:else if currentUser?.avatar_url}
         <img src={currentUser.avatar_url} alt={displayName} class="h-8 w-8 shrink-0 rounded-full object-cover" />
       {:else}
         <div class="h-8 w-8 shrink-0 rounded-full bg-void-accent flex items-center justify-center text-xs font-bold text-white">
@@ -232,8 +252,13 @@
         </div>
       {/if}
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
-        <p class="text-[11px] text-void-online">{t(trans, 'common.online')}</p>
+        {#if loading}
+          <Skeleton className="mb-1 h-3.5 w-24 rounded-md" />
+          <Skeleton className="h-3 w-14 rounded-md" />
+        {:else}
+          <p class="text-sm font-medium text-void-text-primary truncate">{displayName}</p>
+          <p class="text-[11px] text-void-online">{t(trans, 'common.online')}</p>
+        {/if}
       </div>
       <Tooltip text={t(trans, 'nav.settings')} position="top">
         <button

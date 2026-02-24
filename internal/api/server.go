@@ -19,22 +19,24 @@ import (
 	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
 	"github.com/concord-chat/concord/internal/server"
+	"github.com/concord-chat/concord/internal/voice"
 )
 
 // Server is the central HTTP API server for Concord.
 // It wires chi routing, middleware, and service handlers.
 type Server struct {
-	router     chi.Router
-	httpServer *http.Server
-	auth       *auth.Service
-	servers    *server.Service
-	chat       *chat.Service
-	friends    *friends.Service
-	signaling  *signaling.Server
-	health     *observability.HealthChecker
-	metrics    *observability.Metrics
-	logger     zerolog.Logger
-	cfg        config.ServerConfig
+	router      chi.Router
+	httpServer  *http.Server
+	auth        *auth.Service
+	servers     *server.Service
+	chat        *chat.Service
+	friends     *friends.Service
+	signaling   *signaling.Server
+	iceProvider *voice.ICECredentialsProvider
+	health      *observability.HealthChecker
+	metrics     *observability.Metrics
+	logger      zerolog.Logger
+	cfg         config.ServerConfig
 }
 
 // New creates and configures a new API Server with all routes and middleware.
@@ -151,6 +153,7 @@ func New(
 			// Voice
 			protected.Get("/servers/{serverID}/channels/{channelID}/voice/participants", s.handleVoiceParticipants)
 			protected.Get("/servers/{serverID}/voice/participants", s.handleServerVoiceParticipants)
+			protected.Get("/voice/ice-config", s.handleVoiceICEConfig)
 
 			// Friends
 			protected.Post("/friends/request", s.handleSendFriendRequest)
@@ -168,6 +171,11 @@ func New(
 
 	s.router = r
 	return s
+}
+
+// SetVoiceICEProvider configures TURN credential generation for WebRTC peers.
+func (s *Server) SetVoiceICEProvider(provider *voice.ICECredentialsProvider) {
+	s.iceProvider = provider
 }
 
 // Start begins listening for HTTP connections.

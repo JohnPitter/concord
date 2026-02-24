@@ -18,5 +18,12 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "wailsjs/**/*.ts", "wailsjs/**/*.js"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.svelte",
+    "wailsjs/**/*.d.ts",
+    "wailsjs/go/models.ts"
+  ],
+  "exclude": ["wailsjs/**/*.js"]
 }

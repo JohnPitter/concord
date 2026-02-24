@@ -91,7 +91,7 @@ type PostgresConfig struct {
 type ServerConfig struct {
 	Host            string        `json:"host"`
 	Port            int           `json:"port"`
-	PublicURL       string        `json:"public_url"`  // External URL (e.g. Cloudflare tunnel)
+	PublicURL       string        `json:"public_url"` // External URL (e.g. Cloudflare tunnel)
 	TLSEnabled      bool          `json:"tls_enabled"`
 	TLSCertFile     string        `json:"tls_cert_file"`
 	TLSKeyFile      string        `json:"tls_key_file"`
@@ -125,26 +125,32 @@ type P2PConfig struct {
 
 // VoiceConfig contains voice chat settings
 type VoiceConfig struct {
-	SampleRate             int                      `json:"sample_rate"`        // Hz (48000)
-	Channels               int                      `json:"channels"`           // 1 = mono, 2 = stereo
-	FrameSize              int                      `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
-	Bitrate                int                      `json:"bitrate"`            // bps (64000)
-	JitterBufferSize       time.Duration            `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
-	MaxJitterBuffer        time.Duration            `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
-	EnableVAD              bool                     `json:"enable_vad"`         // Voice Activity Detection
-	VADThreshold           float32                  `json:"vad_threshold"`      // 0.0 - 1.0
-	EnableNoiseSuppression bool                     `json:"enable_noise_suppression"`
-	MaxChannelUsers        int                      `json:"max_channel_users"` // Max users per voice channel
-	VoiceTranslation       VoiceTranslationConfig   `json:"voice_translation"` // Real-time voice translation
+	SampleRate             int                    `json:"sample_rate"`        // Hz (48000)
+	Channels               int                    `json:"channels"`           // 1 = mono, 2 = stereo
+	FrameSize              int                    `json:"frame_size"`         // Samples per frame (960 for 20ms @ 48kHz)
+	Bitrate                int                    `json:"bitrate"`            // bps (64000)
+	JitterBufferSize       time.Duration          `json:"jitter_buffer_size"` // Default jitter buffer (50ms)
+	MaxJitterBuffer        time.Duration          `json:"max_jitter_buffer"`  // Max jitter buffer (200ms)
+	EnableVAD              bool                   `json:"enable_vad"`         // Voice Activity Detection
+	VADThreshold           float32                `json:"vad_threshold"`      // 0.0 - 1.0
+	EnableNoiseSuppression bool                   `json:"enable_noise_suppression"`
+	MaxChannelUsers        int                    `json:"max_channel_users"`   // Max users per voice channel
+	TURNEnabled            bool                   `json:"turn_enabled"`        // Enable TURN REST credential endpoint
+	TURNHost               string                 `json:"turn_host"`           // Public TURN host (domain/IP)
+	TURNPort               int                    `json:"turn_port"`           // TURN UDP/TCP port
+	TURNTLSPort            int                    `json:"turn_tls_port"`       // TURN TLS port
+	TURNSecret             string                 `json:"turn_secret"`         // Shared secret for TURN REST auth
+	TURNCredentialTTL      time.Duration          `json:"turn_credential_ttl"` // Credential lifetime
+	VoiceTranslation       VoiceTranslationConfig `json:"voice_translation"`   // Real-time voice translation
 }
 
 // VoiceTranslationConfig contains settings for real-time voice translation (STT + TTS).
 type VoiceTranslationConfig struct {
 	Enabled       bool          `json:"enabled"`
-	STTURL        string        `json:"stt_url"`        // Default: "https://api.openai.com/v1/audio/transcriptions"
+	STTURL        string        `json:"stt_url"` // Default: "https://api.openai.com/v1/audio/transcriptions"
 	STTAPIKey     string        `json:"stt_api_key"`
-	STTModel      string        `json:"stt_model"`      // Default: "whisper-1"
-	TTSURL        string        `json:"tts_url"`        // Default: "https://api.openai.com/v1/audio/speech"
+	STTModel      string        `json:"stt_model"` // Default: "whisper-1"
+	TTSURL        string        `json:"tts_url"`   // Default: "https://api.openai.com/v1/audio/speech"
 	TTSAPIKey     string        `json:"tts_api_key"`
 	TTSVoice      string        `json:"tts_voice"`      // Default: "alloy"
 	TTSFormat     string        `json:"tts_format"`     // Default: "mp3"
@@ -358,6 +364,36 @@ func (c *Config) loadFromEnv() {
 	}
 
 	// Voice Translation (STT/TTS)
+	if v := os.Getenv("CONCORD_TURN_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			c.Voice.TURNEnabled = enabled
+		}
+	}
+	if v := os.Getenv("CONCORD_TURN_HOST"); v != "" {
+		c.Voice.TURNHost = v
+	}
+	if v := os.Getenv("CONCORD_TURN_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Voice.TURNPort = port
+		}
+	}
+	if v := os.Getenv("CONCORD_TURN_TLS_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Voice.TURNTLSPort = port
+		}
+	}
+	if v := os.Getenv("CONCORD_TURN_SECRET"); v != "" {
+		c.Voice.TURNSecret = v
+	}
+	if v := os.Getenv("CONCORD_TURN_CREDENTIAL_TTL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.Voice.TURNCredentialTTL = d
+		} else if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+			c.Voice.TURNCredentialTTL = time.Duration(seconds) * time.Second
+		}
+	}
+
+	// Voice Translation (STT/TTS)
 	if v := os.Getenv("WHISPER_URL"); v != "" {
 		c.Voice.VoiceTranslation.STTURL = v
 	}
@@ -432,6 +468,17 @@ func (c *Config) Validate() error {
 	}
 	if c.Voice.Bitrate <= 0 {
 		return fmt.Errorf("invalid bitrate: %d", c.Voice.Bitrate)
+	}
+	if c.Voice.TURNEnabled {
+		if c.Voice.TURNSecret == "" {
+			return errors.New("turn secret cannot be empty when TURN is enabled")
+		}
+		if c.Voice.TURNPort <= 0 {
+			return fmt.Errorf("invalid TURN port: %d", c.Voice.TURNPort)
+		}
+		if c.Voice.TURNTLSPort < 0 {
+			return fmt.Errorf("invalid TURN TLS port: %d", c.Voice.TURNTLSPort)
+		}
 	}
 
 	// Validate logging level

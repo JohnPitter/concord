@@ -343,6 +343,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         avatarURL,
         inputDeviceId: settings.audioInputDevice,
         outputDeviceId: settings.audioOutputDevice,
+        authToken: apiClient.getTokens()?.accessToken || '',
       })
     } else {
       if (isServerMode()) {
@@ -455,12 +456,15 @@ export async function setVoiceOutputDevice(deviceId: string): Promise<void> {
 
 // Track the local user's username for VAD matching
 let localUsername: string | null = null
+let localUserID: string | null = null
 
-export function setLocalUsername(username: string): void {
+export function setLocalUsername(username: string, userID?: string): void {
   localUsername = username
+  localUserID = userID?.trim() || null
 }
 
 function isLocalUser(speaker: SpeakerData): boolean {
+  if (localUserID && speaker.user_id === localUserID) return true
   if (!localUsername) return false
   return speaker.username === localUsername
 }

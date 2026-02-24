@@ -87,6 +87,12 @@ func Default() *Config {
 			VADThreshold:           0.3,
 			EnableNoiseSuppression: true,
 			MaxChannelUsers:        25,
+			TURNEnabled:            false,
+			TURNHost:               "",
+			TURNPort:               3478,
+			TURNTLSPort:            0,
+			TURNSecret:             "",
+			TURNCredentialTTL:      12 * time.Hour,
 			VoiceTranslation: VoiceTranslationConfig{
 				Enabled:       false,
 				STTURL:        "https://api.openai.com/v1/audio/transcriptions",

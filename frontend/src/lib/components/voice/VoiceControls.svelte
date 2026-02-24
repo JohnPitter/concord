@@ -1,7 +1,6 @@
 <script lang="ts">
   import Tooltip from '../ui/Tooltip.svelte'
   import { translations, t } from '../../i18n'
-  import type { SpeakerData } from '../../stores/voice.svelte'
 
   let {
     connected,
@@ -10,7 +9,6 @@
     deafened,
     noiseSuppression = true,
     screenSharing = false,
-    speakers,
     onToggleMute,
     onToggleDeafen,
     onToggleNoiseSuppression,
@@ -23,7 +21,6 @@
     deafened: boolean
     noiseSuppression?: boolean
     screenSharing?: boolean
-    speakers: SpeakerData[]
     onToggleMute: () => void
     onToggleDeafen: () => void
     onToggleNoiseSuppression?: () => void
@@ -58,26 +55,6 @@
         </button>
       </Tooltip>
     </div>
-
-    <!-- Active speakers -->
-    {#if speakers.length > 0}
-      <div class="px-3 pb-1">
-        {#each speakers as speaker (speaker.peer_id || speaker.user_id || speaker.username)}
-          {@const displaySpeakerName = speaker.username || speaker.user_id || speaker.peer_id || 'user'}
-          <div class="flex items-center gap-2 py-0.5">
-            <div class="h-5 w-5 shrink-0 rounded-full bg-void-accent/20 flex items-center justify-center">
-              <span class="text-[9px] font-bold text-void-accent">
-                {displaySpeakerName.slice(0, 2).toUpperCase()}
-              </span>
-            </div>
-            <span class="text-xs text-void-text-secondary truncate">{displaySpeakerName}</span>
-            {#if speaker.speaking}
-              <div class="ml-auto h-1.5 w-1.5 rounded-full bg-void-online"></div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/if}
 
     <!-- Controls -->
     <div class="flex items-center justify-center gap-1 border-t border-void-border px-3 py-1.5">

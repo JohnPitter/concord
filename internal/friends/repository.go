@@ -249,7 +249,20 @@ func (r *Repository) RejectRequest(ctx context.Context, requestID, userID string
 // Complexity: O(n) where n = number of friends.
 func (r *Repository) GetFriends(ctx context.Context, userID string) ([]FriendView, error) {
 	query := `
-		SELECT u.id, u.username, COALESCE(u.display_name, u.username), COALESCE(u.avatar_url, '')
+		SELECT
+			u.id,
+			u.username,
+			COALESCE(u.display_name, u.username),
+			COALESCE(u.avatar_url, ''),
+			CASE
+				WHEN EXISTS (
+					SELECT 1
+					FROM auth_sessions s
+					WHERE s.user_id = u.id
+						AND s.expires_at > CURRENT_TIMESTAMP
+				) THEN 'online'
+				ELSE 'offline'
+			END AS status
 		FROM friends f
 		JOIN users u ON u.id = f.friend_id
 		WHERE f.user_id = ?
@@ -264,10 +277,9 @@ func (r *Repository) GetFriends(ctx context.Context, userID string) ([]FriendVie
 	var results []FriendView
 	for rows.Next() {
 		var v FriendView
-		if err := rows.Scan(&v.ID, &v.Username, &v.DisplayName, &v.AvatarURL); err != nil {
+		if err := rows.Scan(&v.ID, &v.Username, &v.DisplayName, &v.AvatarURL, &v.Status); err != nil {
 			return nil, fmt.Errorf("scan friend: %w", err)
 		}
-		v.Status = "offline"
 		results = append(results, v)
 	}
 	if results == nil {

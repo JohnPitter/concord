@@ -47,6 +47,8 @@ let activeServerId = $state<string | null>(null)
 let channels = $state<ChannelData[]>([])
 let members = $state<MemberData[]>([])
 let loading = $state(false)
+let channelsLoading = $state(false)
+let membersLoading = $state(false)
 let error = $state<string | null>(null)
 let memberPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -58,7 +60,9 @@ export function getServers() {
     get channels() { return channels },
     get textChannels() { return channels.filter(c => c.type === 'text') },
     get voiceChannels() { return channels.filter(c => c.type === 'voice') },
+    get channelsLoading() { return channelsLoading },
     get members() { return members },
+    get membersLoading() { return membersLoading },
     get loading() { return loading },
     get error() { return error },
   }
@@ -146,6 +150,7 @@ export async function deleteServer(serverID: string, userID: string): Promise<vo
 // --- Channels ---
 
 async function loadChannels(serverID: string): Promise<void> {
+  channelsLoading = true
   try {
     await ensureValidToken()
     let result
@@ -158,6 +163,8 @@ async function loadChannels(serverID: string): Promise<void> {
   } catch (e) {
     console.error('Failed to load channels:', e)
     channels = []
+  } finally {
+    channelsLoading = false
   }
 }
 
@@ -195,6 +202,7 @@ export async function deleteChannel(serverID: string, userID: string, channelID:
 // --- Members ---
 
 async function loadMembers(serverID: string): Promise<void> {
+  membersLoading = true
   try {
     await ensureValidToken()
     let result
@@ -207,6 +215,8 @@ async function loadMembers(serverID: string): Promise<void> {
   } catch (e) {
     console.error('Failed to load members:', e)
     members = []
+  } finally {
+    membersLoading = false
   }
 }
 

@@ -106,12 +106,7 @@ export async function checkForUpdates(): Promise<UpdateInfo> {
 export function openUpdatePage(url?: string): void {
   const target = url || LATEST_RELEASE_PAGE
   try {
-    const result = BrowserOpenURL(target)
-    if (result && typeof (result as Promise<unknown>).catch === 'function') {
-      ;(result as Promise<unknown>).catch(() => {
-        window.open(target, '_blank', 'noopener,noreferrer')
-      })
-    }
+    BrowserOpenURL(target)
   } catch {
     window.open(target, '_blank', 'noopener,noreferrer')
   }

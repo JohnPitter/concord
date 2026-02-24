@@ -1,5 +1,6 @@
 <script lang="ts">
   import MessageBubble from './MessageBubble.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import { translations, t } from '../../i18n'
   import type { MessageData, AttachmentData } from '../../stores/chat.svelte'
 
@@ -83,7 +84,24 @@
     </div>
   {/if}
 
-  {#if messages.length === 0 && !loading}
+  {#if loading && messages.length === 0}
+    <div class="px-4 py-4">
+      <div class="space-y-4">
+        {#each Array.from({ length: 7 }) as _, i (`msg-sk-${i}`)}
+          <div class="flex gap-3 {i % 3 === 2 ? 'justify-end' : ''}">
+            {#if i % 3 !== 2}
+              <Skeleton className="h-10 w-10 rounded-full" />
+            {/if}
+            <div class="max-w-[70%] min-w-[220px]">
+              <Skeleton className="mb-1 h-3.5 w-24 rounded-md" />
+              <Skeleton className="mb-1 h-3.5 w-full rounded-md" />
+              <Skeleton className="h-3.5 w-3/4 rounded-md" />
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else if messages.length === 0 && !loading}
     <!-- Welcome message -->
     <div class="flex flex-col items-center justify-center px-4 py-16">
       <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-void-bg-tertiary">

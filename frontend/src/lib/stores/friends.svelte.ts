@@ -4,9 +4,12 @@
 import * as App from '../../../wailsjs/go/main/App'
 import { ensureValidToken } from './auth.svelte'
 import { getAuth } from './auth.svelte'
+import { getSettings } from './settings.svelte'
 import { isServerMode } from '../api/mode'
 import { apiFriends } from '../api/friends'
 import type { FriendRequestView, FriendView } from '../api/friends'
+import { notify, requestNotificationPermission } from '../services/notifications'
+import { toastInfo } from './toast.svelte'
 
 export type FriendStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
@@ -68,12 +71,13 @@ interface FriendsState {
 
 const STORAGE_KEY = 'concord_friends'
 const DM_MESSAGES_KEY = 'concord_dm_messages'
-const POLL_INTERVAL = 30_000 // 30s polling for pending requests
+const POLL_INTERVAL = 2_500 // near real-time polling for friends/pending requests
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // Track recently rejected request IDs so polling doesn't re-add them
 const recentlyRejected = new Set<string>()
+const seenIncomingRequestIDs = new Set<string>()
 
 const state = $state<FriendsState>({
   friends: [],
@@ -93,6 +97,25 @@ const state = $state<FriendsState>({
 function currentUserID(): string | null {
   const auth = getAuth()
   return auth.user?.id ?? null
+}
+
+function currentUsername(): string {
+  const auth = getAuth()
+  return auth.user?.username ?? ''
+}
+
+function notificationsEnabled(): boolean {
+  return getSettings().notificationsEnabled
+}
+
+function maybeNotify(title: string, body: string): void {
+  if (!notificationsEnabled()) return
+
+  toastInfo(title, body)
+  void requestNotificationPermission().then((granted) => {
+    if (!granted) return
+    notify(title, body)
+  })
 }
 
 // ── Persistence (localStorage cache) ────────────────────────────────────
@@ -121,7 +144,13 @@ function loadFromStorage() {
     if (raw) {
       const data = JSON.parse(raw)
       if (data.friends) state.friends = data.friends
-      if (data.pendingRequests) state.pendingRequests = data.pendingRequests
+      if (data.pendingRequests) {
+        state.pendingRequests = data.pendingRequests
+        seenIncomingRequestIDs.clear()
+        for (const req of state.pendingRequests) {
+          if (req.direction === 'incoming') seenIncomingRequestIDs.add(req.id)
+        }
+      }
       if (data.blocked) state.blocked = data.blocked
       if (data.dms) state.dms = data.dms
     }
@@ -135,12 +164,25 @@ function loadFromStorage() {
 // ── Backend sync helpers ──────────────────────────────────────────────
 
 function mapBackendFriend(f: FriendView): Friend {
+  const statusRaw = (f.status || '').toLowerCase()
+  const status: FriendStatus =
+    statusRaw === 'online' || statusRaw === 'idle' || statusRaw === 'dnd' || statusRaw === 'offline'
+      ? statusRaw
+      : 'offline'
+
+  const activity = (f.activity || '').trim()
+
   return {
     id: f.id,
     username: f.username,
     display_name: f.display_name,
     avatar_url: f.avatar_url || undefined,
-    status: 'offline' as FriendStatus,
+    status,
+    activity: activity || (status === 'online' ? 'Online' : undefined),
+    game: f.game,
+    gameSince: f.gameSince,
+    streaming: !!f.streaming,
+    streamTitle: f.streamTitle,
   }
 }
 
@@ -156,6 +198,21 @@ function mapBackendRequest(r: FriendRequestView): FriendRequest {
 }
 
 function syncDMsFromFriends(friends: Friend[]) {
+  // Keep existing DM metadata in sync with the latest friend state.
+  const byFriendID = new Map(friends.map(f => [f.id, f] as const))
+  state.dms = state.dms
+    .filter(d => byFriendID.has(d.friendId))
+    .map(d => {
+      const friend = byFriendID.get(d.friendId)!
+      return {
+        ...d,
+        username: friend.username,
+        display_name: friend.display_name,
+        avatar_url: friend.avatar_url,
+        status: friend.status,
+      }
+    })
+
   // Ensure every friend has a DM conversation entry
   const existingDMFriendIds = new Set(state.dms.map(d => d.friendId))
   const newDMs: DMConversation[] = []
@@ -174,11 +231,7 @@ function syncDMsFromFriends(friends: Friend[]) {
   }
 
   // Remove DMs for users no longer in friends list
-  const friendIds = new Set(friends.map(f => f.id))
-  state.dms = [
-    ...state.dms.filter(d => friendIds.has(d.friendId)),
-    ...newDMs,
-  ]
+  state.dms = [...state.dms, ...newDMs]
 }
 
 async function fetchFriendsFromBackend(): Promise<Friend[]> {
@@ -248,6 +301,14 @@ export function setFriendsTab(tab: FriendsTab) {
 
 export function openDM(dmId: string | null) {
   state.activeDMId = dmId
+  if (!dmId) return
+  const dm = state.dms.find(d => d.id === dmId)
+  if (!dm) return
+  if (dm.unread) {
+    dm.unread = 0
+    state.dms = [...state.dms]
+    persist()
+  }
 }
 
 export async function loadFriends() {
@@ -263,6 +324,9 @@ export async function loadFriends() {
     state.friends = friends
     state.pendingRequests = pending
     syncDMsFromFriends(friends)
+    for (const req of pending) {
+      if (req.direction === 'incoming') seenIncomingRequestIDs.add(req.id)
+    }
     persist()
   } catch {
     // Keep cached data on error
@@ -285,6 +349,12 @@ function startPolling() {
       state.friends = friends
       // Filter out recently rejected requests to avoid the "reappear" glitch
       state.pendingRequests = pending.filter(r => !recentlyRejected.has(r.id))
+      for (const req of state.pendingRequests) {
+        if (req.direction !== 'incoming') continue
+        if (seenIncomingRequestIDs.has(req.id)) continue
+        seenIncomingRequestIDs.add(req.id)
+        maybeNotify('Novo pedido de amizade', `${req.display_name} enviou um pedido.`)
+      }
       syncDMsFromFriends(friends)
       persist()
     } catch {
@@ -313,6 +383,11 @@ export async function sendFriendRequest(username: string) {
   const uid = currentUserID()
   if (!uid) {
     state.addFriendError = 'Voce precisa estar logado.'
+    return
+  }
+
+  if (trimmed.toLowerCase() === currentUsername().toLowerCase()) {
+    state.addFriendError = 'Voce nao pode enviar convite para si mesmo.'
     return
   }
 
@@ -354,6 +429,7 @@ export async function acceptFriendRequest(requestId: string) {
     ])
     state.friends = friends
     state.pendingRequests = pending
+    seenIncomingRequestIDs.delete(requestId)
     syncDMsFromFriends(friends)
     persist()
   } catch {
@@ -367,6 +443,7 @@ export async function rejectFriendRequest(requestId: string) {
 
   // Mark as recently rejected so polling won't re-add it
   recentlyRejected.add(requestId)
+  seenIncomingRequestIDs.delete(requestId)
 
   // Optimistic removal — update UI immediately
   const previous = state.pendingRequests
@@ -486,9 +563,15 @@ export function sendDMMessage(dmId: string, senderId: string, content: string) {
   state.dmMessages = { ...state.dmMessages, [dmId]: [...(state.dmMessages[dmId] ?? []), msg] }
 
   // Update lastMessage on the DM conversation
+  const currentID = currentUserID()
+  const isIncoming = currentID !== null && senderId !== currentID
   const dm = state.dms.find(d => d.id === dmId)
   if (dm) {
     dm.lastMessage = trimmed
+    if (isIncoming && state.activeDMId !== dmId) {
+      dm.unread = (dm.unread ?? 0) + 1
+      maybeNotify(dm.display_name, trimmed)
+    }
     state.dms = [...state.dms]
     persist()
   }

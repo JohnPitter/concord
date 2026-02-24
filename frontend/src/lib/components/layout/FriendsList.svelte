@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Friend, FriendStatus, FriendRequest } from '../../stores/friends.svelte'
+  import Skeleton from '../ui/Skeleton.svelte'
   import { translations, t } from '../../i18n'
 
   type Tab = 'online' | 'all' | 'pending' | 'blocked'
@@ -8,6 +9,7 @@
     friends,
     pendingRequests = [],
     blockedUsers = [],
+    loading = false,
     tab,
     addFriendError = null,
     addFriendSuccess = null,
@@ -23,6 +25,7 @@
     friends: Friend[]
     pendingRequests?: FriendRequest[]
     blockedUsers?: string[]
+    loading?: boolean
     tab: Tab
     addFriendError?: string | null
     addFriendSuccess?: string | null
@@ -226,7 +229,22 @@
 
   <!-- Friends list -->
   <div class="flex-1 overflow-y-auto px-4 py-2">
-    {#if tab === 'blocked'}
+    {#if loading}
+      <div class="space-y-2">
+        {#each Array.from({ length: 7 }) as _, i (`friend-sk-${i}`)}
+          <div class="flex items-center gap-3 rounded-lg px-2 py-2.5">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <Skeleton className="mb-1 h-3.5 w-28 rounded-md" />
+              <Skeleton className="h-3 w-40 rounded-md" />
+            </div>
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+          <div class="mx-2 h-px bg-void-border/50"></div>
+        {/each}
+      </div>
+    {:else if tab === 'blocked'}
       {#if blockedUsers.length === 0}
         <div class="flex flex-col items-center justify-center h-full gap-3 text-center animate-fade-in">
           <svg class="h-16 w-16 text-void-text-muted opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
