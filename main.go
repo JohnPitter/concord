@@ -171,7 +171,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize friends service
 	friendRepo := friends.NewRepository(a.db, friends.NewStdlibTransactor(a.db.Conn()), a.logger)
-	a.friendService = friends.NewService(friendRepo, a.logger)
+	a.friendService = friends.NewService(friendRepo, nil, a.logger)
 	a.logger.Info().Msg("friends service initialized")
 
 	// Initialize chat service
@@ -525,13 +525,21 @@ func (a *App) LeaveVoice() error {
 // ToggleMute toggles the microphone mute state.
 func (a *App) ToggleMute() bool {
 	a.voiceEngine.Mute()
-	return a.voiceEngine.IsMuted()
+	muted := a.voiceEngine.IsMuted()
+	if a.voiceOrch != nil {
+		a.voiceOrch.UpdateSelfState(muted, a.voiceEngine.IsDeafened())
+	}
+	return muted
 }
 
 // ToggleDeafen toggles the audio output deafen state.
 func (a *App) ToggleDeafen() bool {
 	a.voiceEngine.Deafen()
-	return a.voiceEngine.IsDeafened()
+	deafened := a.voiceEngine.IsDeafened()
+	if a.voiceOrch != nil {
+		a.voiceOrch.UpdateSelfState(a.voiceEngine.IsMuted(), deafened)
+	}
+	return deafened
 }
 
 // GetVoiceStatus returns the current voice status.

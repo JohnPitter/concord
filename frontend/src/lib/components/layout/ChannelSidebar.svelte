@@ -344,6 +344,26 @@
                 {#if speaker.screenSharing || (isLocal && voiceScreenSharing)}
                   <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
+                {#if speaker.deafened}
+                  <Tooltip text={t(trans, 'voice.deafened')} position="top">
+                    <svg class="h-3 w-3 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M3 18v-6a9 9 0 0 1 .84-3.8" />
+                      <path d="M21 18v-6a9 9 0 0 0-9-9c-1.83 0-3.52.55-4.93 1.49" />
+                      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+                    </svg>
+                  </Tooltip>
+                {:else if speaker.muted}
+                  <Tooltip text={t(trans, 'voice.muted')} position="top">
+                    <svg class="h-3 w-3 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .67-.1 1.32-.27 1.93" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                  </Tooltip>
+                {/if}
                 <svg class="ml-auto h-3.5 w-3.5 shrink-0 {(speaker.speaking || (isLocal && voiceLocalSpeaking)) ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
                 </svg>

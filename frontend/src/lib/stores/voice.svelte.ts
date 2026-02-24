@@ -17,6 +17,8 @@ export interface SpeakerData {
   volume: number
   speaking: boolean
   screenSharing?: boolean
+  muted?: boolean
+  deafened?: boolean
 }
 
 export interface VoiceStatusData {
@@ -26,6 +28,7 @@ export interface VoiceStatusData {
   deafened: boolean
   peer_count: number
   speakers: SpeakerData[]
+  channel_started_at?: number
 }
 
 let state = $state<'disconnected' | 'connecting' | 'connected'>('disconnected')
@@ -36,14 +39,21 @@ let noiseSuppression = $state(true)
 let screenSharing = $state(false)
 let speakers = $state<SpeakerData[]>([])
 let error = $state<string | null>(null)
+let channelStartedAt = $state<number | null>(null)
 let joinedAt = $state<number | null>(null)
 let elapsedSeconds = $state(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 let rtcClient: VoiceRTCClient | null = null
 
-function startTimer() {
-  joinedAt = Date.now()
-  elapsedSeconds = 0
+function startTimer(startAt?: number) {
+  const now = Date.now()
+  if (typeof startAt === 'number' && Number.isFinite(startAt) && startAt > 0) {
+    joinedAt = startAt
+  } else {
+    joinedAt = now
+  }
+  if (joinedAt && joinedAt > now) joinedAt = now
+  elapsedSeconds = joinedAt ? Math.max(0, Math.floor((now - joinedAt) / 1000)) : 0
   if (timerInterval) clearInterval(timerInterval)
   timerInterval = setInterval(() => {
     if (joinedAt) elapsedSeconds = Math.floor((Date.now() - joinedAt) / 1000)
@@ -74,11 +84,37 @@ export function getVoice() {
     get screenSharing() { return screenSharing },
     get speakers() {
       // Enrich speakers reactively: local user gets client-side VAD + screen sharing
-      return speakers.map(s => ({
-        ...s,
-        speaking: s.speaking || (localSpeaking && isLocalUser(s)),
-        screenSharing: isLocalUser(s) ? screenSharing : false,
-      }))
+      const channelPeers = !isServerMode() && channelId
+        ? (channelParticipants[channelId] ?? [])
+        : []
+
+      return speakers.map(s => {
+        const local = isLocalUser(s)
+        let merged: SpeakerData = {
+          ...s,
+          speaking: s.speaking || (localSpeaking && local),
+          screenSharing: local ? screenSharing : false,
+          muted: local ? muted : s.muted,
+          deafened: local ? deafened : s.deafened,
+        }
+
+        if (!local && channelPeers.length > 0) {
+          const peer = channelPeers.find(p =>
+            (p.user_id && p.user_id === s.user_id) ||
+            (p.peer_id && p.peer_id === s.peer_id) ||
+            (p.username && p.username === s.username),
+          )
+          if (peer) {
+            merged = {
+              ...merged,
+              muted: peer.muted ?? merged.muted,
+              deafened: peer.deafened ?? merged.deafened,
+            }
+          }
+        }
+
+        return merged
+      })
     },
     get localSpeaking() { return localSpeaking },
     get error() { return error },
@@ -100,6 +136,8 @@ function normalizeSpeaker(raw: Partial<SpeakerData>): SpeakerData {
     volume: Number.isFinite(raw.volume as number) ? Number(raw.volume) : 0,
     speaking: !!raw.speaking,
     screenSharing: !!raw.screenSharing,
+    muted: !!raw.muted,
+    deafened: !!raw.deafened,
   }
 }
 
@@ -119,6 +157,17 @@ function applyVoiceStatus(status: VoiceStatusData): void {
   channelId = status.channel_id || null
   muted = status.muted
   deafened = status.deafened
+  if (state === 'disconnected') {
+    stopTimer()
+    channelStartedAt = null
+  }
+  const startedAt = typeof status.channel_started_at === 'number' ? status.channel_started_at : null
+  if (startedAt && startedAt > 0) {
+    if (channelStartedAt !== startedAt) {
+      channelStartedAt = startedAt
+      if (state === 'connected') startTimer(channelStartedAt)
+    }
+  }
   const normalized = (status.speakers ?? []).map(s => normalizeSpeaker(s))
   const newSpeakers = sortSpeakersStable(normalized)
 
@@ -320,6 +369,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
 
   state = 'connecting'
   error = null
+  channelStartedAt = null
 
   try {
     await ensureValidToken()
@@ -354,7 +404,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
     }
     await refreshVoiceStatus()
     playJoinSound()
-    startTimer()
+    startTimer(channelStartedAt ?? Date.now())
     startVoicePolling()
     startVoiceActivityDetection()
     setupTranslatedAudioListener()
@@ -384,6 +434,7 @@ export async function leaveVoice(): Promise<void> {
     stopTimer()
     state = 'disconnected'
     channelId = null
+    channelStartedAt = null
     speakers = []
     muted = false
     deafened = false
@@ -496,6 +547,8 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
             avatar_url: p.avatar_url || '',
             volume: 0,
             speaking: false,
+            muted: !!p.muted,
+            deafened: !!p.deafened,
           })),
         )
       }
@@ -514,6 +567,8 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
                 avatar_url: p.avatar_url || '',
                 volume: 0,
                 speaking: false,
+                muted: !!p.muted,
+                deafened: !!p.deafened,
               })),
             )
 
@@ -559,8 +614,10 @@ export function resetVoice(): void {
     void rtcClient.leave()
     rtcClient = null
   }
+  stopTimer()
   state = 'disconnected'
   channelId = null
+  channelStartedAt = null
   muted = false
   deafened = false
   speakers = []

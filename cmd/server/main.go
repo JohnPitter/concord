@@ -19,6 +19,7 @@ import (
 	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/presence"
 	"github.com/concord-chat/concord/internal/security"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/postgres"
@@ -132,7 +133,8 @@ func main() {
 		return postgres.NewQuerierAdapter(q)
 	})
 	friendRepo := friends.NewRepository(pgAdapter, friendTx, logger)
-	friendsSvc := friends.NewService(friendRepo, logger)
+	presenceTracker := presence.NewTracker(2 * time.Minute)
+	friendsSvc := friends.NewService(friendRepo, presenceTracker, logger)
 
 	logger.Info().Msg("all services initialized with postgresql backend")
 
@@ -149,6 +151,7 @@ func main() {
 		friendsSvc,
 		sigServer,
 		jwtManager,
+		presenceTracker,
 		health,
 		metrics,
 		logger,

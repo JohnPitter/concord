@@ -18,6 +18,7 @@ import (
 	"github.com/concord-chat/concord/internal/friends"
 	"github.com/concord-chat/concord/internal/network/signaling"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/presence"
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/voice"
 )
@@ -33,6 +34,7 @@ type Server struct {
 	friends     *friends.Service
 	signaling   *signaling.Server
 	iceProvider *voice.ICECredentialsProvider
+	presence    *presence.Tracker
 	health      *observability.HealthChecker
 	metrics     *observability.Metrics
 	logger      zerolog.Logger
@@ -50,6 +52,7 @@ func New(
 	friendsSvc *friends.Service,
 	sigServer *signaling.Server,
 	jwtManager *auth.JWTManager,
+	presenceTracker *presence.Tracker,
 	health *observability.HealthChecker,
 	metrics *observability.Metrics,
 	logger zerolog.Logger,
@@ -60,6 +63,7 @@ func New(
 		chat:      chatSvc,
 		friends:   friendsSvc,
 		signaling: sigServer,
+		presence:  presenceTracker,
 		health:    health,
 		metrics:   metrics,
 		logger:    logger.With().Str("component", "api_server").Logger(),
@@ -121,6 +125,9 @@ func New(
 		api.Group(func(protected chi.Router) {
 			if jwtManager != nil {
 				protected.Use(AuthMiddleware(jwtManager))
+			}
+			if s.presence != nil {
+				protected.Use(PresenceMiddleware(s.presence))
 			}
 
 			// Servers

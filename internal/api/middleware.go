@@ -14,6 +14,7 @@ import (
 	"github.com/concord-chat/concord/internal/auth"
 	"github.com/concord-chat/concord/internal/config"
 	"github.com/concord-chat/concord/internal/observability"
+	"github.com/concord-chat/concord/internal/presence"
 )
 
 // contextKey is a private type used for context value keys to prevent collisions.
@@ -56,6 +57,24 @@ func AuthMiddleware(jwtManager *auth.JWTManager) func(http.Handler) http.Handler
 
 			ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// PresenceMiddleware updates the in-memory presence tracker for authenticated users.
+// Should run after AuthMiddleware.
+// Complexity: O(1) per request.
+func PresenceMiddleware(tracker *presence.Tracker) func(http.Handler) http.Handler {
+	if tracker == nil {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID := UserIDFromContext(r.Context())
+			if userID != "" {
+				tracker.Touch(userID)
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

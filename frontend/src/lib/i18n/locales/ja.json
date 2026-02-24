@@ -187,6 +187,8 @@
   "voice.unmute": "\u30df\u30e5\u30fc\u30c8\u89e3\u9664",
   "voice.deafen": "\u30b9\u30d4\u30fc\u30ab\u30fc\u30aa\u30d5",
   "voice.undeafen": "\u30b9\u30d4\u30fc\u30ab\u30fc\u30aa\u30f3",
+  "voice.muted": "\u30df\u30e5\u30fc\u30c8\u4e2d",
+  "voice.deafened": "\u30b9\u30d4\u30fc\u30ab\u30fc\u30aa\u30d5\u4e2d",
 
   "translation.translate": "\u7ffb\u8a33",
   "translation.active": "\u7ffb\u8a33\u6709\u52b9",

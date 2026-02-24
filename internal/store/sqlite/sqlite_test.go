@@ -43,8 +43,12 @@ func TestNew(t *testing.T) {
 
 	t.Run("fails with invalid path", func(t *testing.T) {
 		logger := observability.NewNopLogger()
+		tmpDir := t.TempDir()
+		blockingFile := filepath.Join(tmpDir, "not-a-directory")
+		require.NoError(t, os.WriteFile(blockingFile, []byte("x"), 0o644))
+
 		cfg := Config{
-			Path:            "/invalid/path/to/database.db",
+			Path:            filepath.Join(blockingFile, "database.db"),
 			MaxOpenConns:    10,
 			MaxIdleConns:    5,
 			ConnMaxLifetime: 1 * time.Hour,

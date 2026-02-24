@@ -187,6 +187,8 @@
   "voice.unmute": "Ativar microfone",
   "voice.deafen": "Ensurdecer",
   "voice.undeafen": "Ativar audio",
+  "voice.muted": "Mutado",
+  "voice.deafened": "Ensurdecido",
 
   "translation.translate": "Traduzir",
   "translation.active": "Traducao ativa",

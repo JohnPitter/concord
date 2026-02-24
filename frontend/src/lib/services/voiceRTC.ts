@@ -5,6 +5,8 @@ export interface VoiceParticipant {
   avatar_url?: string
   volume: number
   speaking: boolean
+  muted: boolean
+  deafened: boolean
 }
 
 export interface VoiceRTCStatus {
@@ -14,6 +16,7 @@ export interface VoiceRTCStatus {
   deafened: boolean
   peer_count: number
   speakers: VoiceParticipant[]
+  channel_started_at?: number
 }
 
 interface VoicePeerMeta {
@@ -21,6 +24,8 @@ interface VoicePeerMeta {
   user_id: string
   username: string
   avatar_url?: string
+  muted?: boolean
+  deafened?: boolean
 }
 
 interface VoiceJoinOptions {
@@ -80,6 +85,7 @@ export class VoiceRTCClient {
   private channelID = ''
   private muted = false
   private deafened = false
+  private channelStartedAt: number | null = null
   private state: VoiceRTCStatus['state'] = 'disconnected'
   private outputDeviceId = ''
   private audioContext: AudioContext | null = null
@@ -100,6 +106,7 @@ export class VoiceRTCClient {
     this.channelID = opts.channelID
     this.selfPeerID = crypto.randomUUID()
     this.outputDeviceId = opts.outputDeviceId ?? ''
+    this.channelStartedAt = null
     this.peersMeta.clear()
     this.participants.clear()
     this.emitStatus()
@@ -112,6 +119,8 @@ export class VoiceRTCClient {
       avatar_url: opts.avatarURL,
       volume: 0,
       speaking: false,
+      muted: this.muted,
+      deafened: this.deafened,
     })
 
     try {
@@ -135,6 +144,7 @@ export class VoiceRTCClient {
           this.cleanupAudioAnalysis()
           this.participants.clear()
           this.peersMeta.clear()
+          this.channelStartedAt = null
           this.emitStatus()
         }
       }
@@ -150,6 +160,8 @@ export class VoiceRTCClient {
           avatar_url: opts.avatarURL,
           addresses: [],
           public_key: [],
+          muted: this.muted,
+          deafened: this.deafened,
         },
       })
 
@@ -183,6 +195,7 @@ export class VoiceRTCClient {
     this.cleanupAudioAnalysis()
     this.participants.clear()
     this.peersMeta.clear()
+    this.channelStartedAt = null
 
     if (this.ws) {
       this.ws.onmessage = null
@@ -214,12 +227,15 @@ export class VoiceRTCClient {
       deafened: this.deafened,
       peer_count: Math.max(0, this.participants.size - 1),
       speakers,
+      channel_started_at: this.channelStartedAt ?? undefined,
     }
   }
 
   toggleMute(): boolean {
     this.muted = !this.muted
     this.applyMuteState()
+    this.updateSelfParticipantState()
+    this.sendPeerState()
     this.emitStatus()
     return this.muted
   }
@@ -231,6 +247,8 @@ export class VoiceRTCClient {
     }
     this.applyMuteState()
     this.applyDeafenState()
+    this.updateSelfParticipantState()
+    this.sendPeerState()
     this.emitStatus()
     return this.deafened
   }
@@ -281,6 +299,9 @@ export class VoiceRTCClient {
         case 'peer_left':
           if (signal.from) this.onPeerLeft(signal.from)
           break
+        case 'peer_state':
+          this.onPeerState(signal.from || '', signal.payload)
+          break
         case 'sdp_offer':
           if (signal.from) await this.onSDPOffer(signal.from, signal.payload)
           break
@@ -304,6 +325,8 @@ export class VoiceRTCClient {
 
   private async onPeerList(payload: unknown): Promise<void> {
     const peers = this.extractPeers(payload)
+    const startedAt = this.extractChannelStartedAt(payload)
+    if (startedAt) this.channelStartedAt = startedAt
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
 
@@ -315,6 +338,8 @@ export class VoiceRTCClient {
         avatar_url: peer.avatar_url,
         volume: 0,
         speaking: false,
+        muted: peer.deafened ? true : !!peer.muted,
+        deafened: !!peer.deafened,
       })
 
       const state = await this.ensurePeerConnection(peer.peer_id)
@@ -345,6 +370,8 @@ export class VoiceRTCClient {
       avatar_url: peer.avatar_url,
       volume: 0,
       speaking: false,
+      muted: peer.deafened ? true : !!peer.muted,
+      deafened: !!peer.deafened,
     })
     this.emitStatus()
   }
@@ -375,6 +402,8 @@ export class VoiceRTCClient {
         avatar_url: meta.avatar_url,
         volume: 0,
         speaking: false,
+        muted: meta.deafened ? true : !!meta.muted,
+        deafened: !!meta.deafened,
       })
     }
 
@@ -645,6 +674,8 @@ export class VoiceRTCClient {
       user_id: userID,
       username: this.safeUsername(this.safeString(raw.username), userID, peerID),
       avatar_url: this.safeString(raw.avatar_url),
+      muted: this.safeBool(raw.muted),
+      deafened: this.safeBool(raw.deafened),
     }
   }
 
@@ -676,6 +707,42 @@ export class VoiceRTCClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const payload: SignalMessage = signal.from ? signal : { ...signal, from: this.selfPeerID || undefined }
     this.ws.send(JSON.stringify(payload))
+  }
+
+  private sendPeerState(): void {
+    if (!this.serverID || !this.channelID) return
+    const muted = this.deafened ? true : this.muted
+    this.sendSignal({
+      type: 'peer_state',
+      server_id: this.serverID,
+      channel_id: this.channelID,
+      payload: {
+        peer_id: this.selfPeerID,
+        muted,
+        deafened: this.deafened,
+      },
+    })
+  }
+
+  private updateSelfParticipantState(): void {
+    const entry = this.participants.get(this.selfPeerID)
+    if (!entry) return
+    entry.deafened = this.deafened
+    entry.muted = this.deafened ? true : this.muted
+  }
+
+  private onPeerState(fromPeerID: string, payload: unknown): void {
+    const data = payload as Record<string, unknown> | null
+    if (!data) return
+    const peerID = this.safeString(data.peer_id) || fromPeerID
+    if (!peerID) return
+    const entry = this.participants.get(peerID)
+    if (!entry) return
+    const muted = this.safeBool(data.muted)
+    const deafened = this.safeBool(data.deafened)
+    entry.deafened = deafened
+    entry.muted = deafened ? true : muted
+    this.emitStatus()
   }
 
   private emitStatus(): void {
@@ -783,10 +850,33 @@ export class VoiceRTCClient {
     return typeof value === 'string' ? value.trim() : ''
   }
 
+  private safeBool(value: unknown): boolean {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') return value !== 0
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === 'true') return true
+      if (normalized === 'false') return false
+    }
+    return false
+  }
+
   private safeUsername(username: string, userID: string, peerID: string): string {
     if (username.trim().length > 0) return username.trim()
     if (userID.trim().length > 0) return userID.trim().slice(0, 12)
     return peerID.trim().slice(0, 12) || 'user'
+  }
+
+  private extractChannelStartedAt(payload: unknown): number | null {
+    const raw = (payload as { channel_started_at?: unknown } | undefined)?.channel_started_at
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return Math.floor(raw)
+    }
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed)
+    }
+    return null
   }
 
   private initAudioAnalysis(): void {

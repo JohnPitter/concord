@@ -187,6 +187,8 @@
   "voice.unmute": "Unmute",
   "voice.deafen": "Deafen",
   "voice.undeafen": "Undeafen",
+  "voice.muted": "Muted",
+  "voice.deafened": "Deafened",
 
   "translation.translate": "Translate",
   "translation.active": "Translation active",

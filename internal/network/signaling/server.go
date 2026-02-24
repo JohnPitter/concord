@@ -31,8 +31,9 @@ var (
 type Server struct {
 	mu sync.RWMutex
 	// channels maps "serverID:channelID" -> map of peerID -> connection
-	channels map[string]map[string]*peerConn
-	logger   zerolog.Logger
+	channels     map[string]map[string]*peerConn
+	channelStart map[string]time.Time
+	logger       zerolog.Logger
 }
 
 type peerConn struct {
@@ -41,6 +42,8 @@ type peerConn struct {
 	peerID    string
 	username  string
 	avatarURL string
+	muted     bool
+	deafened  bool
 	send      chan []byte
 	closeOnce sync.Once
 }
@@ -100,8 +103,9 @@ func (pc *peerConn) close() {
 // NewServer creates a new signaling server.
 func NewServer(logger zerolog.Logger) *Server {
 	return &Server{
-		channels: make(map[string]map[string]*peerConn),
-		logger:   logger.With().Str("component", "signaling-server").Logger(),
+		channels:     make(map[string]map[string]*peerConn),
+		channelStart: make(map[string]time.Time),
+		logger:       logger.With().Str("component", "signaling-server").Logger(),
 	}
 }
 
@@ -170,6 +174,10 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 
+			if payload.Deafened {
+				payload.Muted = true
+			}
+
 			currentChannel = channelKey
 			currentPeerID = payload.PeerID
 			currentPC = &peerConn{
@@ -178,6 +186,8 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				peerID:    payload.PeerID,
 				username:  payload.Username,
 				avatarURL: payload.AvatarURL,
+				muted:     payload.Muted,
+				deafened:  payload.Deafened,
 				send:      make(chan []byte, peerSendBuffer),
 			}
 
@@ -229,6 +239,37 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			signal.ChannelID = parts[1]
 			s.forwardToPeer(currentChannel, signal.To, &signal)
 
+		case SignalPeerState:
+			if currentChannel == "" || currentPeerID == "" {
+				continue
+			}
+
+			var payload PeerStatePayload
+			if err := signal.DecodePayload(&payload); err != nil {
+				continue
+			}
+
+			muted := payload.Muted
+			deafened := payload.Deafened
+			if deafened {
+				muted = true
+			}
+
+			s.updatePeerState(currentChannel, currentPeerID, muted, deafened)
+
+			parts := splitChannelKey(currentChannel)
+			peerPayload := PeerStatePayload{
+				PeerID:   currentPeerID,
+				Muted:    muted,
+				Deafened: deafened,
+			}
+			sig, err := NewSignal(SignalPeerState, currentPeerID, peerPayload)
+			if err == nil {
+				sig.ServerID = parts[0]
+				sig.ChannelID = parts[1]
+				s.broadcast(currentChannel, currentPeerID, sig)
+			}
+
 		default:
 			s.logger.Debug().Str("type", string(signal.Type)).Msg("unknown signal type")
 		}
@@ -242,6 +283,9 @@ func (s *Server) addPeer(channelKey string, pc *peerConn) {
 	if _, ok := s.channels[channelKey]; !ok {
 		s.channels[channelKey] = make(map[string]*peerConn)
 	}
+	if len(s.channels[channelKey]) == 0 {
+		s.channelStart[channelKey] = time.Now().UTC()
+	}
 	s.channels[channelKey][pc.peerID] = pc
 }
 
@@ -254,6 +298,7 @@ func (s *Server) removePeer(channelKey, peerID string) {
 		delete(ch, peerID)
 		if len(ch) == 0 {
 			delete(s.channels, channelKey)
+			delete(s.channelStart, channelKey)
 		}
 	}
 	s.mu.Unlock()
@@ -281,11 +326,22 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, peerID string) {
 			PeerID:    p.peerID,
 			Username:  p.username,
 			AvatarURL: p.avatarURL,
+			Muted:     p.muted,
+			Deafened:  p.deafened,
 		})
 	}
+	startedAt := s.channelStart[channelKey]
 	s.mu.RUnlock()
 
-	sig, err := NewSignal(SignalPeerList, "", PeerListPayload{Peers: peers})
+	startedAtMs := int64(0)
+	if !startedAt.IsZero() {
+		startedAtMs = startedAt.UnixMilli()
+	}
+
+	sig, err := NewSignal(SignalPeerList, "", PeerListPayload{
+		Peers:            peers,
+		ChannelStartedAt: startedAtMs,
+	})
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to create peer list signal")
 		return
@@ -316,6 +372,17 @@ func (s *Server) broadcast(channelKey, excludePeerID string, signal *Signal) {
 	for pid, pc := range peers {
 		if err := pc.enqueueJSON(signal); err != nil {
 			s.dropPeer(channelKey, pid)
+		}
+	}
+}
+
+func (s *Server) updatePeerState(channelKey, peerID string, muted, deafened bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ch, ok := s.channels[channelKey]; ok {
+		if pc, ok := ch[peerID]; ok {
+			pc.muted = muted
+			pc.deafened = deafened
 		}
 	}
 }
@@ -380,6 +447,8 @@ func (s *Server) GetChannelPeers(serverID, channelID string) []PeerEntry {
 			PeerID:    pc.peerID,
 			Username:  pc.username,
 			AvatarURL: pc.avatarURL,
+			Muted:     pc.muted,
+			Deafened:  pc.deafened,
 		})
 	}
 	s.mu.RUnlock()
@@ -413,6 +482,8 @@ func (s *Server) GetServerChannelPeers(serverID string) map[string][]PeerEntry {
 				PeerID:    pc.peerID,
 				Username:  pc.username,
 				AvatarURL: pc.avatarURL,
+				Muted:     pc.muted,
+				Deafened:  pc.deafened,
 			})
 		}
 		result[channelID] = peers

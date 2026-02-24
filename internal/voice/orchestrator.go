@@ -124,6 +124,8 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 		PeerID:    o.peerID,
 		Username:  username,
 		AvatarURL: avatarURL,
+		Muted:     o.engine.IsMuted(),
+		Deafened:  o.engine.IsDeafened(),
 	}
 	if err := client.JoinChannel(serverID, channelID, joinPayload); err != nil {
 		_ = client.Close()
@@ -137,6 +139,33 @@ func (o *Orchestrator) Join(ctx context.Context, wsURL, serverID, channelID, use
 
 	o.logger.Info().Msg("voice signaling join sent")
 	return nil
+}
+
+// UpdateSelfState sends the local mute/deafen state to other peers via signaling.
+func (o *Orchestrator) UpdateSelfState(muted, deafened bool) {
+	o.mu.Lock()
+	client := o.sigClient
+	sID := o.serverID
+	chID := o.channelID
+	peerID := o.peerID
+	o.mu.Unlock()
+
+	if client == nil || sID == "" || chID == "" {
+		return
+	}
+	if deafened {
+		muted = true
+	}
+
+	payload := signaling.PeerStatePayload{
+		PeerID:   peerID,
+		Muted:    muted,
+		Deafened: deafened,
+	}
+
+	if err := client.SendPeerState(sID, chID, payload); err != nil {
+		o.logger.Warn().Err(err).Msg("failed to send peer state")
+	}
 }
 
 // Leave disconnects from the voice channel and signaling server.

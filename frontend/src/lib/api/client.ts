@@ -4,6 +4,7 @@
 const API_STORAGE_KEY = 'concord-api-tokens'
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000
 const DISCOVERY_TIMEOUT_MS = 2500
+const API_UNAVAILABLE_MESSAGE = 'Servidor indisponível. Tente novamente.'
 
 interface ApiTokens {
   accessToken: string
@@ -166,9 +167,30 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
 
   try {
     return await Promise.race([fetchPromise, timeoutPromise])
+  } catch (err) {
+    throw normalizeNetworkError(err)
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle)
   }
+}
+
+function normalizeNetworkError(err: unknown): Error {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase()
+    const name = err.name.toLowerCase()
+    if (
+      name === 'aborterror' ||
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('load failed') ||
+      msg.includes('request timeout') ||
+      msg.includes('timed out')
+    ) {
+      return new Error(API_UNAVAILABLE_MESSAGE)
+    }
+    return err
+  }
+  return new Error(API_UNAVAILABLE_MESSAGE)
 }
 
 const SERVER_URL = defaultServerURL()

@@ -198,6 +198,17 @@ func (c *Client) SendICECandidate(serverID, channelID, toPeerID string, candidat
 	return c.Send(sig)
 }
 
+// SendPeerState broadcasts the local peer mute/deafen state.
+func (c *Client) SendPeerState(serverID, channelID string, payload PeerStatePayload) error {
+	sig, err := NewSignal(SignalPeerState, "", payload)
+	if err != nil {
+		return err
+	}
+	sig.ServerID = serverID
+	sig.ChannelID = channelID
+	return c.Send(sig)
+}
+
 // Close disconnects from the signaling server.
 func (c *Client) Close() error {
 	if c.cancel != nil {

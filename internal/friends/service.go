@@ -10,15 +10,22 @@ import (
 
 // Service orchestrates friend management operations.
 type Service struct {
-	repo   *Repository
-	logger zerolog.Logger
+	repo     *Repository
+	presence PresenceChecker
+	logger   zerolog.Logger
+}
+
+// PresenceChecker exposes online status for user IDs.
+type PresenceChecker interface {
+	IsOnline(userID string) bool
 }
 
 // NewService creates a new friends service.
-func NewService(repo *Repository, logger zerolog.Logger) *Service {
+func NewService(repo *Repository, presence PresenceChecker, logger zerolog.Logger) *Service {
 	return &Service{
-		repo:   repo,
-		logger: logger.With().Str("component", "friends_service").Logger(),
+		repo:     repo,
+		presence: presence,
+		logger:   logger.With().Str("component", "friends_service").Logger(),
 	}
 }
 
@@ -87,7 +94,24 @@ func (s *Service) RejectRequest(ctx context.Context, requestID, userID string) e
 
 // GetFriends returns all friends for a user.
 func (s *Service) GetFriends(ctx context.Context, userID string) ([]FriendView, error) {
-	return s.repo.GetFriends(ctx, userID)
+	friendsList, err := s.repo.GetFriends(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.presence == nil {
+		return friendsList, nil
+	}
+
+	for i := range friendsList {
+		if s.presence.IsOnline(friendsList[i].ID) {
+			friendsList[i].Status = "online"
+		} else {
+			friendsList[i].Status = "offline"
+		}
+	}
+
+	return friendsList, nil
 }
 
 // RemoveFriend removes a friendship.

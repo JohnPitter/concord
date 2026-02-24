@@ -187,6 +187,8 @@
   "voice.unmute": "\u53d6\u6d88\u9759\u97f3",
   "voice.deafen": "\u5173\u95ed\u58f0\u97f3",
   "voice.undeafen": "\u5f00\u542f\u58f0\u97f3",
+  "voice.muted": "\u5df2\u9759\u97f3",
+  "voice.deafened": "\u5df2\u5173\u95ed\u58f0\u97f3",
 
   "translation.translate": "\u7ffb\u8bd1",
   "translation.active": "\u7ffb\u8bd1\u5df2\u6fc0\u6d3b",
