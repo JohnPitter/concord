@@ -15,7 +15,7 @@ services:
           cpus: "0.5"
           memory: 256M
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/nginx-health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -48,6 +48,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     deploy:
       resources:
         limits:
@@ -62,6 +64,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - concord
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    command:
+      - "--label-enable"
+      - "--cleanup"
+      - "--rolling-restart"
+      - "--interval"
+      - "${WATCHTOWER_POLL_INTERVAL:-60}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.44
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
     networks:
       - concord
 

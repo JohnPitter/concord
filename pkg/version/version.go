@@ -8,7 +8,7 @@ import (
 var (
 	// Version is the semantic version of the application
 	// Set via ldflags during build: -X github.com/concord-chat/concord/pkg/version.Version=1.0.0
-	Version = "1.0.0"
+	Version = "0.0.0-dev"
 
 	// GitCommit is the git commit hash
 	// Set via ldflags during build

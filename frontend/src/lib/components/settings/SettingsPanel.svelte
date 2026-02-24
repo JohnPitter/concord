@@ -5,6 +5,7 @@
   import Dropdown from '../ui/Dropdown.svelte'
   import { translations, t, LOCALES, setLocale, locale } from '../../i18n'
   import type { Locale } from '../../i18n'
+  import { checkForUpdates, openUpdatePage, type UpdateInfo } from '../../services/updater'
   import {
     getSettings, setAudioInput, setAudioOutput,
     setNotifications, setNotificationSounds,
@@ -72,6 +73,10 @@
   let srcLang = $state(settings.translationSourceLang)
   let tgtLang = $state(settings.translationTargetLang)
   let autoTranslateEnabled = $state(settings.autoTranslate)
+  let updateInfo = $state<UpdateInfo | null>(null)
+  let updateChecking = $state(false)
+  let updateError = $state<string | null>(null)
+  let updateLastCheckedAt = $state<string | null>(null)
 
   // Sync from store when panel opens
   $effect(() => {
@@ -93,6 +98,12 @@
   $effect(() => { setNotificationSounds(notifSounds) })
   $effect(() => { setTranslationLangs(srcLang, tgtLang) })
   $effect(() => { setAutoTranslate(autoTranslateEnabled) })
+
+  $effect(() => {
+    if (open && activeCategory === 'account' && !updateChecking && !updateInfo && !updateError) {
+      void refreshUpdateStatus()
+    }
+  })
 
   const categoryKeys: { id: Category; labelKey: string; icon: string }[] = [
     { id: 'account', labelKey: 'settings.account', icon: 'user' },
@@ -124,6 +135,20 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       close()
+    }
+  }
+
+  async function refreshUpdateStatus() {
+    updateChecking = true
+    updateError = null
+    try {
+      updateInfo = await checkForUpdates()
+      updateLastCheckedAt = new Date().toLocaleTimeString()
+    } catch (e) {
+      updateError = e instanceof Error ? e.message : 'Failed to check updates'
+      updateLastCheckedAt = new Date().toLocaleTimeString()
+    } finally {
+      updateChecking = false
     }
   }
 </script>
@@ -274,6 +299,39 @@
                   </Button>
                 </div>
               {/if}
+
+              <div class="border-t border-void-border pt-4">
+                <div class="mb-3 flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-void-text-primary">Auto Update</h4>
+                  <Button variant="ghost" size="sm" onclick={refreshUpdateStatus} loading={updateChecking} disabled={updateChecking}>
+                    Check now
+                  </Button>
+                </div>
+
+                {#if updateError}
+                  <p class="mb-3 text-xs text-red-400">{updateError}</p>
+                {/if}
+
+                {#if updateLastCheckedAt}
+                  <p class="mb-2 text-xs text-void-text-muted">Last checked at {updateLastCheckedAt}</p>
+                {/if}
+
+                {#if updateInfo}
+                  <p class="text-xs text-void-text-muted">
+                    Current: v{updateInfo.currentVersion} · Latest: v{updateInfo.latestVersion}
+                  </p>
+                  {#if updateInfo.available}
+                    <div class="mt-3 flex items-center justify-between rounded-lg border border-void-accent/40 bg-void-accent/10 p-3">
+                      <p class="text-sm font-medium text-void-accent">New version available</p>
+                      <Button variant="solid" size="sm" onclick={() => openUpdatePage(updateInfo?.releaseURL)}>
+                        Update now
+                      </Button>
+                    </div>
+                  {:else}
+                    <p class="mt-2 text-xs text-void-online">You are up to date.</p>
+                  {/if}
+                {/if}
+              </div>
 
             </div>
           {/if}

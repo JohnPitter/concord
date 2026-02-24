@@ -380,6 +380,40 @@ func (s *Server) GetChannelPeers(serverID, channelID string) []PeerEntry {
 	return peers
 }
 
+// GetServerChannelPeers returns all voice participants grouped by channel ID for a server.
+func (s *Server) GetServerChannelPeers(serverID string) map[string][]PeerEntry {
+	prefix := serverID + ":"
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make(map[string][]PeerEntry)
+	for key, ch := range s.channels {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+
+		parts := splitChannelKey(key)
+		channelID := parts[1]
+		if channelID == "" {
+			continue
+		}
+
+		peers := make([]PeerEntry, 0, len(ch))
+		for _, pc := range ch {
+			peers = append(peers, PeerEntry{
+				UserID:    pc.userID,
+				PeerID:    pc.peerID,
+				Username:  pc.username,
+				AvatarURL: pc.avatarURL,
+			})
+		}
+		result[channelID] = peers
+	}
+
+	return result
+}
+
 // splitChannelKey splits a "serverID:channelID" key into its parts.
 func splitChannelKey(key string) [2]string {
 	parts := strings.SplitN(key, ":", 2)

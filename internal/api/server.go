@@ -64,48 +64,50 @@ func New(
 		cfg:       cfg,
 	}
 
+	// Root router: keeps WebSocket signaling outside the API middleware stack.
 	r := chi.NewRouter()
 
 	// --- WebSocket signaling endpoint ---
-	// Mounted on a separate sub-router so it bypasses timeout/body-limit/rate-limit
-	// middleware that would break long-lived WebSocket connections.
+	// Registered on root router so it bypasses API timeout/body-limit/rate-limit middleware.
 	if sigServer != nil {
-		wsRouter := chi.NewRouter()
-		wsRouter.Use(middleware.Recoverer)
-		wsRouter.Get("/", sigServer.Handler())
-		r.Mount("/ws/signaling", wsRouter)
+		// Support both with and without trailing slash.
+		r.Get("/ws/signaling", sigServer.Handler())
+		r.Get("/ws/signaling/", sigServer.Handler())
 	}
 
+	// API router with full middleware stack.
+	apiRouter := chi.NewRouter()
+
 	// --- Global middleware stack ---
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(RequestLogger(s.logger))
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(SecurityHeaders())
-	r.Use(CORSMiddleware(cfg.CORS))
-	r.Use(MaxBodySize(1 << 20)) // 1 MB default body limit
+	apiRouter.Use(middleware.RequestID)
+	apiRouter.Use(middleware.RealIP)
+	apiRouter.Use(RequestLogger(s.logger))
+	apiRouter.Use(middleware.Recoverer)
+	apiRouter.Use(middleware.Timeout(30 * time.Second))
+	apiRouter.Use(SecurityHeaders())
+	apiRouter.Use(CORSMiddleware(cfg.CORS))
+	apiRouter.Use(MaxBodySize(1 << 20)) // 1 MB default body limit
 
 	// Rate limiting with standard headers (config-driven RPS, default 100/s)
 	rps := cfg.RateLimitRPS
 	if rps <= 0 {
 		rps = 100
 	}
-	r.Use(RateLimitWithHeaders(rps))
+	apiRouter.Use(RateLimitWithHeaders(rps))
 
 	// Prometheus HTTP metrics
 	if metrics != nil {
-		r.Use(MetricsMiddleware(metrics))
+		apiRouter.Use(MetricsMiddleware(metrics))
 	}
 
 	// --- Public endpoints ---
-	r.Get("/health", s.handleHealth)
-	r.Get("/health/live", s.handleLiveness)
-	r.Get("/health/ready", s.handleReadiness)
-	r.Handle("/metrics", promhttp.Handler())
+	apiRouter.Get("/health", s.handleHealth)
+	apiRouter.Get("/health/live", s.handleLiveness)
+	apiRouter.Get("/health/ready", s.handleReadiness)
+	apiRouter.Handle("/metrics", promhttp.Handler())
 
 	// --- API v1 ---
-	r.Route("/api/v1", func(api chi.Router) {
+	apiRouter.Route("/api/v1", func(api chi.Router) {
 		// Auth routes (public)
 		api.Route("/auth", func(ar chi.Router) {
 			ar.Post("/device-code", s.handleDeviceCode)
@@ -148,6 +150,7 @@ func New(
 
 			// Voice
 			protected.Get("/servers/{serverID}/channels/{channelID}/voice/participants", s.handleVoiceParticipants)
+			protected.Get("/servers/{serverID}/voice/participants", s.handleServerVoiceParticipants)
 
 			// Friends
 			protected.Post("/friends/request", s.handleSendFriendRequest)
@@ -160,6 +163,8 @@ func New(
 			protected.Delete("/friends/{friendID}/block", s.handleUnblockUser)
 		})
 	})
+
+	r.Mount("/", apiRouter)
 
 	s.router = r
 	return s

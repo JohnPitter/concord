@@ -3,7 +3,13 @@
 # Variables
 APP_NAME=concord
 SERVER_NAME=concord-server
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.1.0-dev")
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
+GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")
+LD_FLAGS=-s -w \
+	-X github.com/concord-chat/concord/pkg/version.Version=$(VERSION) \
+	-X github.com/concord-chat/concord/pkg/version.GitCommit=$(GIT_COMMIT) \
+	-X github.com/concord-chat/concord/pkg/version.BuildDate=$(BUILD_DATE)
 BUILD_DIR=./build
 FRONTEND_DIR=./frontend
 GO_FILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*")
@@ -37,12 +43,12 @@ dev: ## Run development server with hot reload
 
 build: ## Build production binaries
 	@echo "$(BLUE)Building Concord desktop app...$(NC)"
-	wails build -clean -upx
+	wails build -clean -upx -ldflags "$(LD_FLAGS)"
 	@echo "$(GREEN)Build complete: $(BUILD_DIR)/bin/$(APP_NAME)$(NC)"
 
 build-server: ## Build central server binary
 	@echo "$(BLUE)Building Concord server...$(NC)"
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o $(BUILD_DIR)/$(SERVER_NAME) ./cmd/server
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LD_FLAGS)" -o $(BUILD_DIR)/$(SERVER_NAME) ./cmd/server
 	@echo "$(GREEN)Server build complete: $(BUILD_DIR)/$(SERVER_NAME)$(NC)"
 
 test: ## Run all tests

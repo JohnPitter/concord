@@ -4,6 +4,8 @@
 import * as App from '../../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { ensureValidToken } from './auth.svelte'
+import { apiClient } from '../api/client'
+import { isServerMode } from '../api/mode'
 
 export interface SpeakerData {
   peer_id: string
@@ -204,10 +206,13 @@ function playLeaveSound() {
 }
 
 let voicePolling: ReturnType<typeof setInterval> | null = null
+const VOICE_STATUS_POLL_MS = 600
+const SERVER_PARTICIPANTS_POLL_MS = 800
+const P2P_PARTICIPANTS_POLL_MS = 1500
 
 function startVoicePolling() {
   if (voicePolling) return
-  voicePolling = setInterval(() => refreshVoiceStatus(), 2000)
+  voicePolling = setInterval(() => refreshVoiceStatus(), VOICE_STATUS_POLL_MS)
 }
 
 function stopVoicePolling() {
@@ -269,7 +274,11 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
 
   try {
     await ensureValidToken()
-    await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
+    if (isServerMode()) {
+      await App.JoinVoiceWithURL(apiClient.getBaseURL(), serverID, channelID, userID, username, avatarURL)
+    } else {
+      await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
+    }
     state = 'connected'
     channelId = channelID
     playJoinSound()
@@ -381,9 +390,13 @@ export function getChannelParticipants(channelId: string): SpeakerData[] {
 export async function refreshChannelParticipants(serverID: string, channelIDs: string[]): Promise<void> {
   try {
     const updated: Record<string, SpeakerData[]> = {}
-    for (const chID of channelIDs) {
-      const peers = await App.GetVoiceParticipants(serverID, chID)
-      if (peers && peers.length > 0) {
+    const inServerMode = isServerMode()
+
+    if (inServerMode) {
+      const byChannel = await apiClient.get<Record<string, any[]>>(`/api/v1/servers/${serverID}/voice/participants`)
+      for (const chID of channelIDs) {
+        const peers = byChannel?.[chID] ?? []
+        if (peers.length === 0) continue
         updated[chID] = peers.map((p: any) => ({
           peer_id: p.peer_id || '',
           user_id: p.user_id || '',
@@ -393,7 +406,34 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
           speaking: false,
         }))
       }
+    } else {
+      const results = await Promise.all(
+        channelIDs.map(async (chID) => {
+          try {
+            const peers = await App.GetVoiceParticipants(serverID, chID)
+            if (!peers || peers.length === 0) return [chID, []] as const
+
+            const mapped = peers.map((p: any) => ({
+              peer_id: p.peer_id || '',
+              user_id: p.user_id || '',
+              username: p.username || '',
+              avatar_url: p.avatar_url || '',
+              volume: 0,
+              speaking: false,
+            }))
+
+            return [chID, mapped] as const
+          } catch {
+            return [chID, []] as const
+          }
+        }),
+      )
+
+      for (const [chID, peers] of results) {
+        if (peers.length > 0) updated[chID] = peers
+      }
     }
+
     channelParticipants = updated
   } catch (e) {
     console.error('Failed to refresh channel participants:', e)
@@ -405,9 +445,10 @@ export function startParticipantsPolling(serverID: string, channelIDs: string[])
   if (channelIDs.length === 0) return
   // Initial fetch
   refreshChannelParticipants(serverID, channelIDs)
+  const intervalMs = isServerMode() ? SERVER_PARTICIPANTS_POLL_MS : P2P_PARTICIPANTS_POLL_MS
   participantsPolling = setInterval(() => {
     refreshChannelParticipants(serverID, channelIDs)
-  }, 3000)
+  }, intervalMs)
 }
 
 export function stopParticipantsPolling(): void {

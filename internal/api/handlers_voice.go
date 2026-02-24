@@ -26,3 +26,21 @@ func (s *Server) handleVoiceParticipants(w http.ResponseWriter, r *http.Request)
 
 	writeJSON(w, http.StatusOK, peers)
 }
+
+// handleServerVoiceParticipants returns voice participants for all channels in a server.
+// GET /api/v1/servers/{serverID}/voice/participants
+func (s *Server) handleServerVoiceParticipants(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "serverID")
+
+	if s.signaling == nil {
+		writeJSON(w, http.StatusOK, map[string][]signaling.PeerEntry{})
+		return
+	}
+
+	byChannel := s.signaling.GetServerChannelPeers(serverID)
+	if byChannel == nil {
+		byChannel = map[string][]signaling.PeerEntry{}
+	}
+
+	writeJSON(w, http.StatusOK, byChannel)
+}

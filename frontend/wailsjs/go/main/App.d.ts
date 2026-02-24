@@ -10,6 +10,7 @@ import {sqlite} from '../models';
 import {p2p} from '../models';
 import {translation} from '../models';
 import {version} from '../models';
+import {signaling} from '../models';
 import {voice} from '../models';
 
 export function AcceptFriendRequest(arg1:string,arg2:string):Promise<void>;
@@ -72,6 +73,8 @@ export function GetTranslationStatus():Promise<translation.Status>;
 
 export function GetVersion():Promise<version.Info>;
 
+export function GetVoiceParticipants(arg1:string,arg2:string):Promise<Array<signaling.PeerEntry>>;
+
 export function GetVoiceStatus():Promise<voice.VoiceStatus>;
 
 export function GetVoiceTranslationStatus():Promise<voice.VoiceTranslationStatus>;
@@ -82,7 +85,9 @@ export function InitP2PHost():Promise<void>;
 
 export function JoinP2PRoom(arg1:string):Promise<void>;
 
-export function JoinVoice(arg1:string):Promise<void>;
+export function JoinVoice(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
+export function JoinVoiceWithURL(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function KickMember(arg1:string,arg2:string,arg3:string):Promise<void>;
 

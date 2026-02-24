@@ -122,6 +122,10 @@ export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
+export function GetVoiceParticipants(arg1, arg2) {
+  return window['go']['main']['App']['GetVoiceParticipants'](arg1, arg2);
+}
+
 export function GetVoiceStatus() {
   return window['go']['main']['App']['GetVoiceStatus']();
 }
@@ -142,8 +146,12 @@ export function JoinP2PRoom(arg1) {
   return window['go']['main']['App']['JoinP2PRoom'](arg1);
 }
 
-export function JoinVoice(arg1) {
-  return window['go']['main']['App']['JoinVoice'](arg1);
+export function JoinVoice(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['JoinVoice'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function JoinVoiceWithURL(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['JoinVoiceWithURL'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function KickMember(arg1, arg2, arg3) {

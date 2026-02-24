@@ -134,12 +134,41 @@ class ApiClient {
   del<T>(path: string) { return this.request<T>('DELETE', path) }
 }
 
-// Server URL from build-time env var (VITE_SERVER_URL)
-// Set in frontend/.env or CI environment. Fallback to empty string (relative).
-const SERVER_URL = import.meta.env.VITE_SERVER_URL as string || ''
+// Server URL from build-time env var (VITE_SERVER_URL).
+// In desktop mode, relative URLs may resolve to app:// and fail. Keep an HTTP fallback.
+function defaultServerURL(): string {
+  const configured = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
+  if (configured) return configured
+  return 'http://localhost'
+}
+
+const SERVER_URL = defaultServerURL()
 
 // Remote discovery gist — returns dynamic server URL when tunnel changes
 const DISCOVERY_URL = 'https://gist.githubusercontent.com/JohnPitter/ee556dbee0baf301f58e908a5d1ba9b7/raw/server.json'
+
+async function isReachable(url: string): Promise<boolean> {
+  const base = url.replace(/\/$/, '')
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 1500)
+
+  try {
+    const res = await fetch(`${base}/health`, { cache: 'no-store', signal: controller.signal })
+    return res.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function chooseFallbackURL(preferred: string): Promise<string> {
+  const local = 'http://localhost'
+  const candidate = preferred?.trim() ? preferred : local
+  if (await isReachable(candidate)) return candidate
+  if (candidate !== local && await isReachable(local)) return local
+  return candidate
+}
 
 // Singleton — initialized with the build-time server URL
 export const apiClient = new ApiClient(SERVER_URL)
@@ -150,14 +179,23 @@ export const apiClient = new ApiClient(SERVER_URL)
  * Updates apiClient.baseURL in-place so all subsequent calls use the new URL.
  */
 export async function discoverServerURL(): Promise<string> {
+  // Keep current URL as fallback; if unhealthy, swap to localhost.
+  const fallback = await chooseFallbackURL(apiClient.getBaseURL())
+
   try {
     const res = await fetch(DISCOVERY_URL, { cache: 'no-store' })
-    if (!res.ok) return apiClient.getBaseURL()
+    if (!res.ok) {
+      apiClient.setBaseURL(fallback)
+      return fallback
+    }
     const data: { server_url?: string } = await res.json()
     if (data.server_url) {
-      apiClient.setBaseURL(data.server_url)
-      return data.server_url
+      const chosen = await chooseFallbackURL(data.server_url)
+      apiClient.setBaseURL(chosen)
+      return chosen
     }
   } catch { /* network error — keep build-time URL */ }
-  return apiClient.getBaseURL()
+
+  apiClient.setBaseURL(fallback)
+  return fallback
 }

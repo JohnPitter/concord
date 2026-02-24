@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,15 +43,15 @@ var assets embed.FS
 
 // App struct holds the application state
 type App struct {
-	ctx           context.Context
-	cfg           *config.Config
-	db            *sqlite.DB
-	logger        zerolog.Logger
-	metrics       *observability.Metrics
-	health        *observability.HealthChecker
-	authService   *auth.Service
-	serverService *server.Service
-	chatService   *chat.Service
+	ctx                context.Context
+	cfg                *config.Config
+	db                 *sqlite.DB
+	logger             zerolog.Logger
+	metrics            *observability.Metrics
+	health             *observability.HealthChecker
+	authService        *auth.Service
+	serverService      *server.Service
+	chatService        *chat.Service
 	friendService      *friends.Service
 	voiceEngine        *voice.Engine
 	voiceOrch          *voice.Orchestrator
@@ -480,6 +481,16 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 func (a *App) JoinVoice(serverID, channelID, userID, username, avatarURL string) error {
 	// Use the local embedded signaling server
 	wsURL := fmt.Sprintf("http://%s", a.sigListener.Addr().String())
+	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID, username, avatarURL)
+}
+
+// JoinVoiceWithURL joins a voice channel using a specific signaling base URL.
+// Used in central server mode so all clients share the same signaling backend.
+func (a *App) JoinVoiceWithURL(baseURL, serverID, channelID, userID, username, avatarURL string) error {
+	wsURL := strings.TrimSpace(baseURL)
+	if wsURL == "" {
+		return errors.New("voice signaling base URL is required")
+	}
 	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID, username, avatarURL)
 }
 

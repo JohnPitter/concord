@@ -419,6 +419,33 @@ export namespace server {
 
 }
 
+export namespace signaling {
+	
+	export class PeerEntry {
+	    user_id: string;
+	    peer_id: string;
+	    username?: string;
+	    avatar_url?: string;
+	    addresses: string[];
+	    public_key?: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PeerEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_id = source["user_id"];
+	        this.peer_id = source["peer_id"];
+	        this.username = source["username"];
+	        this.avatar_url = source["avatar_url"];
+	        this.addresses = source["addresses"];
+	        this.public_key = source["public_key"];
+	    }
+	}
+
+}
+
 export namespace sqlite {
 	
 	export class P2PMessage {
