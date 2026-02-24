@@ -72,12 +72,26 @@ interface FriendsState {
 const STORAGE_KEY = 'concord_friends'
 const DM_MESSAGES_KEY = 'concord_dm_messages'
 const POLL_INTERVAL = 2_500 // near real-time polling for friends/pending requests
+const WAILS_STORE_TIMEOUT_MS = 10_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let loadFriendsInFlight = false
 
 // Track recently rejected request IDs so polling doesn't re-add them
 const recentlyRejected = new Set<string>()
 const seenIncomingRequestIDs = new Set<string>()
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  let handle: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    handle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (handle) clearTimeout(handle)
+  }
+}
 
 const state = $state<FriendsState>({
   friends: [],
@@ -243,7 +257,11 @@ async function fetchFriendsFromBackend(): Promise<Friend[]> {
   if (isServerMode()) {
     raw = await apiFriends.getFriends()
   } else {
-    raw = await App.GetFriends(uid) as unknown as FriendView[]
+    raw = await withTimeout(
+      App.GetFriends(uid) as unknown as Promise<FriendView[]>,
+      WAILS_STORE_TIMEOUT_MS,
+      'GetFriends timeout',
+    )
   }
   return (raw ?? []).map(mapBackendFriend)
 }
@@ -257,7 +275,11 @@ async function fetchPendingFromBackend(): Promise<FriendRequest[]> {
   if (isServerMode()) {
     raw = await apiFriends.getPendingRequests()
   } else {
-    raw = await App.GetPendingRequests(uid) as unknown as FriendRequestView[]
+    raw = await withTimeout(
+      App.GetPendingRequests(uid) as unknown as Promise<FriendRequestView[]>,
+      WAILS_STORE_TIMEOUT_MS,
+      'GetPendingRequests timeout',
+    )
   }
   return (raw ?? []).map(mapBackendRequest)
 }
@@ -312,6 +334,8 @@ export function openDM(dmId: string | null) {
 }
 
 export async function loadFriends() {
+  if (loadFriendsInFlight) return
+  loadFriendsInFlight = true
   state.loading = true
   // Load cached data immediately so the UI isn't blank
   loadFromStorage()
@@ -332,6 +356,7 @@ export async function loadFriends() {
     // Keep cached data on error
   } finally {
     state.loading = false
+    loadFriendsInFlight = false
   }
 
   // Start polling for incoming requests

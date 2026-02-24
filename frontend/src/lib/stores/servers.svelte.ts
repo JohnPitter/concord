@@ -41,6 +41,7 @@ export interface InviteInfoData {
 }
 
 const MEMBER_POLL_INTERVAL = 15_000 // 15s polling for members
+const WAILS_STORE_TIMEOUT_MS = 10_000
 
 let servers = $state<ServerData[]>([])
 let activeServerId = $state<string | null>(null)
@@ -51,6 +52,19 @@ let channelsLoading = $state(false)
 let membersLoading = $state(false)
 let error = $state<string | null>(null)
 let memberPollTimer: ReturnType<typeof setInterval> | null = null
+let loadServersInFlight = false
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  let handle: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    handle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (handle) clearTimeout(handle)
+  }
+}
 
 export function getServers() {
   return {
@@ -69,6 +83,8 @@ export function getServers() {
 }
 
 export async function loadUserServers(userID: string): Promise<void> {
+  if (loadServersInFlight) return
+  loadServersInFlight = true
   loading = true
   error = null
   try {
@@ -77,13 +93,18 @@ export async function loadUserServers(userID: string): Promise<void> {
     if (isServerMode()) {
       result = await apiServers.list()
     } else {
-      result = await App.ListUserServers(userID)
+      result = await withTimeout(
+        App.ListUserServers(userID),
+        WAILS_STORE_TIMEOUT_MS,
+        'ListUserServers timeout',
+      )
     }
     servers = (result ?? []) as unknown as ServerData[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'Failed to load servers'
   } finally {
     loading = false
+    loadServersInFlight = false
   }
 }
 
@@ -157,7 +178,11 @@ async function loadChannels(serverID: string): Promise<void> {
     if (isServerMode()) {
       result = await apiServers.listChannels(serverID)
     } else {
-      result = await App.ListChannels(serverID)
+      result = await withTimeout(
+        App.ListChannels(serverID),
+        WAILS_STORE_TIMEOUT_MS,
+        'ListChannels timeout',
+      )
     }
     channels = (result ?? []) as unknown as ChannelData[]
   } catch (e) {
@@ -209,7 +234,11 @@ async function loadMembers(serverID: string): Promise<void> {
     if (isServerMode()) {
       result = await apiServers.listMembers(serverID)
     } else {
-      result = await App.ListMembers(serverID)
+      result = await withTimeout(
+        App.ListMembers(serverID),
+        WAILS_STORE_TIMEOUT_MS,
+        'ListMembers timeout',
+      )
     }
     members = (result ?? []) as unknown as MemberData[]
   } catch (e) {

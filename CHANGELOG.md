@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Infinite skeleton loading on startup** (`frontend/src/App.svelte`, `frontend/src/lib/api/client.ts`, `frontend/src/lib/stores/auth.svelte.ts`): auth/settings bootstrap now runs once on mount, API discovery/network calls use hard timeout races, Wails session restore calls are timeout-bounded, and auth init has a hard fail-safe timeout to prevent indefinite skeleton lock.
+- **Loading states with Wails backend stalls** (`frontend/src/lib/stores/servers.svelte.ts`, `frontend/src/lib/stores/friends.svelte.ts`, `frontend/src/lib/stores/chat.svelte.ts`, `frontend/src/lib/stores/auth.svelte.ts`, `frontend/src/App.svelte`): added timeout guards for Wails async calls plus bootstrap watchdog recovery to ensure server/friends/chat/auth skeleton states cannot remain infinite when local backend calls hang.
+- **Repeated bootstrap fetch loop causing persistent skeletons** (`frontend/src/App.svelte`, `frontend/src/lib/stores/servers.svelte.ts`, `frontend/src/lib/stores/friends.svelte.ts`): added one-time bootstrap per authenticated user and in-flight guards for `loadUserServers`/`loadFriends`, preventing continuous `loading=true` resets and excessive `/servers` + `/friends` request storms.
 
 ## [0.15.1] - 2026-02-22
 

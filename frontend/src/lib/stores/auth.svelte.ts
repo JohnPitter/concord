@@ -324,3 +324,14 @@ export function cancelLogin(): void {
   polling = false
   error = null
 }
+
+// Last-resort recovery to avoid indefinite app bootstrap loading.
+export function recoverFromStuckLoading(reason = 'unknown'): void {
+  if (!loading && !initInProgress) return
+  console.error('Recovering from stuck auth loading:', reason)
+  loading = false
+  initInProgress = false
+  if (!error) {
+    error = 'Initialization timed out. Please try again.'
+  }
+}

@@ -30,6 +30,7 @@ export interface SearchResultData extends MessageData {
 }
 
 const MESSAGE_POLL_INTERVAL = 5_000 // 5s polling for new messages
+const WAILS_STORE_TIMEOUT_MS = 10_000
 
 let messages = $state<MessageData[]>([])
 let activeChannelId = $state<string | null>(null)
@@ -41,6 +42,19 @@ let searchQuery = $state('')
 let error = $state<string | null>(null)
 let attachmentsByMessage = $state<Record<string, AttachmentData[]>>({})
 let messagePollTimer: ReturnType<typeof setInterval> | null = null
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  let handle: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    handle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (handle) clearTimeout(handle)
+  }
+}
 
 export function getChat() {
   return {
@@ -72,7 +86,11 @@ export async function loadMessages(channelID: string): Promise<void> {
     if (isServerMode()) {
       result = await apiChat.getMessages(channelID, '', '', 50)
     } else {
-      result = await App.GetMessages(channelID, '', '', 50)
+      result = await withTimeout(
+        App.GetMessages(channelID, '', '', 50),
+        WAILS_STORE_TIMEOUT_MS,
+        'GetMessages timeout',
+      )
     }
     // API returns newest first, reverse for display (oldest at top)
     const msgs = (result ?? []) as unknown as MessageData[]
@@ -102,8 +120,12 @@ export async function loadOlderMessages(): Promise<void> {
     if (isServerMode()) {
       result = await apiChat.getMessages(activeChannelId, oldestMessage.id, '', 50)
     } else {
-      result = await App.GetMessages(
-        activeChannelId, oldestMessage.id, '', 50
+      result = await withTimeout(
+        App.GetMessages(
+          activeChannelId, oldestMessage.id, '', 50,
+        ),
+        WAILS_STORE_TIMEOUT_MS,
+        'GetMessages timeout',
       )
     }
     const older = ((result ?? []) as unknown as MessageData[]).reverse()
@@ -270,7 +292,11 @@ async function pollNewMessages(channelID: string) {
     if (isServerMode()) {
       result = await apiChat.getMessages(channelID, '', after, 50)
     } else {
-      result = await App.GetMessages(channelID, '', after, 50)
+      result = await withTimeout(
+        App.GetMessages(channelID, '', after, 50),
+        WAILS_STORE_TIMEOUT_MS,
+        'GetMessages timeout',
+      )
     }
     const newMsgs = (result ?? []) as unknown as MessageData[]
     if (newMsgs.length > 0) {

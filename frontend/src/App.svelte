@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getAuth, initAuth, logout } from './lib/stores/auth.svelte'
+  import { getAuth, initAuth, logout, recoverFromStuckLoading } from './lib/stores/auth.svelte'
   import {
     getServers, loadUserServers, selectServer,
     createServer, redeemInvite, generateInvite,
@@ -72,21 +72,35 @@
   let activeChannelId = $state<string | null>(null)
 
   const isHome = $derived(activeServerId === 'home')
+  const AUTH_BOOTSTRAP_WATCHDOG_MS = 20_000
+  let bootstrappedUserId = $state<string | null>(null)
 
   onMount(() => {
     loadSettings()
     void initAuth()
+
+    const watchdog = setTimeout(() => {
+      recoverFromStuckLoading('app bootstrap watchdog')
+    }, AUTH_BOOTSTRAP_WATCHDOG_MS)
+
+    return () => clearTimeout(watchdog)
   })
 
   // Load data once authenticated
   $effect(() => {
     if (auth.authenticated && auth.user) {
-      loadUserServers(auth.user.id)
-      loadFriends()
+      if (bootstrappedUserId === auth.user.id) {
+        return
+      }
+      bootstrappedUserId = auth.user.id
+      void loadUserServers(auth.user.id)
+      void loadFriends()
       setLocalUsername(auth.user.username, auth.user.id)
       if (!settings.hasSeenWelcome) {
         showWelcome = true
       }
+    } else {
+      bootstrappedUserId = null
     }
   })
 
