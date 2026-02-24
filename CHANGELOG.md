@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Infinite skeleton loading on startup** (`frontend/src/lib/api/client.ts`, `frontend/src/lib/stores/auth.svelte.ts`): server-mode bootstrap now uses strict request/discovery timeouts and bounded `initAuth` wait, preventing the app from getting stuck indefinitely in the initial loading skeleton when discovery/network calls hang.
+- **Infinite skeleton loading on startup** (`frontend/src/App.svelte`, `frontend/src/lib/api/client.ts`, `frontend/src/lib/stores/auth.svelte.ts`): auth/settings bootstrap now runs once on mount, API discovery/network calls use hard timeout races, Wails session restore calls are timeout-bounded, and auth init has a hard fail-safe timeout to prevent indefinite skeleton lock.
 
 ## [0.15.1] - 2026-02-22
 

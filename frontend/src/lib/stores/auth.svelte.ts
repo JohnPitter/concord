@@ -35,6 +35,8 @@ const USER_ID_KEY = 'concord_user_id'
 // Refresh token 2 minutes before expiry
 const REFRESH_BUFFER_MS = 2 * 60 * 1000
 const SERVER_DISCOVERY_MAX_WAIT_MS = 3500
+const AUTH_INIT_HARD_TIMEOUT_MS = 15000
+const WAILS_CALL_TIMEOUT_MS = 8000
 
 let authenticated = $state(false)
 let user = $state<User | null>(null)
@@ -42,6 +44,7 @@ let accessToken = $state<string | null>(null)
 let expiresAt = $state<number | null>(null)
 let loading = $state(true)
 let error = $state<string | null>(null)
+let initInProgress = false
 
 // Device flow state
 let deviceCode = $state<DeviceCodeResponse | null>(null)
@@ -49,6 +52,19 @@ let polling = $state(false)
 
 // Refresh timer
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  let handle: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    handle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (handle) clearTimeout(handle)
+  }
+}
 
 export function getAuth() {
   return {
@@ -97,7 +113,11 @@ async function refreshAccessToken(): Promise<boolean> {
         return true
       }
     } else {
-      const state: AuthState = await App.RestoreSession(user.id)
+      const state: AuthState = await withTimeout(
+        App.RestoreSession(user.id),
+        WAILS_CALL_TIMEOUT_MS,
+        'Session refresh timeout',
+      )
       if (state.authenticated && state.user) {
         user = state.user
         accessToken = state.access_token ?? null
@@ -138,8 +158,19 @@ export async function ensureValidToken(): Promise<boolean> {
 }
 
 export async function initAuth(): Promise<void> {
+  if (initInProgress) {
+    return
+  }
+  initInProgress = true
   loading = true
   error = null
+  const hardTimeout = setTimeout(() => {
+    if (!initInProgress) return
+    console.error('Auth initialization hard timeout')
+    error = 'Initialization timed out. Please try again.'
+    loading = false
+    initInProgress = false
+  }, AUTH_INIT_HARD_TIMEOUT_MS)
 
   try {
     // Discover latest server URL before any API call
@@ -167,7 +198,11 @@ export async function initAuth(): Promise<void> {
         })
       }
     } else {
-      state = await App.RestoreSession(savedUserID)
+      state = await withTimeout(
+        App.RestoreSession(savedUserID),
+        WAILS_CALL_TIMEOUT_MS,
+        'Session restore timeout',
+      )
     }
 
     if (state.authenticated && state.user) {
@@ -182,8 +217,13 @@ export async function initAuth(): Promise<void> {
   } catch (e) {
     console.error('Failed to restore session:', e)
     localStorage.removeItem(USER_ID_KEY)
+    error = e instanceof Error ? e.message : 'Failed to initialize session'
   } finally {
-    loading = false
+    clearTimeout(hardTimeout)
+    if (initInProgress) {
+      loading = false
+      initInProgress = false
+    }
   }
 }
 

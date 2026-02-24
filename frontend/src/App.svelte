@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { getAuth, initAuth, logout } from './lib/stores/auth.svelte'
   import {
     getServers, loadUserServers, selectServer,
@@ -72,11 +73,10 @@
 
   const isHome = $derived(activeServerId === 'home')
 
-  // Load persisted settings on mount
-  $effect(() => { loadSettings() })
-
-  // Initialize auth on mount
-  $effect(() => { initAuth() })
+  onMount(() => {
+    loadSettings()
+    void initAuth()
+  })
 
   // Load data once authenticated
   $effect(() => {

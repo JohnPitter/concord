@@ -146,7 +146,7 @@ function defaultServerURL(): string {
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
 
   if (init.signal) {
     if (init.signal.aborted) {
@@ -156,10 +156,18 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
     }
   }
 
+  const fetchPromise = fetch(input, { ...init, signal: controller.signal })
+  const timeoutPromise = new Promise<Response>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      controller.abort()
+      reject(new Error(`Request timeout after ${timeoutMs}ms`))
+    }, timeoutMs)
+  })
+
   try {
-    return await fetch(input, { ...init, signal: controller.signal })
+    return await Promise.race([fetchPromise, timeoutPromise])
   } finally {
-    clearTimeout(timer)
+    if (timeoutHandle) clearTimeout(timeoutHandle)
   }
 }
 
@@ -170,16 +178,16 @@ const DISCOVERY_URL = 'https://gist.githubusercontent.com/JohnPitter/ee556dbee0b
 
 async function isReachable(url: string): Promise<boolean> {
   const base = url.replace(/\/$/, '')
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 1500)
 
   try {
-    const res = await fetch(`${base}/health`, { cache: 'no-store', signal: controller.signal })
+    const res = await fetchWithTimeout(
+      `${base}/health`,
+      { cache: 'no-store' },
+      1500,
+    )
     return res.ok
   } catch {
     return false
-  } finally {
-    clearTimeout(timer)
   }
 }
 
