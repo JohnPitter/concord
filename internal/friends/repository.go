@@ -254,15 +254,7 @@ func (r *Repository) GetFriends(ctx context.Context, userID string) ([]FriendVie
 			u.username,
 			COALESCE(u.display_name, u.username),
 			COALESCE(u.avatar_url, ''),
-			CASE
-				WHEN EXISTS (
-					SELECT 1
-					FROM auth_sessions s
-					WHERE s.user_id = u.id
-						AND s.expires_at > CURRENT_TIMESTAMP
-				) THEN 'online'
-				ELSE 'offline'
-			END AS status
+			'offline' AS status
 		FROM friends f
 		JOIN users u ON u.id = f.friend_id
 		WHERE f.user_id = ?

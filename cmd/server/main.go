@@ -133,7 +133,9 @@ func main() {
 		return postgres.NewQuerierAdapter(q)
 	})
 	friendRepo := friends.NewRepository(pgAdapter, friendTx, logger)
-	presenceTracker := presence.NewTracker(2 * time.Minute)
+	// Keep online status responsive: clients send frequent authenticated polls.
+	// 30s avoids stale "online" while tolerating transient network jitter.
+	presenceTracker := presence.NewTracker(30 * time.Second)
 	friendsSvc := friends.NewService(friendRepo, presenceTracker, logger)
 
 	logger.Info().Msg("all services initialized with postgresql backend")
