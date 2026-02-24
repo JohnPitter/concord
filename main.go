@@ -29,6 +29,7 @@ import (
 	"github.com/concord-chat/concord/internal/server"
 	"github.com/concord-chat/concord/internal/store/sqlite"
 	"github.com/concord-chat/concord/internal/translation"
+	"github.com/concord-chat/concord/internal/updater"
 	"github.com/concord-chat/concord/internal/voice"
 	"github.com/concord-chat/concord/pkg/version"
 	"github.com/rs/zerolog"
@@ -56,6 +57,7 @@ type App struct {
 	voiceEngine        *voice.Engine
 	voiceOrch          *voice.Orchestrator
 	voiceTranslator    *voice.VoiceTranslator
+	updaterService     *updater.Service
 	sigServer          *signaling.Server
 	sigListener        net.Listener
 	fileService        *files.Service
@@ -101,6 +103,10 @@ func (a *App) startup(ctx context.Context) {
 		Str("git_commit", version.GitCommit).
 		Str("platform", version.Platform).
 		Msg("starting Concord")
+
+	// Initialize updater service
+	a.updaterService = updater.NewService(a.logger)
+	a.logger.Info().Msg("updater service initialized")
 
 	// Initialize metrics
 	a.metrics = observability.NewMetrics()
@@ -296,6 +302,23 @@ func (a *App) Greet(name string) string {
 // GetVersion returns version information
 func (a *App) GetVersion() version.Info {
 	return version.Get()
+}
+
+// ApplyAutoUpdate downloads and applies a desktop update, then restarts the app.
+func (a *App) ApplyAutoUpdate(downloadURL, targetVersion, expectedSHA256 string) error {
+	if a.updaterService == nil {
+		a.updaterService = updater.NewService(a.logger)
+	}
+	if err := a.updaterService.ApplyDesktopUpdate(downloadURL, targetVersion, expectedSHA256); err != nil {
+		return err
+	}
+
+	// Allow the JS promise to resolve before closing the app.
+	go func() {
+		time.Sleep(800 * time.Millisecond)
+		runtime.Quit(a.ctx)
+	}()
+	return nil
 }
 
 // GetHealth returns the health status of the application

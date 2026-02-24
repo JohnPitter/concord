@@ -5,7 +5,7 @@
   import Dropdown from '../ui/Dropdown.svelte'
   import { translations, t, LOCALES, setLocale, locale } from '../../i18n'
   import type { Locale } from '../../i18n'
-  import { checkForUpdates, openUpdatePage, type UpdateInfo } from '../../services/updater'
+  import { checkForUpdates, installUpdate, type UpdateInfo } from '../../services/updater'
   import {
     getSettings, setAudioInput, setAudioOutput,
     setNotifications, setNotificationSounds,
@@ -76,7 +76,9 @@
   let autoTranslateEnabled = $state(settings.autoTranslate)
   let updateInfo = $state<UpdateInfo | null>(null)
   let updateChecking = $state(false)
+  let updateInstalling = $state(false)
   let updateError = $state<string | null>(null)
+  let updateInstallMessage = $state<string | null>(null)
   let updateLastCheckedAt = $state<string | null>(null)
 
   // Sync from store when panel opens
@@ -148,6 +150,7 @@
   async function refreshUpdateStatus() {
     updateChecking = true
     updateError = null
+    updateInstallMessage = null
     try {
       updateInfo = await checkForUpdates()
       updateLastCheckedAt = new Date().toLocaleTimeString()
@@ -156,6 +159,26 @@
       updateLastCheckedAt = new Date().toLocaleTimeString()
     } finally {
       updateChecking = false
+    }
+  }
+
+  async function applyUpdateNow() {
+    if (!updateInfo?.available || updateInstalling) {
+      return
+    }
+
+    updateInstalling = true
+    updateError = null
+    updateInstallMessage = null
+    try {
+      await installUpdate(updateInfo)
+      updateInstallMessage = updateInfo.autoInstallSupported
+        ? 'Update downloaded. Restarting app...'
+        : 'Automatic update unavailable on this platform. Opened release page.'
+    } catch (e) {
+      updateError = e instanceof Error ? e.message : 'Failed to install update'
+    } finally {
+      updateInstalling = false
     }
   }
 </script>
@@ -319,6 +342,10 @@
                   <p class="mb-3 text-xs text-red-400">{updateError}</p>
                 {/if}
 
+                {#if updateInstallMessage}
+                  <p class="mb-3 text-xs text-void-online">{updateInstallMessage}</p>
+                {/if}
+
                 {#if updateLastCheckedAt}
                   <p class="mb-2 text-xs text-void-text-muted">Last checked at {updateLastCheckedAt}</p>
                 {/if}
@@ -330,10 +357,21 @@
                   {#if updateInfo.available}
                     <div class="mt-3 flex items-center justify-between rounded-lg border border-void-accent/40 bg-void-accent/10 p-3">
                       <p class="text-sm font-medium text-void-accent">New version available</p>
-                      <Button variant="solid" size="sm" onclick={() => openUpdatePage(updateInfo?.releaseURL)}>
-                        Update now
+                      <Button
+                        variant="solid"
+                        size="sm"
+                        loading={updateInstalling}
+                        disabled={updateInstalling || updateChecking}
+                        onclick={applyUpdateNow}
+                      >
+                        {updateInstalling ? 'Installing...' : 'Update now'}
                       </Button>
                     </div>
+                    {#if !updateInfo.autoInstallSupported}
+                      <p class="mt-2 text-xs text-void-text-muted">
+                        Automatic install is currently available only on Windows desktop builds.
+                      </p>
+                    {/if}
                   {:else}
                     <p class="mt-2 text-xs text-void-online">You are up to date.</p>
                   {/if}

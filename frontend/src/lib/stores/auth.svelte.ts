@@ -34,6 +34,7 @@ const USER_ID_KEY = 'concord_user_id'
 
 // Refresh token 2 minutes before expiry
 const REFRESH_BUFFER_MS = 2 * 60 * 1000
+const SERVER_DISCOVERY_MAX_WAIT_MS = 3500
 
 let authenticated = $state(false)
 let user = $state<User | null>(null)
@@ -143,7 +144,10 @@ export async function initAuth(): Promise<void> {
   try {
     // Discover latest server URL before any API call
     if (isServerMode()) {
-      await discoverServerURL()
+      await Promise.race([
+        discoverServerURL().catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, SERVER_DISCOVERY_MAX_WAIT_MS)),
+      ])
     }
 
     const savedUserID = localStorage.getItem(USER_ID_KEY)

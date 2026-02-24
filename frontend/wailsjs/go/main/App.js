@@ -6,6 +6,10 @@ export function AcceptFriendRequest(arg1, arg2) {
   return window['go']['main']['App']['AcceptFriendRequest'](arg1, arg2);
 }
 
+export function ApplyAutoUpdate(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ApplyAutoUpdate'](arg1, arg2, arg3);
+}
+
 export function BlockUser(arg1, arg2) {
   return window['go']['main']['App']['BlockUser'](arg1, arg2);
 }

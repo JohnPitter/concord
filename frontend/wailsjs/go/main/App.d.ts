@@ -15,6 +15,8 @@ import {voice} from '../models';
 
 export function AcceptFriendRequest(arg1:string,arg2:string):Promise<void>;
 
+export function ApplyAutoUpdate(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function BlockUser(arg1:string,arg2:string):Promise<void>;
 
 export function CompleteLogin(arg1:string,arg2:number):Promise<auth.AuthState>;

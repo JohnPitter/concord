@@ -2,6 +2,8 @@
 // Used when networkMode === 'server' instead of Wails bindings
 
 const API_STORAGE_KEY = 'concord-api-tokens'
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000
+const DISCOVERY_TIMEOUT_MS = 2500
 
 interface ApiTokens {
   accessToken: string
@@ -67,7 +69,7 @@ class ApiClient {
   private async refreshToken(): Promise<void> {
     if (!this.tokens?.userId) throw new Error('No user ID for refresh')
 
-    const res = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
+    const res = await fetchWithTimeout(`${this.baseURL}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: this.tokens.userId }),
@@ -99,7 +101,7 @@ class ApiClient {
     }
     if (body !== undefined) opts.body = JSON.stringify(body)
 
-    const res = await fetch(`${this.baseURL}${path}`, opts)
+    const res = await fetchWithTimeout(`${this.baseURL}${path}`, opts)
 
     if (res.status === 204) return undefined as T
 
@@ -118,7 +120,7 @@ class ApiClient {
     }
     if (body !== undefined) opts.body = JSON.stringify(body)
 
-    const res = await fetch(`${this.baseURL}${path}`, opts)
+    const res = await fetchWithTimeout(`${this.baseURL}${path}`, opts)
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: { message: res.statusText } }))
@@ -140,6 +142,25 @@ function defaultServerURL(): string {
   const configured = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
   if (configured) return configured
   return 'http://localhost'
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  if (init.signal) {
+    if (init.signal.aborted) {
+      controller.abort()
+    } else {
+      init.signal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+  }
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const SERVER_URL = defaultServerURL()
@@ -183,7 +204,11 @@ export async function discoverServerURL(): Promise<string> {
   const fallback = await chooseFallbackURL(apiClient.getBaseURL())
 
   try {
-    const res = await fetch(DISCOVERY_URL, { cache: 'no-store' })
+    const res = await fetchWithTimeout(
+      DISCOVERY_URL,
+      { cache: 'no-store' },
+      DISCOVERY_TIMEOUT_MS,
+    )
     if (!res.ok) {
       apiClient.setBaseURL(fallback)
       return fallback

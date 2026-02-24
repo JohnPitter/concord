@@ -5,15 +5,27 @@ const LATEST_RELEASE_API = 'https://api.github.com/repos/JohnPitter/concord/rele
 const LATEST_RELEASE_PAGE = 'https://github.com/JohnPitter/concord/releases/latest'
 
 export interface UpdateInfo {
+  platform: 'windows' | 'darwin' | 'linux' | 'unknown'
   currentVersion: string
   latestVersion: string
   available: boolean
   releaseURL: string
+  assetName: string | null
+  assetURL: string | null
+  assetSHA256: string | null
+  autoInstallSupported: boolean
 }
 
 interface GitHubRelease {
   tag_name: string
   html_url: string
+  assets?: GitHubReleaseAsset[]
+}
+
+interface GitHubReleaseAsset {
+  name: string
+  browser_download_url: string
+  digest?: string
 }
 
 function getFallbackVersion(): string {
@@ -22,10 +34,52 @@ function getFallbackVersion(): string {
   return '0.0.0'
 }
 
-async function getCurrentVersion(): Promise<string> {
+function detectPlatformFromUserAgent(): 'windows' | 'darwin' | 'linux' | 'unknown' {
+  const userAgent = navigator.userAgent.toLowerCase()
+  if (userAgent.includes('win')) return 'windows'
+  if (userAgent.includes('mac')) return 'darwin'
+  if (userAgent.includes('linux')) return 'linux'
+  return 'unknown'
+}
+
+function normalizePlatform(platform: string): 'windows' | 'darwin' | 'linux' | 'unknown' {
+  const normalized = platform.trim().toLowerCase()
+  if (normalized.startsWith('windows')) return 'windows'
+  if (normalized.startsWith('darwin') || normalized.startsWith('mac')) return 'darwin'
+  if (normalized.startsWith('linux')) return 'linux'
+  return 'unknown'
+}
+
+function normalizeDigest(digest?: string): string | null {
+  const value = (digest || '').trim().toLowerCase()
+  if (!value) return null
+  if (value.startsWith('sha256:')) {
+    return value.slice('sha256:'.length)
+  }
+  return value
+}
+
+function selectReleaseAsset(
+  assets: GitHubReleaseAsset[] | undefined,
+  platform: 'windows' | 'darwin' | 'linux' | 'unknown',
+): GitHubReleaseAsset | null {
+  if (!assets || assets.length === 0) return null
+
+  const matcher: Record<'windows' | 'darwin' | 'linux', RegExp> = {
+    windows: /^concord-windows-.*\.zip$/i,
+    darwin: /^concord-macos-.*\.zip$/i,
+    linux: /^concord-linux-.*\.tar\.gz$/i,
+  }
+
+  if (platform === 'unknown') return null
+  return assets.find((asset) => matcher[platform].test(asset.name || '')) ?? null
+}
+
+async function getCurrentVersionInfo(): Promise<{ version: string; platform: 'windows' | 'darwin' | 'linux' | 'unknown' }> {
   try {
     const info = await App.GetVersion()
     const current = normalizeVersion(info.version || '')
+    const platform = normalizePlatform(info.platform || '')
     const commit = (info.git_commit || '').trim().toLowerCase()
     const buildDate = (info.build_date || '').trim().toLowerCase()
 
@@ -36,11 +90,20 @@ async function getCurrentVersion(): Promise<string> {
       (buildDate === '' || buildDate === 'unknown')
 
     if (!looksLikePlaceholder && current) {
-      return current
+      return {
+        version: current,
+        platform: platform === 'unknown' ? detectPlatformFromUserAgent() : platform,
+      }
     }
-    return getFallbackVersion()
+    return {
+      version: getFallbackVersion(),
+      platform: platform === 'unknown' ? detectPlatformFromUserAgent() : platform,
+    }
   } catch {
-    return getFallbackVersion()
+    return {
+      version: getFallbackVersion(),
+      platform: detectPlatformFromUserAgent(),
+    }
   }
 }
 
@@ -90,17 +153,42 @@ function compareSemver(a: string, b: string): number {
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo> {
-  const currentVersion = await getCurrentVersion()
+  const currentInfo = await getCurrentVersionInfo()
+  const currentVersion = currentInfo.version
   const release = await fetchLatestRelease()
   const latestVersion = normalizeVersion(release.tag_name || currentVersion)
   const available = compareSemver(latestVersion, currentVersion) > 0
+  const asset = selectReleaseAsset(release.assets, currentInfo.platform)
+  const autoInstallSupported = currentInfo.platform === 'windows' && !!asset
 
   return {
+    platform: currentInfo.platform,
     currentVersion,
     latestVersion,
     available,
     releaseURL: release.html_url || LATEST_RELEASE_PAGE,
+    assetName: asset?.name || null,
+    assetURL: asset?.browser_download_url || null,
+    assetSHA256: normalizeDigest(asset?.digest),
+    autoInstallSupported,
   }
+}
+
+export async function installUpdate(updateInfo: UpdateInfo): Promise<void> {
+  if (!updateInfo.available) {
+    throw new Error('No update available.')
+  }
+
+  if (updateInfo.autoInstallSupported && updateInfo.assetURL) {
+    await App.ApplyAutoUpdate(
+      updateInfo.assetURL,
+      updateInfo.latestVersion,
+      updateInfo.assetSHA256 || '',
+    )
+    return
+  }
+
+  openUpdatePage(updateInfo.releaseURL)
 }
 
 export function openUpdatePage(url?: string): void {

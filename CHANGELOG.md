@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Desktop update checker UI** (`frontend/src/lib/services/updater.ts`, `SettingsPanel.svelte`): app now checks GitHub Releases (`/releases/latest`), compares current vs latest version, shows update status in Settings, and provides an **Update now** action opening the release page.
+- **Desktop auto-update installer** (`internal/updater/service.go`, `main.go`, `frontend/src/lib/services/updater.ts`, `frontend/src/lib/components/settings/SettingsPanel.svelte`): on Windows desktop builds, `Update now` now downloads the release asset, verifies digest when available, stages `concord.exe`, applies update after process exit, and relaunches automatically.
 - **Backend auto-update service** (`deployments/docker/docker-compose.prod.yml`): added `watchtower` with label-based updates, rolling restart, and cleanup.
 - **Global skeleton loading system** (`frontend/src/lib/components/ui/Skeleton.svelte`, `App.svelte`, `layout/*`, `chat/MessageList.svelte`): added reusable shimmer skeleton component and loading placeholders across auth bootstrap, server/DM sidebars, friends/activity panels, member list, channel/chat header, message timeline, and input areas.
 
@@ -33,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Voice presence latency** (`handlers_voice.go`, `server.go`, `voice.svelte.ts`, `signaling/server.go`): added aggregated endpoint `GET /api/v1/servers/{serverID}/voice/participants` and reduced polling intervals (voice status: 600ms, server participants: 800ms) for near real-time join/leave visibility.
 - **Update checker UX/reliability** (`updater.ts`, `SettingsPanel.svelte`): improved `Check now` feedback with loading state + last checked timestamp, added timeout/rate-limit errors, fallback current version when Wails bindings are unavailable, and browser fallback for opening release URL.
 - **Version accuracy in updater/builds** (`updater.ts`, `pkg/version/version.go`, `Makefile`): updater now ignores placeholder backend version metadata (`1.0.0/unknown`) to prevent false comparisons, default app version changed to `0.0.0-dev`, and desktop/server build targets now inject real version/git/date via ldflags.
+
+### Fixed
+
+- **Infinite skeleton loading on startup** (`frontend/src/lib/api/client.ts`, `frontend/src/lib/stores/auth.svelte.ts`): server-mode bootstrap now uses strict request/discovery timeouts and bounded `initAuth` wait, preventing the app from getting stuck indefinitely in the initial loading skeleton when discovery/network calls hang.
 
 ## [0.15.1] - 2026-02-22
 
