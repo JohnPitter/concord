@@ -6,6 +6,8 @@ import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { ensureValidToken } from './auth.svelte'
 import { apiClient } from '../api/client'
 import { isServerMode } from '../api/mode'
+import { getSettings } from './settings.svelte'
+import { VoiceRTCClient, type VoiceRTCStatus } from '../services/voiceRTC'
 
 export interface SpeakerData {
   peer_id: string
@@ -37,6 +39,7 @@ let error = $state<string | null>(null)
 let joinedAt = $state<number | null>(null)
 let elapsedSeconds = $state(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
+let rtcClient: VoiceRTCClient | null = null
 
 function startTimer() {
   joinedAt = Date.now()
@@ -82,6 +85,52 @@ export function getVoice() {
     get connected() { return state === 'connected' },
     get elapsed() { return formatElapsed(elapsedSeconds) },
   }
+}
+
+function normalizeSpeaker(raw: Partial<SpeakerData>): SpeakerData {
+  const peerID = (raw.peer_id || '').trim()
+  const userID = (raw.user_id || '').trim() || peerID
+  const usernameRaw = (raw.username || '').trim()
+  const username = usernameRaw || userID.slice(0, 12) || peerID.slice(0, 12) || 'user'
+  return {
+    peer_id: peerID,
+    user_id: userID,
+    username,
+    avatar_url: (raw.avatar_url || '').trim(),
+    volume: Number.isFinite(raw.volume as number) ? Number(raw.volume) : 0,
+    speaking: !!raw.speaking,
+    screenSharing: !!raw.screenSharing,
+  }
+}
+
+function sortSpeakersStable(list: SpeakerData[]): SpeakerData[] {
+  return [...list].sort((a, b) => {
+    const aLocal = isLocalUser(a) ? 0 : 1
+    const bLocal = isLocalUser(b) ? 0 : 1
+    if (aLocal !== bLocal) return aLocal - bLocal
+    const byName = a.username.localeCompare(b.username)
+    if (byName !== 0) return byName
+    return (a.peer_id || a.user_id).localeCompare(b.peer_id || b.user_id)
+  })
+}
+
+function applyVoiceStatus(status: VoiceStatusData): void {
+  state = status.state as VoiceStatusData['state']
+  channelId = status.channel_id || null
+  muted = status.muted
+  deafened = status.deafened
+  const normalized = (status.speakers ?? []).map(s => normalizeSpeaker(s))
+  const newSpeakers = sortSpeakersStable(normalized)
+
+  if (state === 'connected' && !deafened) {
+    const oldCount = previousSpeakerCount
+    const newCount = newSpeakers.length
+    if (newCount > oldCount && oldCount > 0) playJoinSound()
+    else if (newCount < oldCount && newCount > 0) playLeaveSound()
+  }
+
+  previousSpeakerCount = newSpeakers.length
+  speakers = newSpeakers
 }
 
 // Client-side voice activity detection via Web Audio API
@@ -274,13 +323,35 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
 
   try {
     await ensureValidToken()
-    if (isServerMode()) {
-      await App.JoinVoiceWithURL(apiClient.getBaseURL(), serverID, channelID, userID, username, avatarURL)
+    if (isServerMode() && typeof RTCPeerConnection !== 'undefined') {
+      const settings = getSettings()
+      rtcClient = new VoiceRTCClient(
+        (status: VoiceRTCStatus) => {
+          applyVoiceStatus(status as unknown as VoiceStatusData)
+        },
+        (message: string) => {
+          error = message
+        },
+      )
+
+      await rtcClient.join({
+        baseURL: apiClient.getBaseURL(),
+        serverID,
+        channelID,
+        userID,
+        username,
+        avatarURL,
+        inputDeviceId: settings.audioInputDevice,
+        outputDeviceId: settings.audioOutputDevice,
+      })
     } else {
-      await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
+      if (isServerMode()) {
+        await App.JoinVoiceWithURL(apiClient.getBaseURL(), serverID, channelID, userID, username, avatarURL)
+      } else {
+        await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
+      }
     }
-    state = 'connected'
-    channelId = channelID
+    await refreshVoiceStatus()
     playJoinSound()
     startTimer()
     startVoicePolling()
@@ -296,7 +367,12 @@ export async function leaveVoice(): Promise<void> {
   if (state === 'disconnected') return
 
   try {
-    await App.LeaveVoice()
+    if (rtcClient) {
+      await rtcClient.leave()
+      rtcClient = null
+    } else {
+      await App.LeaveVoice()
+    }
   } catch (e) {
     console.error('Failed to leave voice channel:', e)
   } finally {
@@ -310,12 +386,13 @@ export async function leaveVoice(): Promise<void> {
     speakers = []
     muted = false
     deafened = false
+    previousSpeakerCount = 0
   }
 }
 
 export async function toggleMute(): Promise<void> {
   try {
-    const isMuted: boolean = await App.ToggleMute()
+    const isMuted: boolean = rtcClient ? rtcClient.toggleMute() : await App.ToggleMute()
     muted = isMuted
   } catch (e) {
     console.error('Failed to toggle mute:', e)
@@ -324,7 +401,7 @@ export async function toggleMute(): Promise<void> {
 
 export async function toggleDeafen(): Promise<void> {
   try {
-    const isDeafened: boolean = await App.ToggleDeafen()
+    const isDeafened: boolean = rtcClient ? rtcClient.toggleDeafen() : await App.ToggleDeafen()
     deafened = isDeafened
     if (isDeafened) muted = true
   } catch (e) {
@@ -346,23 +423,33 @@ export async function toggleScreenSharing(): Promise<void> {
 
 export async function refreshVoiceStatus(): Promise<void> {
   try {
-    const status = await App.GetVoiceStatus()
-    state = status.state as VoiceStatusData['state']
-    channelId = status.channel_id || null
-    muted = status.muted
-    deafened = status.deafened
-    const newSpeakers = (status.speakers ?? []) as unknown as SpeakerData[]
-    // Play join/leave sound when speaker count changes (only while we're connected)
-    if (state === 'connected' && !deafened) {
-      const oldCount = previousSpeakerCount
-      const newCount = newSpeakers.length
-      if (newCount > oldCount && oldCount > 0) playJoinSound()
-      else if (newCount < oldCount && newCount > 0) playLeaveSound()
+    if (rtcClient) {
+      applyVoiceStatus(rtcClient.getStatus() as unknown as VoiceStatusData)
+      return
     }
-    previousSpeakerCount = newSpeakers.length
-    speakers = newSpeakers
+
+    const status = await App.GetVoiceStatus()
+    applyVoiceStatus(status as unknown as VoiceStatusData)
   } catch (e) {
     console.error('Failed to refresh voice status:', e)
+  }
+}
+
+export async function setVoiceInputDevice(deviceId: string): Promise<void> {
+  if (!rtcClient) return
+  try {
+    await rtcClient.setInputDevice(deviceId)
+  } catch (e) {
+    console.error('Failed to switch input device:', e)
+  }
+}
+
+export async function setVoiceOutputDevice(deviceId: string): Promise<void> {
+  if (!rtcClient) return
+  try {
+    await rtcClient.setOutputDevice(deviceId)
+  } catch (e) {
+    console.error('Failed to switch output device:', e)
   }
 }
 
@@ -397,34 +484,38 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
       for (const chID of channelIDs) {
         const peers = byChannel?.[chID] ?? []
         if (peers.length === 0) continue
-        updated[chID] = peers.map((p: any) => ({
-          peer_id: p.peer_id || '',
-          user_id: p.user_id || '',
-          username: p.username || '',
-          avatar_url: p.avatar_url || '',
-          volume: 0,
-          speaking: false,
-        }))
+        updated[chID] = sortSpeakersStable(
+          peers.map((p: any) => normalizeSpeaker({
+            peer_id: p.peer_id || '',
+            user_id: p.user_id || '',
+            username: p.username || '',
+            avatar_url: p.avatar_url || '',
+            volume: 0,
+            speaking: false,
+          })),
+        )
       }
     } else {
       const results = await Promise.all(
         channelIDs.map(async (chID) => {
           try {
             const peers = await App.GetVoiceParticipants(serverID, chID)
-            if (!peers || peers.length === 0) return [chID, []] as const
+            if (!peers || peers.length === 0) return [chID, [] as SpeakerData[]] as const
 
-            const mapped = peers.map((p: any) => ({
-              peer_id: p.peer_id || '',
-              user_id: p.user_id || '',
-              username: p.username || '',
-              avatar_url: p.avatar_url || '',
-              volume: 0,
-              speaking: false,
-            }))
+            const mapped = sortSpeakersStable(
+              peers.map((p: any) => normalizeSpeaker({
+                peer_id: p.peer_id || '',
+                user_id: p.user_id || '',
+                username: p.username || '',
+                avatar_url: p.avatar_url || '',
+                volume: 0,
+                speaking: false,
+              })),
+            )
 
-            return [chID, mapped] as const
+            return [chID, mapped as SpeakerData[]] as const
           } catch {
-            return [chID, []] as const
+            return [chID, [] as SpeakerData[]] as const
           }
         }),
       )
@@ -460,11 +551,16 @@ export function stopParticipantsPolling(): void {
 }
 
 export function resetVoice(): void {
+  if (rtcClient) {
+    void rtcClient.leave()
+    rtcClient = null
+  }
   state = 'disconnected'
   channelId = null
   muted = false
   deafened = false
   speakers = []
   error = null
+  previousSpeakerCount = 0
   stopParticipantsPolling()
 }

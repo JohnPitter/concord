@@ -11,6 +11,7 @@
     setNotifications, setNotificationSounds,
     setTranslationLangs, setAutoTranslate, setTheme,
   } from '../../stores/settings.svelte'
+  import { setVoiceInputDevice, setVoiceOutputDevice } from '../../stores/voice.svelte'
 
   interface Props {
     open: boolean
@@ -92,8 +93,14 @@
   })
 
   // Sync changes to store
-  $effect(() => { setAudioInput(selectedInputDevice) })
-  $effect(() => { setAudioOutput(selectedOutputDevice) })
+  $effect(() => {
+    setAudioInput(selectedInputDevice)
+    void setVoiceInputDevice(selectedInputDevice)
+  })
+  $effect(() => {
+    setAudioOutput(selectedOutputDevice)
+    void setVoiceOutputDevice(selectedOutputDevice)
+  })
   $effect(() => { setNotifications(notifEnabled) })
   $effect(() => { setNotificationSounds(notifSounds) })
   $effect(() => { setTranslationLangs(srcLang, tgtLang) })

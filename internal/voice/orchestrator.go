@@ -309,10 +309,8 @@ func (o *Orchestrator) registerHandlers(client *signaling.Client) {
 			mid := payload.SDPMid
 			candidate.SDPMid = &mid
 		}
-		if payload.SDPMLineIndex > 0 {
-			idx := payload.SDPMLineIndex
-			candidate.SDPMLineIndex = &idx
-		}
+		idx := payload.SDPMLineIndex
+		candidate.SDPMLineIndex = &idx
 
 		if err := o.engine.AddICECandidate(fromPeerID, candidate); err != nil {
 			o.logger.Warn().Err(err).Str("peer_id", fromPeerID).Msg("failed to add ICE candidate")

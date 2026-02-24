@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Production server service** (`docker-compose.prod.yml`): server is now watchtower-enabled via `com.centurylinklabs.watchtower.enable=true`.
 - **Docker env template** (`deployments/docker/.env.example`): added `WATCHTOWER_POLL_INTERVAL` configuration.
+- **Server-mode voice media path** (`frontend/src/lib/services/voiceRTC.ts`, `frontend/src/lib/stores/voice.svelte.ts`): switched server-mode voice from backend-only state polling to browser-native WebRTC peer media (same signaling protocol), restoring real microphone/speaker audio between participants and enabling live input/output device switching.
+- **Voice participant identity stability** (`voice.svelte.ts`, `ChannelSidebar.svelte`, `VoiceControls.svelte`): normalized empty usernames with deterministic fallbacks, added stable speaker sorting, and keyed participant rendering to prevent UI swaps and ghost `??` entries during rapid updates/device changes.
+- **ICE candidate handling** (`internal/voice/orchestrator.go`): now forwards `sdp_mline_index=0` instead of dropping it, reducing failed candidate application on first media m-line.
 - **Voice join routing** (`main.go`, `voice.svelte.ts`): server mode now joins voice using the central signaling URL (`JoinVoiceWithURL`) while keeping local signaling path for non-server mode.
 - **Voice participants polling** (`voice.svelte.ts`): server mode now reads participants from authenticated API endpoint (`/api/v1/servers/{serverID}/channels/{channelID}/voice/participants`) with parallel channel fetches to reduce appearance delay.
 - **API router wiring** (`internal/api/server.go`): fixed chi middleware/route ordering panic on fresh deploys and exposed signaling on both `/ws/signaling` and `/ws/signaling/`, restoring stable server-mode join behavior.

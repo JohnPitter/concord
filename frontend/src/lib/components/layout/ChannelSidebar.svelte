@@ -276,20 +276,21 @@
         {@const channelSpeakers = isMyChannel ? voiceSpeakers : (getChannelParticipants?.(channel.id) ?? [])}
         {#if channelSpeakers.length > 0}
           <div class="ml-4 mb-1 space-y-0.5">
-            {#each channelSpeakers as speaker}
+            {#each channelSpeakers as speaker (speaker.peer_id || speaker.user_id || speaker.username)}
               {@const avatarUrl = getAvatarForSpeaker(speaker)}
+              {@const displaySpeakerName = speaker.username || speaker.user_id || speaker.peer_id || 'user'}
               {@const isLocal = isMyChannel && speaker.username === currentUser?.username}
               <div class="flex items-center gap-2 rounded-md py-1 px-2 hover:bg-void-bg-hover/50 transition-colors">
                 <div class="relative shrink-0">
                   {#if avatarUrl}
-                    <img src={avatarUrl} alt={speaker.username} class="h-6 w-6 rounded-full object-cover" />
+                    <img src={avatarUrl} alt={displaySpeakerName} class="h-6 w-6 rounded-full object-cover" />
                   {:else}
                     <div class="h-6 w-6 rounded-full bg-void-accent/30 flex items-center justify-center text-[9px] font-bold text-void-accent">
-                      {(speaker.username || '??').slice(0, 2).toUpperCase()}
+                      {displaySpeakerName.slice(0, 2).toUpperCase()}
                     </div>
                   {/if}
                 </div>
-                <span class="text-xs text-void-text-secondary truncate">{speaker.username}</span>
+                <span class="text-xs text-void-text-secondary truncate">{displaySpeakerName}</span>
                 {#if speaker.screenSharing || (isLocal && voiceScreenSharing)}
                   <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
