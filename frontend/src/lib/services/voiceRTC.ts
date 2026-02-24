@@ -47,6 +47,9 @@ interface PeerConnectionState {
   pc: RTCPeerConnection
   audio: HTMLAudioElement
   stream: MediaStream
+  analyser: AnalyserNode | null
+  analyserData: Uint8Array | null
+  sourceNode: MediaStreamAudioSourceNode | null
 }
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -67,6 +70,8 @@ export class VoiceRTCClient {
   private deafened = false
   private state: VoiceRTCStatus['state'] = 'disconnected'
   private outputDeviceId = ''
+  private audioContext: AudioContext | null = null
+  private speakingLoop: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
@@ -98,6 +103,7 @@ export class VoiceRTCClient {
     try {
       this.localStream = await this.createLocalStream(opts.inputDeviceId)
       this.applyMuteState()
+      this.initAudioAnalysis()
 
       const wsURL = this.toSignalingURL(opts.baseURL)
       this.ws = await this.openWebSocket(wsURL)
@@ -111,6 +117,9 @@ export class VoiceRTCClient {
           this.state = 'disconnected'
           this.cleanupPeers()
           this.cleanupLocalStream()
+          this.cleanupAudioAnalysis()
+          this.participants.clear()
+          this.peersMeta.clear()
           this.emitStatus()
         }
       }
@@ -144,6 +153,7 @@ export class VoiceRTCClient {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.sendSignal({
           type: 'leave',
+          from: this.selfPeerID,
           server_id: this.serverID,
           channel_id: this.channelID,
         })
@@ -155,6 +165,7 @@ export class VoiceRTCClient {
     this.state = 'disconnected'
     this.cleanupPeers()
     this.cleanupLocalStream()
+    this.cleanupAudioAnalysis()
     this.participants.clear()
     this.peersMeta.clear()
 
@@ -297,6 +308,7 @@ export class VoiceRTCClient {
 
       this.sendSignal({
         type: 'sdp_offer',
+        from: this.selfPeerID,
         to: peer.peer_id,
         server_id: this.serverID,
         channel_id: this.channelID,
@@ -358,6 +370,7 @@ export class VoiceRTCClient {
 
     this.sendSignal({
       type: 'sdp_answer',
+      from: this.selfPeerID,
       to: fromPeerID,
       server_id: this.serverID,
       channel_id: this.channelID,
@@ -406,6 +419,7 @@ export class VoiceRTCClient {
       if (!event.candidate) return
       this.sendSignal({
         type: 'ice_candidate',
+        from: this.selfPeerID,
         to: peerID,
         server_id: this.serverID,
         channel_id: this.channelID,
@@ -418,15 +432,19 @@ export class VoiceRTCClient {
     }
 
     pc.ontrack = (event) => {
-      if (event.streams.length > 0) {
+      if (event.streams.length > 0 && event.streams[0]) {
         for (const track of event.streams[0].getTracks()) {
-          stream.addTrack(track)
+          if (!stream.getTracks().some((t) => t.id === track.id)) {
+            stream.addTrack(track)
+          }
         }
-      } else {
+      } else if (!stream.getTracks().some((t) => t.id === event.track.id)) {
         stream.addTrack(event.track)
       }
+
+      this.setupPeerAnalyser(peerID, stream)
       void audio.play().catch(() => {
-        // Autoplay may be blocked by policy; user gesture on join usually unlocks it.
+        this.onError('audio playback was blocked; click the app window and rejoin voice')
       })
     }
 
@@ -440,7 +458,14 @@ export class VoiceRTCClient {
       }
     }
 
-    const state: PeerConnectionState = { pc, audio, stream }
+    const state: PeerConnectionState = {
+      pc,
+      audio,
+      stream,
+      analyser: null,
+      analyserData: null,
+      sourceNode: null,
+    }
     this.peers.set(peerID, state)
     return state
   }
@@ -459,6 +484,10 @@ export class VoiceRTCClient {
 
     for (const t of peer.stream.getTracks()) {
       t.stop()
+    }
+    if (peer.sourceNode) {
+      peer.sourceNode.disconnect()
+      peer.sourceNode = null
     }
 
     peer.pc.ontrack = null
@@ -562,7 +591,8 @@ export class VoiceRTCClient {
 
   private sendSignal(signal: SignalMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-    this.ws.send(JSON.stringify(signal))
+    const payload: SignalMessage = signal.from ? signal : { ...signal, from: this.selfPeerID || undefined }
+    this.ws.send(JSON.stringify(payload))
   }
 
   private emitStatus(): void {
@@ -612,5 +642,90 @@ export class VoiceRTCClient {
     if (username.trim().length > 0) return username.trim()
     if (userID.trim().length > 0) return userID.trim().slice(0, 12)
     return peerID.trim().slice(0, 12) || 'user'
+  }
+
+  private initAudioAnalysis(): void {
+    try {
+      this.audioContext = new AudioContext()
+      void this.audioContext.resume().catch(() => {
+        // ignore resume failures; VAD is best-effort
+      })
+      this.startSpeakingLoop()
+    } catch {
+      this.audioContext = null
+    }
+  }
+
+  private cleanupAudioAnalysis(): void {
+    if (this.speakingLoop) {
+      clearInterval(this.speakingLoop)
+      this.speakingLoop = null
+    }
+
+    if (this.audioContext) {
+      void this.audioContext.close().catch(() => {
+        // ignore close failures
+      })
+      this.audioContext = null
+    }
+  }
+
+  private setupPeerAnalyser(peerID: string, stream: MediaStream): void {
+    if (!this.audioContext) return
+    const peer = this.peers.get(peerID)
+    if (!peer || peer.analyser) return
+
+    try {
+      const source = this.audioContext.createMediaStreamSource(stream)
+      const analyser = this.audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.2
+      analyser.minDecibels = -90
+      analyser.maxDecibels = -10
+      source.connect(analyser)
+
+      peer.sourceNode = source
+      peer.analyser = analyser
+      peer.analyserData = new Uint8Array(analyser.frequencyBinCount)
+    } catch {
+      // Keep voice functional even if analyser fails.
+    }
+  }
+
+  private startSpeakingLoop(): void {
+    if (this.speakingLoop) return
+
+    this.speakingLoop = setInterval(() => {
+      let changed = false
+
+      for (const [peerID, peer] of this.peers.entries()) {
+        const participant = this.participants.get(peerID)
+        if (!participant) continue
+
+        if (!peer.analyser || !peer.analyserData) {
+          if (participant.speaking) {
+            participant.speaking = false
+            changed = true
+          }
+          continue
+        }
+
+        peer.analyser.getByteTimeDomainData(peer.analyserData)
+        let sumSquares = 0
+        for (let i = 0; i < peer.analyserData.length; i++) {
+          const normalized = (peer.analyserData[i] - 128) / 128
+          sumSquares += normalized * normalized
+        }
+        const rms = Math.sqrt(sumSquares / peer.analyserData.length)
+        const speaking = rms > 0.02
+
+        if (participant.speaking !== speaking) {
+          participant.speaking = speaking
+          changed = true
+        }
+      }
+
+      if (changed) this.emitStatus()
+    }, 120)
   }
 }

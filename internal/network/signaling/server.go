@@ -217,10 +217,17 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			}
 
 		case SignalOffer, SignalAnswer, SignalSDPOffer, SignalSDPAnswer, SignalICECandidate:
-			// Forward to specific peer
-			if signal.To != "" {
-				s.forwardToPeer(channelKey, signal.To, &signal)
+			// Forward to specific peer in the currently joined channel.
+			// The sender is always the active connection peer to prevent spoofing.
+			if currentChannel == "" || currentPeerID == "" || signal.To == "" {
+				continue
 			}
+
+			parts := splitChannelKey(currentChannel)
+			signal.From = currentPeerID
+			signal.ServerID = parts[0]
+			signal.ChannelID = parts[1]
+			s.forwardToPeer(currentChannel, signal.To, &signal)
 
 		default:
 			s.logger.Debug().Str("type", string(signal.Type)).Msg("unknown signal type")
