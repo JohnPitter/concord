@@ -808,33 +808,52 @@ export class VoiceRTCClient {
     const pc = peer.pc
     const description: RTCSessionDescriptionInit = { type, sdp }
 
+    // Send debug breadcrumb via signaling so server logs show progress
+    const dbg = (step: string) => {
+      this.sendSignal({
+        type: 'peer_state',
+        server_id: this.serverID,
+        channel_id: this.channelID,
+        payload: { peer_id: this.selfPeerID, debug: `${type}:${step}`, muted: this.muted, deafened: this.deafened, screen_sharing: false },
+      })
+    }
+
     try {
       if (type === 'offer') {
         // Responder: accept the offer and send back an answer.
         // No collision possible — responders never send offers.
         const sigState = pc.signalingState
         console.info(`[voice] Accepting offer from ${fromPeerID}, signalingState=${sigState}, role=${peer.role}`)
+        dbg(`accept:sigState=${sigState}:role=${peer.role}`)
 
         // If we're somehow in have-local-offer (shouldn't happen with role separation),
         // rollback gracefully before accepting the remote offer.
         if (sigState === 'have-local-offer') {
           console.warn(`[voice] Unexpected have-local-offer as responder for ${fromPeerID}, rolling back`)
+          dbg('rollback:start')
           await pc.setLocalDescription({ type: 'rollback' })
+          dbg('rollback:done')
         }
 
+        dbg('setRemoteDesc:start')
         await pc.setRemoteDescription(description)
+        dbg(`setRemoteDesc:done:sig=${pc.signalingState}`)
         await this.flushPendingICECandidates(fromPeerID, peer)
         console.info(`[voice] Remote offer set for ${fromPeerID}, signalingState=${pc.signalingState}`)
 
         // Create and send answer
+        dbg('createAnswer:start')
         const answer = await pc.createAnswer()
+        dbg(`createAnswer:done:type=${answer.type}`)
         await pc.setLocalDescription(answer)
         const localDesc = pc.localDescription
+        dbg(`setLocalDesc:done:sdp=${(localDesc?.sdp ?? '').length}B`)
         console.info(`[voice] Answer created for ${fromPeerID}, type=${localDesc?.type}, sdp=${(localDesc?.sdp ?? '').length}B`)
 
         if (localDesc && localDesc.sdp) {
           console.info(`[voice] >> sdp_answer to ${fromPeerID}`)
           this.pushDiag('info', 'sdp:answer', `${fromPeerID} ${localDesc.sdp.length}B`)
+          dbg('sendAnswer:start')
           this.sendSignal({
             type: 'sdp_answer',
             from: this.selfPeerID,
@@ -843,25 +862,33 @@ export class VoiceRTCClient {
             channel_id: this.channelID,
             payload: { sdp: localDesc.sdp },
           })
+          dbg('sendAnswer:done')
+        } else {
+          dbg('sendAnswer:SKIP:noSdp')
         }
       } else {
         // Initiator: accept the answer from the responder.
         const sigState = pc.signalingState
         console.info(`[voice] Setting remote answer from ${fromPeerID}, signalingState=${sigState}`)
+        dbg(`answer:sigState=${sigState}`)
 
         if (sigState !== 'have-local-offer') {
           console.warn(`[voice] Received answer but signalingState=${sigState} (expected have-local-offer), dropping`)
+          dbg(`answer:DROP:sigState=${sigState}`)
           return
         }
 
+        dbg('setRemoteAnswer:start')
         await pc.setRemoteDescription(description)
         await this.flushPendingICECandidates(fromPeerID, peer)
+        dbg(`setRemoteAnswer:done:conn=${pc.connectionState}`)
         console.info(`[voice] Remote answer set for ${fromPeerID}, connectionState=${pc.connectionState}`)
       }
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e)
       this.pushDiag('warn', 'sdp:handle:error', `${type} ${fromPeerID} ${errMsg}`)
       console.error(`[voice] FAILED to handle ${type} from ${fromPeerID}: ${errMsg}`, e)
+      dbg(`ERROR:${errMsg.substring(0, 100)}`)
     }
   }
 

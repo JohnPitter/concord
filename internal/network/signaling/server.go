@@ -266,6 +266,16 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 
+			// Log debug breadcrumbs from client SDP negotiation
+			if payload.Debug != "" {
+				s.logger.Info().
+					Str("peer", currentPeerID).
+					Str("debug", payload.Debug).
+					Str("channel", currentChannel).
+					Msg("client debug")
+				continue // debug-only peer_state, don't broadcast
+			}
+
 			muted := payload.Muted
 			deafened := payload.Deafened
 			if deafened {

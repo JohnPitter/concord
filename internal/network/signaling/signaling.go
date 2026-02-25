@@ -87,6 +87,7 @@ type PeerStatePayload struct {
 	Muted         bool   `json:"muted"`
 	Deafened      bool   `json:"deafened"`
 	ScreenSharing bool   `json:"screen_sharing,omitempty"`
+	Debug         string `json:"debug,omitempty"`
 }
 
 // SDPPayload carries a WebRTC session description (offer or answer).
