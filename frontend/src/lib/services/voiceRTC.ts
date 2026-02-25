@@ -104,7 +104,10 @@ interface SignalMessage {
   payload?: unknown
 }
 
-// Per-peer state including the RTCPeerConnection and perfect negotiation flags.
+// Per-peer state including the RTCPeerConnection and role-based negotiation flags.
+// Jitsi-style: roles (initiator/responder) are fixed per peer pair to prevent glare.
+// The joiner (who receives peer_list) is ALWAYS the initiator for existing peers.
+// Existing peers (who receive peer_joined) are ALWAYS responders — they never create offers.
 interface PeerConnectionState {
   pc: RTCPeerConnection
   audio: HTMLAudioElement
@@ -115,11 +118,9 @@ interface PeerConnectionState {
   screenVideoSender: RTCRtpSender | null
   screenAudioSender: RTCRtpSender | null
   pendingRemoteCandidates: RTCIceCandidateInit[]
-  // Perfect negotiation state (MDN pattern)
+  // Role-based negotiation (Jitsi pattern — no Perfect Negotiation)
+  role: 'initiator' | 'responder'
   makingOffer: boolean
-  ignoreOffer: boolean
-  isSettingRemoteAnswerPending: boolean
-  polite: boolean
 }
 
 interface IceConfigServer {
@@ -730,9 +731,10 @@ export class VoiceRTCClient {
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
       this.registerPeer(peer)
-      // Create a PeerConnection with tracks — onnegotiationneeded will fire
-      // and the perfect negotiation pattern will handle the offer/answer exchange.
-      this.ensurePeerConnection(peer.peer_id)
+      // Jitsi pattern: joiner is ALWAYS the initiator for existing peers.
+      // ensurePeerConnection creates the PC, addTrack triggers onnegotiationneeded,
+      // which creates and sends the offer because role === 'initiator'.
+      this.ensurePeerConnection(peer.peer_id, 'initiator')
     }
     this.emitStatus()
   }
@@ -742,8 +744,11 @@ export class VoiceRTCClient {
     if (!peer || peer.peer_id === this.selfPeerID) return
     this.pushDiag('info', 'peer:joined', `${peer.peer_id} (${peer.username})`)
     this.registerPeer(peer)
-    // Avoid offer glare: existing peers wait for the joiner to initiate.
-    this.pushDiag('info', 'peer:joined:await-offer', peer.peer_id)
+    // Jitsi pattern: existing peers are ALWAYS responders — they DO NOT create offers.
+    // They create the PeerConnection and add tracks, but onnegotiationneeded is suppressed.
+    // The joiner will send the offer via their onPeerList → ensurePeerConnection('initiator').
+    this.ensurePeerConnection(peer.peer_id, 'responder')
+    this.pushDiag('info', 'peer:joined:responder', `awaiting offer from ${peer.peer_id}`)
     this.emitStatus()
   }
 
@@ -772,8 +777,9 @@ export class VoiceRTCClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Perfect Negotiation Pattern (MDN)
-  // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Perfect_negotiation
+  // Role-Based Negotiation (Jitsi pattern — no Perfect Negotiation)
+  // Glare is prevented architecturally: roles are fixed per peer pair.
+  // Joiner = initiator (creates offers), existing peer = responder (only answers).
   // ---------------------------------------------------------------------------
 
   private async onDescription(fromPeerID: string, type: 'offer' | 'answer', payload: unknown): Promise<void> {
@@ -795,73 +801,64 @@ export class VoiceRTCClient {
       this.registerPeer(meta)
     }
 
-    const peer = this.ensurePeerConnection(fromPeerID)
+    // If we receive an offer, we are the responder for this peer.
+    // If we receive an answer, we are the initiator for this peer.
+    const role = type === 'offer' ? 'responder' : 'initiator'
+    const peer = this.ensurePeerConnection(fromPeerID, role)
     const pc = peer.pc
     const description: RTCSessionDescriptionInit = { type, sdp }
 
     try {
       if (type === 'offer') {
-        // Perfect negotiation: check for collision
+        // Responder: accept the offer and send back an answer.
+        // No collision possible — responders never send offers.
         const sigState = pc.signalingState
-        const readyForOffer =
-          !peer.makingOffer &&
-          (sigState === 'stable' || peer.isSettingRemoteAnswerPending)
-        const offerCollision = !readyForOffer
+        console.info(`[voice] Accepting offer from ${fromPeerID}, signalingState=${sigState}, role=${peer.role}`)
 
-        console.info(`[voice] offer check: polite=${peer.polite}, makingOffer=${peer.makingOffer}, signalingState=${sigState}, readyForOffer=${readyForOffer}, collision=${offerCollision}`)
-
-        peer.ignoreOffer = !peer.polite && offerCollision
-        if (peer.ignoreOffer) {
-          console.info(`[voice] Ignoring colliding offer from ${fromPeerID} (we are impolite)`)
-          return
+        // If we're somehow in have-local-offer (shouldn't happen with role separation),
+        // rollback gracefully before accepting the remote offer.
+        if (sigState === 'have-local-offer') {
+          console.warn(`[voice] Unexpected have-local-offer as responder for ${fromPeerID}, rolling back`)
+          await pc.setLocalDescription({ type: 'rollback' })
         }
 
-        if (offerCollision) {
-          console.info(`[voice] Offer collision with ${fromPeerID}, rolling back (we are polite)`)
-          if (pc.signalingState !== 'stable') {
-            try {
-              await pc.setLocalDescription({ type: 'rollback' })
-              this.pushDiag('info', 'sdp:rollback', `${fromPeerID} local rollback applied`)
-            } catch (rollbackErr) {
-              // Some engines already perform implicit rollback on setRemoteDescription(offer).
-              const msg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)
-              this.pushDiag('warn', 'sdp:rollback', `${fromPeerID} rollback failed: ${msg}`)
-            }
-          }
-        }
-
-        peer.isSettingRemoteAnswerPending = false
         await pc.setRemoteDescription(description)
         await this.flushPendingICECandidates(fromPeerID, peer)
         console.info(`[voice] Remote offer set for ${fromPeerID}, signalingState=${pc.signalingState}`)
 
-        await pc.setLocalDescription()
-        const answer = pc.localDescription
-        console.info(`[voice] Local answer created for ${fromPeerID}, type=${answer?.type}, sdp=${(answer?.sdp ?? '').length}B`)
-        if (answer && answer.sdp) {
+        // Create and send answer
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        const localDesc = pc.localDescription
+        console.info(`[voice] Answer created for ${fromPeerID}, type=${localDesc?.type}, sdp=${(localDesc?.sdp ?? '').length}B`)
+
+        if (localDesc && localDesc.sdp) {
           console.info(`[voice] >> sdp_answer to ${fromPeerID}`)
-          this.pushDiag('info', 'sdp:answer', `${fromPeerID} ${answer.sdp.length}B`)
+          this.pushDiag('info', 'sdp:answer', `${fromPeerID} ${localDesc.sdp.length}B`)
           this.sendSignal({
             type: 'sdp_answer',
             from: this.selfPeerID,
             to: fromPeerID,
             server_id: this.serverID,
             channel_id: this.channelID,
-            payload: { sdp: answer.sdp },
+            payload: { sdp: localDesc.sdp },
           })
         }
       } else {
-        // Answer
+        // Initiator: accept the answer from the responder.
         const sigState = pc.signalingState
-        console.info(`[voice] Setting remote answer for ${fromPeerID}, signalingState=${sigState}`)
-        peer.isSettingRemoteAnswerPending = true
+        console.info(`[voice] Setting remote answer from ${fromPeerID}, signalingState=${sigState}`)
+
+        if (sigState !== 'have-local-offer') {
+          console.warn(`[voice] Received answer but signalingState=${sigState} (expected have-local-offer), dropping`)
+          return
+        }
+
         await pc.setRemoteDescription(description)
         await this.flushPendingICECandidates(fromPeerID, peer)
-        peer.isSettingRemoteAnswerPending = false
         console.info(`[voice] Remote answer set for ${fromPeerID}, connectionState=${pc.connectionState}`)
       }
     } catch (e) {
-      peer.isSettingRemoteAnswerPending = false
       const errMsg = e instanceof Error ? e.message : String(e)
       this.pushDiag('warn', 'sdp:handle:error', `${type} ${fromPeerID} ${errMsg}`)
       console.error(`[voice] FAILED to handle ${type} from ${fromPeerID}: ${errMsg}`, e)
@@ -875,18 +872,15 @@ export class VoiceRTCClient {
     if (!peer) return
 
     if (!peer.pc.remoteDescription) {
-      if (!peer.ignoreOffer) {
-        peer.pendingRemoteCandidates.push(candidate)
-      }
+      // Buffer candidates until remote description is set
+      peer.pendingRemoteCandidates.push(candidate)
       return
     }
 
     try {
       await peer.pc.addIceCandidate(candidate)
     } catch (e) {
-      if (!peer.ignoreOffer) {
-        console.warn(`[voice] Failed to add ICE candidate from ${fromPeerID}:`, e)
-      }
+      console.warn(`[voice] Failed to add ICE candidate from ${fromPeerID}:`, e)
     }
   }
 
@@ -894,11 +888,11 @@ export class VoiceRTCClient {
   // PeerConnection lifecycle
   // ---------------------------------------------------------------------------
 
-  private ensurePeerConnection(peerID: string): PeerConnectionState {
+  private ensurePeerConnection(peerID: string, role: 'initiator' | 'responder'): PeerConnectionState {
     const existing = this.peers.get(peerID)
     if (existing) return existing
 
-    console.info(`[voice] Creating PeerConnection for ${peerID}`)
+    console.info(`[voice] Creating PeerConnection for ${peerID} as ${role}`)
     const pc = new RTCPeerConnection({ iceServers: this.iceServers })
     const stream = new MediaStream()
     const audio = new Audio()
@@ -910,16 +904,6 @@ export class VoiceRTCClient {
 
     void this.applyOutputDevice(audio)
 
-    // Add local tracks — this triggers onnegotiationneeded
-    if (this.localStream) {
-      for (const track of this.localStream.getAudioTracks()) {
-        pc.addTrack(track, this.localStream)
-      }
-    }
-
-    // Polite peer: the one with the smaller peerID rolls back on collision.
-    const polite = this.selfPeerID < peerID
-
     const state: PeerConnectionState = {
       pc,
       audio,
@@ -930,48 +914,66 @@ export class VoiceRTCClient {
       screenVideoSender: null,
       screenAudioSender: null,
       pendingRemoteCandidates: [],
+      role,
       makingOffer: false,
-      ignoreOffer: false,
-      isSettingRemoteAnswerPending: false,
-      polite,
     }
     this.peers.set(peerID, state)
 
-    // If local screen share is active, publish it to late-joining peers.
-    if (this.screenStream && this.screenVideoTrack) {
-      state.screenVideoSender = pc.addTrack(this.screenVideoTrack, this.screenStream)
-      if (this.screenAudioTrack) {
-        state.screenAudioSender = pc.addTrack(this.screenAudioTrack, this.screenStream)
-      }
-    }
-
-    // --- Perfect Negotiation: onnegotiationneeded ---
+    // --- Role-based onnegotiationneeded ---
+    // Only initiators create and send offers. Responders suppress onnegotiationneeded
+    // because they will receive an offer from the initiator and respond with an answer.
     pc.onnegotiationneeded = async () => {
+      if (state.role !== 'initiator') {
+        console.info(`[voice] negotiationneeded suppressed for ${peerID} (role=${state.role})`)
+        return
+      }
+      if (state.makingOffer) {
+        console.info(`[voice] negotiationneeded skipped for ${peerID} (already making offer)`)
+        return
+      }
+
       try {
         if (pc.signalingState !== 'stable') {
           this.pushDiag('info', 'sdp:offer:skip', `${peerID} signalingState=${pc.signalingState}`)
           return
         }
 
-        console.info(`[voice] negotiationneeded for ${peerID}`)
+        console.info(`[voice] negotiationneeded for ${peerID} (initiator)`)
         state.makingOffer = true
-        await pc.setLocalDescription()
-        const offer = pc.localDescription
-        if (offer) {
-          console.info(`[voice] >> sdp_offer to ${peerID}, sdp=${(offer.sdp ?? '').length}B`)
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        const localDesc = pc.localDescription
+        if (localDesc && localDesc.sdp) {
+          console.info(`[voice] >> sdp_offer to ${peerID}, sdp=${localDesc.sdp.length}B`)
           this.sendSignal({
             type: 'sdp_offer',
             from: this.selfPeerID,
             to: peerID,
             server_id: this.serverID,
             channel_id: this.channelID,
-            payload: { sdp: offer.sdp ?? '' },
+            payload: { sdp: localDesc.sdp },
           })
         }
       } catch (e) {
         console.error(`[voice] negotiationneeded error for ${peerID}:`, e)
       } finally {
         state.makingOffer = false
+      }
+    }
+
+    // Add local tracks AFTER setting up onnegotiationneeded so it fires correctly.
+    // For initiators, this triggers offer creation. For responders, it's suppressed.
+    if (this.localStream) {
+      for (const track of this.localStream.getAudioTracks()) {
+        pc.addTrack(track, this.localStream)
+      }
+    }
+
+    // If local screen share is active, publish it to late-joining peers.
+    if (this.screenStream && this.screenVideoTrack) {
+      state.screenVideoSender = pc.addTrack(this.screenVideoTrack, this.screenStream)
+      if (this.screenAudioTrack) {
+        state.screenAudioSender = pc.addTrack(this.screenAudioTrack, this.screenStream)
       }
     }
 
@@ -1108,9 +1110,7 @@ export class VoiceRTCClient {
       try {
         await peer.pc.addIceCandidate(candidate)
       } catch (e) {
-        if (!peer.ignoreOffer) {
-          console.warn(`[voice] Failed to add buffered ICE candidate from ${peerID}:`, e)
-        }
+        console.warn(`[voice] Failed to add buffered ICE candidate from ${peerID}:`, e)
       }
     }
   }
@@ -1245,7 +1245,7 @@ export class VoiceRTCClient {
       return
     }
 
-    if (peer.makingOffer || peer.isSettingRemoteAnswerPending || peer.pc.signalingState !== 'stable') {
+    if (peer.makingOffer || peer.pc.signalingState !== 'stable') {
       this.queueIceRestart(peerID, 800, reason)
       return
     }
