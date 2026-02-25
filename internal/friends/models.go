@@ -38,3 +38,18 @@ type FriendView struct {
 	AvatarURL   string `json:"avatar_url"`
 	Status      string `json:"status"` // "online" | "offline"
 }
+
+// DMPaginationOpts controls cursor-based pagination for direct messages.
+type DMPaginationOpts struct {
+	After string `json:"after"` // Message ID to load messages after (newer)
+	Limit int    `json:"limit"` // Max messages to return (default 50, max 100)
+}
+
+// DirectMessage represents a direct message between two friends.
+type DirectMessage struct {
+	ID         string `json:"id"`
+	SenderID   string `json:"sender_id"`
+	ReceiverID string `json:"receiver_id"`
+	Content    string `json:"content"`
+	CreatedAt  string `json:"created_at"`
+}

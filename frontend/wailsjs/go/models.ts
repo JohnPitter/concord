@@ -428,6 +428,8 @@ export namespace signaling {
 	    avatar_url?: string;
 	    addresses: string[];
 	    public_key?: number[];
+	    muted?: boolean;
+	    deafened?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeerEntry(source);
@@ -441,6 +443,8 @@ export namespace signaling {
 	        this.avatar_url = source["avatar_url"];
 	        this.addresses = source["addresses"];
 	        this.public_key = source["public_key"];
+	        this.muted = source["muted"];
+	        this.deafened = source["deafened"];
 	    }
 	}
 

@@ -7,7 +7,7 @@ import { getAuth } from './auth.svelte'
 import { getSettings } from './settings.svelte'
 import { isServerMode } from '../api/mode'
 import { apiFriends } from '../api/friends'
-import type { FriendRequestView, FriendView } from '../api/friends'
+import type { DirectMessageView, FriendRequestView, FriendView } from '../api/friends'
 import { notify, requestNotificationPermission } from '../services/notifications'
 import { toastInfo } from './toast.svelte'
 
@@ -71,18 +71,22 @@ interface FriendsState {
 
 const STORAGE_KEY = 'concord_friends'
 const DM_MESSAGES_KEY = 'concord_dm_messages'
+const DM_PREFIX = 'dm-'
 const POLL_INTERVAL = 2_500 // near real-time polling for friends/pending requests
+const DM_SYNC_PAGE_SIZE = 100
 const WAILS_STORE_TIMEOUT_MS = 10_000
 const STALE_PRESENCE_MS = 20_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let loadFriendsInFlight = false
+let dmSyncInFlight = false
 let lastPresenceSyncAt = 0
 let consecutivePresenceSyncFailures = 0
 
 // Track recently rejected request IDs so polling doesn't re-add them
 const recentlyRejected = new Set<string>()
 const seenIncomingRequestIDs = new Set<string>()
+const syncedDMs = new Set<string>()
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
   let handle: ReturnType<typeof setTimeout> | null = null
@@ -221,6 +225,89 @@ function loadFromStorage() {
   } catch { /* ignore parse errors */ }
 }
 
+function friendIDFromDMID(dmId: string): string {
+  return dmId.startsWith(DM_PREFIX) ? dmId.slice(DM_PREFIX.length) : dmId
+}
+
+function mapBackendDMMessage(dmId: string, msg: DirectMessageView): DMMessage {
+  return {
+    id: msg.id,
+    dmId,
+    senderId: msg.sender_id,
+    content: msg.content,
+    timestamp: msg.created_at,
+  }
+}
+
+function updateDMPreview(dmId: string, content: string): void {
+  const dm = state.dms.find(d => d.id === dmId)
+  if (!dm) return
+  dm.lastMessage = content
+  state.dms = [...state.dms]
+  persist()
+}
+
+function appendMessages(dmId: string, incoming: DMMessage[]): number {
+  if (incoming.length === 0) return 0
+
+  const current = state.dmMessages[dmId] ?? []
+  const existingIDs = new Set(current.map(m => m.id))
+  const fresh = incoming.filter(m => !existingIDs.has(m.id))
+  if (fresh.length === 0) return 0
+
+  state.dmMessages = {
+    ...state.dmMessages,
+    [dmId]: [...current, ...fresh],
+  }
+
+  const latest = fresh[fresh.length - 1]
+  if (latest) updateDMPreview(dmId, latest.content)
+  persistDMMessages()
+  return fresh.length
+}
+
+async function syncDMConversation(dmId: string, forceFull = false): Promise<void> {
+  if (!isServerMode() || !dmId || dmSyncInFlight) return
+  dmSyncInFlight = true
+
+  try {
+    const shouldFullSync = forceFull || !syncedDMs.has(dmId)
+    await ensureValidToken()
+
+    const current = state.dmMessages[dmId] ?? []
+    const after = shouldFullSync ? '' : (current[current.length - 1]?.id ?? '')
+    const friendID = friendIDFromDMID(dmId)
+
+    const result = await apiFriends.getDirectMessages(
+      friendID,
+      after,
+      shouldFullSync ? DM_SYNC_PAGE_SIZE : 50,
+    )
+    const fetched = ((result ?? []) as DirectMessageView[])
+      .reverse()
+      .map(msg => mapBackendDMMessage(dmId, msg))
+
+    if (shouldFullSync) {
+      state.dmMessages = {
+        ...state.dmMessages,
+        [dmId]: fetched,
+      }
+      syncedDMs.add(dmId)
+      if (fetched.length > 0) {
+        updateDMPreview(dmId, fetched[fetched.length - 1].content)
+      }
+      persistDMMessages()
+      return
+    }
+
+    appendMessages(dmId, fetched)
+  } catch {
+    // Keep local cache on transient network errors.
+  } finally {
+    dmSyncInFlight = false
+  }
+}
+
 // ── Backend sync helpers ──────────────────────────────────────────────
 
 function mapBackendFriend(f: FriendView): Friend {
@@ -280,7 +367,7 @@ function syncDMsFromFriends(friends: Friend[]) {
   for (const f of friends) {
     if (!existingDMFriendIds.has(f.id)) {
       newDMs.push({
-        id: `dm-${f.id}`,
+        id: `${DM_PREFIX}${f.id}`,
         friendId: f.id,
         username: f.username,
         display_name: f.display_name,
@@ -379,6 +466,9 @@ export function openDM(dmId: string | null) {
     state.dms = [...state.dms]
     persist()
   }
+  if (isServerMode()) {
+    void syncDMConversation(dmId, true)
+  }
 }
 
 export async function loadFriends() {
@@ -430,6 +520,9 @@ function startPolling() {
         maybeNotify('Novo pedido de amizade', `${req.display_name} enviou um pedido.`)
       }
       syncDMsFromFriends(friends)
+      if (state.activeDMId && isServerMode()) {
+        await syncDMConversation(state.activeDMId, false)
+      }
       persist()
     } catch {
       markPresenceSyncFailure()
@@ -442,6 +535,8 @@ export function stopPolling() {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  syncedDMs.clear()
+  dmSyncInFlight = false
 }
 
 export async function sendFriendRequest(username: string) {
@@ -619,38 +714,46 @@ export function clearFriendNotifications() {
   state.addFriendSuccess = null
 }
 
-export function sendDMMessage(dmId: string, senderId: string, content: string) {
+export async function sendDMMessage(dmId: string, senderId: string, content: string) {
   const trimmed = content.trim()
   if (!trimmed) return
 
-  const msg: DMMessage = {
-    id: `dm-msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    dmId,
-    senderId,
-    content: trimmed,
-    timestamp: new Date().toISOString(),
+  let msg: DMMessage
+  try {
+    if (isServerMode()) {
+      await ensureValidToken()
+      const friendID = friendIDFromDMID(dmId)
+      const remote = await apiFriends.sendDirectMessage(friendID, trimmed)
+      msg = mapBackendDMMessage(dmId, remote)
+    } else {
+      msg = {
+        id: `dm-msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        dmId,
+        senderId,
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+      }
+    }
+  } catch {
+    return
   }
 
-  if (!state.dmMessages[dmId]) {
-    state.dmMessages[dmId] = []
-  }
-  state.dmMessages = { ...state.dmMessages, [dmId]: [...(state.dmMessages[dmId] ?? []), msg] }
+  const added = appendMessages(dmId, [msg])
+  if (added === 0) return
 
   // Update lastMessage on the DM conversation
   const currentID = currentUserID()
-  const isIncoming = currentID !== null && senderId !== currentID
+  const isIncoming = currentID !== null && msg.senderId !== currentID
   const dm = state.dms.find(d => d.id === dmId)
   if (dm) {
-    dm.lastMessage = trimmed
+    dm.lastMessage = msg.content
     if (isIncoming && state.activeDMId !== dmId) {
       dm.unread = (dm.unread ?? 0) + 1
-      maybeNotify(dm.display_name, trimmed)
+      maybeNotify(dm.display_name, msg.content)
     }
     state.dms = [...state.dms]
     persist()
   }
-
-  persistDMMessages()
 }
 
 export function getDMMessages(dmId: string): DMMessage[] {

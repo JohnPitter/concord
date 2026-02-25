@@ -72,6 +72,17 @@ interface IceConfigResponse {
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302'] },
   { urls: ['stun:stun1.l.google.com:19302'] },
+  // Free TURN relay fallback — essential for symmetric NAT traversal.
+  // Without TURN, peers behind restrictive NATs cannot exchange audio.
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turns:openrelay.metered.ca:443',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ]
 
 export class VoiceRTCClient {
@@ -502,10 +513,30 @@ export class VoiceRTCClient {
         stream.addTrack(event.track)
       }
 
+      // Re-assign srcObject so the audio element picks up the new track.
+      audio.srcObject = stream
+
       this.setupPeerAnalyser(peerID, stream)
       void audio.play().catch(() => {
-        this.onError('audio playback was blocked; click the app window and rejoin voice')
+        // Autoplay blocked — retry on user interaction.
+        const resume = () => {
+          void audio.play().catch(() => {})
+          document.removeEventListener('click', resume)
+          document.removeEventListener('keydown', resume)
+        }
+        document.addEventListener('click', resume, { once: true })
+        document.addEventListener('keydown', resume, { once: true })
       })
+    }
+
+    pc.onicecandidateerror = (event) => {
+      // Log ICE failures to help diagnose connectivity issues.
+      const ev = event as RTCPeerConnectionIceErrorEvent
+      console.warn(`[voice] ICE candidate error for ${peerID}: ${ev.errorCode} ${ev.errorText ?? ''}`)
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      console.debug(`[voice] ICE state for ${peerID}: ${pc.iceConnectionState}`)
     }
 
     pc.onconnectionstatechange = () => {

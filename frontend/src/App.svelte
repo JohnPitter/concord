@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getAuth, initAuth, logout, recoverFromStuckLoading } from './lib/stores/auth.svelte'
+  import { getAuth, initAuth, logout, recoverFromStuckLoading, markSelfOfflineBestEffort } from './lib/stores/auth.svelte'
   import {
     getServers, loadUserServers, selectServer,
     createServer, redeemInvite, generateInvite,
@@ -25,7 +25,7 @@
   import {
     getFriends, loadFriends, setFriendsTab, openDM,
     sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
-    removeFriend, blockUser, unblockUser, sendDMMessage,
+    removeFriend, blockUser, unblockUser, sendDMMessage, stopPolling,
   } from './lib/stores/friends.svelte'
 
   import Login from './lib/components/auth/Login.svelte'
@@ -108,6 +108,18 @@
   $effect(() => {
     if (!isHome && srv.list.length > 0 && !srv.activeId) {
       selectServer(srv.list[0].id)
+    }
+  })
+
+  // Best-effort presence update when the app/window is closed abruptly.
+  $effect(() => {
+    if (!auth.authenticated) return
+    const onBeforeUnload = () => {
+      void markSelfOfflineBestEffort(true)
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
     }
   })
 
@@ -602,15 +614,17 @@
     currentUser={currentUserProp}
     onLogout={async () => {
       await leaveVoice()
+      stopPolling()
       resetChat()
       resetVoice()
       activeServerId = 'home'
       activeChannelId = null
       showSettings = false
-      logout()
+      await logout()
     }}
     onSwitchMode={async () => {
       await leaveVoice()
+      stopPolling()
       resetChat()
       resetVoice()
       activeServerId = 'home'

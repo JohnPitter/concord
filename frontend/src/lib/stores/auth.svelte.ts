@@ -37,6 +37,7 @@ const REFRESH_BUFFER_MS = 2 * 60 * 1000
 const SERVER_DISCOVERY_MAX_WAIT_MS = 3500
 const AUTH_INIT_HARD_TIMEOUT_MS = 15000
 const WAILS_CALL_TIMEOUT_MS = 8000
+const PRESENCE_OFFLINE_PATH = '/api/v1/presence/offline'
 
 let authenticated = $state(false)
 let user = $state<User | null>(null)
@@ -63,6 +64,40 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessa
     return await Promise.race([promise, timeoutPromise])
   } finally {
     if (handle) clearTimeout(handle)
+  }
+}
+
+function notifyPresenceOfflineBeacon(accessToken: string): boolean {
+  const base = apiClient.getBaseURL().replace(/\/$/, '')
+  try {
+    // navigator.sendBeacon is guaranteed to be dispatched even during page unload,
+    // unlike fetch+keepalive which the browser may cancel.
+    const blob = new Blob([JSON.stringify({})], { type: 'application/json' })
+    // sendBeacon cannot set Authorization header, so encode token in URL query.
+    // The backend handler will also accept ?token= as fallback.
+    return navigator.sendBeacon(`${base}${PRESENCE_OFFLINE_PATH}?token=${encodeURIComponent(accessToken)}`, blob)
+  } catch {
+    return false
+  }
+}
+
+async function notifyPresenceOffline(accessToken: string, keepalive = false): Promise<void> {
+  // Prefer sendBeacon for page-unload scenarios (keepalive=true).
+  if (keepalive && typeof navigator.sendBeacon === 'function') {
+    if (notifyPresenceOfflineBeacon(accessToken)) return
+  }
+
+  const base = apiClient.getBaseURL().replace(/\/$/, '')
+  try {
+    await fetch(`${base}${PRESENCE_OFFLINE_PATH}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      keepalive,
+    })
+  } catch {
+    // best-effort only
   }
 }
 
@@ -227,6 +262,14 @@ export async function initAuth(): Promise<void> {
   }
 }
 
+export async function markSelfOfflineBestEffort(keepalive = false): Promise<void> {
+  if (!isServerMode()) return
+  const tokens = apiClient.getTokens()
+  const accessToken = tokens?.accessToken
+  if (!accessToken) return
+  await notifyPresenceOffline(accessToken, keepalive)
+}
+
 export async function startLogin(): Promise<void> {
   error = null
   polling = false
@@ -292,6 +335,7 @@ export async function logout(): Promise<void> {
   try {
     if (user) {
       if (isServerMode()) {
+        await markSelfOfflineBestEffort(true)
         apiClient.clearTokens()
       } else {
         await App.Logout(user.id)

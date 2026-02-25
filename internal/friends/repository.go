@@ -385,3 +385,91 @@ func (r *Repository) AreFriends(ctx context.Context, userA, userB string) (bool,
 	}
 	return count > 0, nil
 }
+
+// SaveDirectMessage creates a direct message between two users.
+// Complexity: O(1).
+func (r *Repository) SaveDirectMessage(ctx context.Context, senderID, receiverID, content string) (*DirectMessage, error) {
+	id := uuid.New().String()
+
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO friend_messages (id, sender_id, receiver_id, content, created_at)
+		 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		id, senderID, receiverID, content,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("save direct message: %w", err)
+	}
+
+	var msg DirectMessage
+	err = r.db.QueryRowContext(ctx,
+		`SELECT id, sender_id, receiver_id, content, created_at
+		 FROM friend_messages
+		 WHERE id = ?`,
+		id,
+	).Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("read direct message: %w", err)
+	}
+
+	r.logger.Info().
+		Str("message_id", id).
+		Str("sender_id", senderID).
+		Str("receiver_id", receiverID).
+		Msg("direct message saved")
+
+	return &msg, nil
+}
+
+// GetDirectMessages lists direct messages between two users.
+// Returns newest-first to keep parity with channel message APIs.
+// Complexity: O(log n) with pair indexes.
+func (r *Repository) GetDirectMessages(ctx context.Context, userID, friendID string, opts DMPaginationOpts) ([]DirectMessage, error) {
+	limit := opts.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	var (
+		query string
+		args  []interface{}
+	)
+
+	if opts.After != "" {
+		query = `
+			SELECT id, sender_id, receiver_id, content, created_at
+			FROM friend_messages
+			WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+			  AND created_at >= (SELECT created_at FROM friend_messages WHERE id = ?)
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?`
+		args = []interface{}{userID, friendID, friendID, userID, opts.After, limit}
+	} else {
+		query = `
+			SELECT id, sender_id, receiver_id, content, created_at
+			FROM friend_messages
+			WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?`
+		args = []interface{}{userID, friendID, friendID, userID, limit}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("get direct messages: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]DirectMessage, 0, limit)
+	for rows.Next() {
+		var msg DirectMessage
+		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan direct message: %w", err)
+		}
+		results = append(results, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}

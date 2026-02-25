@@ -8,6 +8,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	maxDirectMessageLength = 4000
+)
+
 // Service orchestrates friend management operations.
 type Service struct {
 	repo     *Repository
@@ -137,4 +141,49 @@ func (s *Service) UnblockUser(ctx context.Context, userID, targetUsername string
 		return fmt.Errorf("user '%s' not found", targetUsername)
 	}
 	return s.repo.UnblockUser(ctx, userID, targetID)
+}
+
+// SendDirectMessage sends a direct message to a friend.
+func (s *Service) SendDirectMessage(ctx context.Context, senderID, friendID, content string) (*DirectMessage, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, fmt.Errorf("message content cannot be empty")
+	}
+	if len(content) > maxDirectMessageLength {
+		return nil, fmt.Errorf("message exceeds maximum length of %d characters", maxDirectMessageLength)
+	}
+
+	areFriends, err := s.repo.AreFriends(ctx, senderID, friendID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check friendship: %w", err)
+	}
+	if !areFriends {
+		return nil, fmt.Errorf("you can only send direct messages to friends")
+	}
+
+	msg, err := s.repo.SaveDirectMessage(ctx, senderID, friendID, content)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Info().
+		Str("sender_id", senderID).
+		Str("friend_id", friendID).
+		Str("message_id", msg.ID).
+		Msg("direct message sent")
+
+	return msg, nil
+}
+
+// GetDirectMessages returns direct messages between the authenticated user and one friend.
+func (s *Service) GetDirectMessages(ctx context.Context, userID, friendID string, opts DMPaginationOpts) ([]DirectMessage, error) {
+	areFriends, err := s.repo.AreFriends(ctx, userID, friendID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check friendship: %w", err)
+	}
+	if !areFriends {
+		return nil, fmt.Errorf("you can only access direct messages with friends")
+	}
+
+	return s.repo.GetDirectMessages(ctx, userID, friendID, opts)
 }

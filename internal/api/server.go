@@ -35,10 +35,16 @@ type Server struct {
 	signaling   *signaling.Server
 	iceProvider *voice.ICECredentialsProvider
 	presence    *presence.Tracker
+	jwt         *auth.JWTManager
 	health      *observability.HealthChecker
 	metrics     *observability.Metrics
 	logger      zerolog.Logger
 	cfg         config.ServerConfig
+}
+
+// jwtManager returns the JWT manager for token validation (may be nil).
+func (s *Server) jwtManager() *auth.JWTManager {
+	return s.jwt
 }
 
 // New creates and configures a new API Server with all routes and middleware.
@@ -64,6 +70,7 @@ func New(
 		friends:   friendsSvc,
 		signaling: sigServer,
 		presence:  presenceTracker,
+		jwt:       jwtManager,
 		health:    health,
 		metrics:   metrics,
 		logger:    logger.With().Str("component", "api_server").Logger(),
@@ -162,12 +169,17 @@ func New(
 			protected.Get("/servers/{serverID}/voice/participants", s.handleServerVoiceParticipants)
 			protected.Get("/voice/ice-config", s.handleVoiceICEConfig)
 
+			// Presence
+			protected.Post("/presence/offline", s.handleSetPresenceOffline)
+
 			// Friends
 			protected.Post("/friends/request", s.handleSendFriendRequest)
 			protected.Get("/friends/requests", s.handleGetPendingRequests)
 			protected.Put("/friends/requests/{requestID}/accept", s.handleAcceptFriendRequest)
 			protected.Delete("/friends/requests/{requestID}", s.handleRejectFriendRequest)
 			protected.Get("/friends", s.handleGetFriends)
+			protected.Get("/friends/{friendID}/messages", s.handleGetDirectMessages)
+			protected.Post("/friends/{friendID}/messages", s.handleSendDirectMessage)
 			protected.Delete("/friends/{friendID}", s.handleRemoveFriend)
 			protected.Post("/friends/{friendID}/block", s.handleBlockUser)
 			protected.Delete("/friends/{friendID}/block", s.handleUnblockUser)

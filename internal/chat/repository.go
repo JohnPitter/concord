@@ -105,7 +105,7 @@ func (r *Repository) GetByChannel(ctx context.Context, channelID string, opts Pa
 				u.username, COALESCE(u.avatar_url, '')
 			FROM messages m
 			INNER JOIN users u ON m.author_id = u.id
-			WHERE m.channel_id = ? AND m.created_at > (SELECT created_at FROM messages WHERE id = ?)
+			WHERE m.channel_id = ? AND m.created_at >= (SELECT created_at FROM messages WHERE id = ?)
 			ORDER BY m.created_at ASC
 			LIMIT ?`
 		args = []interface{}{channelID, opts.After, limit}

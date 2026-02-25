@@ -24,6 +24,14 @@ export interface FriendView {
   streamTitle?: string
 }
 
+export interface DirectMessageView {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  created_at: string
+}
+
 export const apiFriends = {
   sendRequest: (username: string) =>
     apiClient.request<void>('POST', '/api/v1/friends/request', { username }),
@@ -48,4 +56,16 @@ export const apiFriends = {
 
   unblockUser: (friendId: string) =>
     apiClient.del(`/api/v1/friends/${encodeURIComponent(friendId)}/block`),
+
+  getDirectMessages: (friendId: string, after = '', limit = 100) => {
+    const qs = new URLSearchParams()
+    if (after) qs.set('after', after)
+    if (limit > 0) qs.set('limit', String(limit))
+    return apiClient.get<DirectMessageView[]>(
+      `/api/v1/friends/${encodeURIComponent(friendId)}/messages${qs.toString() ? `?${qs.toString()}` : ''}`
+    )
+  },
+
+  sendDirectMessage: (friendId: string, content: string) =>
+    apiClient.request<DirectMessageView>('POST', `/api/v1/friends/${encodeURIComponent(friendId)}/messages`, { content }),
 }

@@ -46,6 +46,17 @@ func DefaultEngineConfig() EngineConfig {
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 			{URLs: []string{"stun:stun1.l.google.com:19302"}},
+			// Free TURN relay fallback for symmetric NAT traversal.
+			{
+				URLs: []string{
+					"turn:openrelay.metered.ca:80",
+					"turn:openrelay.metered.ca:443",
+					"turns:openrelay.metered.ca:443",
+				},
+				Username:       "openrelayproject",
+				Credential:     "openrelayproject",
+				CredentialType: webrtc.ICECredentialTypePassword,
+			},
 		},
 	}
 }
