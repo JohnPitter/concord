@@ -17,6 +17,12 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_SSLMODE=disable
       - REDIS_HOST=redis
+      - CONCORD_TURN_ENABLED=${CONCORD_TURN_ENABLED:-false}
+      - CONCORD_TURN_HOST=${CONCORD_TURN_HOST:-}
+      - CONCORD_TURN_PORT=${CONCORD_TURN_PORT:-3478}
+      - CONCORD_TURN_TLS_PORT=${CONCORD_TURN_TLS_PORT:-0}
+      - CONCORD_TURN_SECRET=${CONCORD_TURN_SECRET:-}
+      - CONCORD_TURN_CREDENTIAL_TTL=${CONCORD_TURN_CREDENTIAL_TTL:-12h}
     depends_on:
       postgres:
         condition: service_healthy

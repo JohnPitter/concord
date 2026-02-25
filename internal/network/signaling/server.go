@@ -230,8 +230,23 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			// Forward to specific peer in the currently joined channel.
 			// The sender is always the active connection peer to prevent spoofing.
 			if currentChannel == "" || currentPeerID == "" || signal.To == "" {
+				s.logger.Warn().
+					Str("type", string(signal.Type)).
+					Str("from", currentPeerID).
+					Str("to", signal.To).
+					Bool("no_channel", currentChannel == "").
+					Bool("no_peer", currentPeerID == "").
+					Bool("no_to", signal.To == "").
+					Msg("dropping signal: missing routing info")
 				continue
 			}
+
+			s.logger.Info().
+				Str("type", string(signal.Type)).
+				Str("from", currentPeerID).
+				Str("to", signal.To).
+				Str("channel", currentChannel).
+				Msg("forwarding signal")
 
 			parts := splitChannelKey(currentChannel)
 			signal.From = currentPeerID

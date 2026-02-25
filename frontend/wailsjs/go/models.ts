@@ -428,8 +428,8 @@ export namespace signaling {
 	    avatar_url?: string;
 	    addresses: string[];
 	    public_key?: number[];
-	    muted?: boolean;
-	    deafened?: boolean;
+	    muted: boolean;
+	    deafened: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeerEntry(source);

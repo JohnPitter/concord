@@ -53,17 +53,14 @@ func (s *Server) handleVoiceICEConfig(w http.ResponseWriter, r *http.Request) {
 	requestHost := r.Host
 
 	if s.iceProvider == nil || !s.iceProvider.Enabled() {
-		// Without a dedicated TURN server, include a free public relay
-		// so peers behind symmetric NATs can still connect.
+		// Without a dedicated TURN server, return STUN-only.
+		// TURN must be configured via CONCORD_TURN_* env vars for relay support.
 		writeJSON(w, http.StatusOK, voice.ICEConfigResponse{
 			Servers: []voice.ICEServer{
 				{URLs: []string{"stun:stun.l.google.com:19302"}},
 				{URLs: []string{"stun:stun1.l.google.com:19302"}},
-				{
-					URLs:       []string{"turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443", "turns:openrelay.metered.ca:443"},
-					Username:   "openrelayproject",
-					Credential: "openrelayproject",
-				},
+				{URLs: []string{"stun:stun2.l.google.com:19302"}},
+				{URLs: []string{"stun:stun3.l.google.com:19302"}},
 			},
 		})
 		return

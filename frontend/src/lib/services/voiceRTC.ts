@@ -69,20 +69,14 @@ interface IceConfigResponse {
   servers?: unknown
 }
 
+// Default STUN servers for ICE candidate gathering.
+// TURN relay servers are provided by the backend via /api/v1/voice/ice-config
+// when CONCORD_TURN_ENABLED=true (requires coturn or similar).
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302'] },
   { urls: ['stun:stun1.l.google.com:19302'] },
-  // Free TURN relay fallback — essential for symmetric NAT traversal.
-  // Without TURN, peers behind restrictive NATs cannot exchange audio.
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turns:openrelay.metered.ca:443',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
+  { urls: ['stun:stun2.l.google.com:19302'] },
+  { urls: ['stun:stun3.l.google.com:19302'] },
 ]
 
 export class VoiceRTCClient {
@@ -160,10 +154,11 @@ export class VoiceRTCClient {
     try {
       this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
     } catch {
-      // Non-fatal: fall back to default STUN/TURN servers
+      // Non-fatal: fall back to default STUN servers
       console.warn('[voice] Failed to fetch ICE config, using defaults')
       this.iceServers = DEFAULT_ICE_SERVERS
     }
+    console.info('[voice] ICE servers:', JSON.stringify(this.iceServers.map(s => ({ urls: s.urls, hasCredentials: !!(s.username || s.credential) }))))
 
     try {
       await this.connectWebSocket(opts, localUsername)
@@ -446,6 +441,7 @@ export class VoiceRTCClient {
     const peers = this.extractPeers(payload)
     const startedAt = this.extractChannelStartedAt(payload)
     if (startedAt) this.channelStartedAt = startedAt
+    console.info(`[voice] peer_list received: ${peers.length} peers`, peers.map((p) => p.peer_id))
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
 
@@ -461,18 +457,24 @@ export class VoiceRTCClient {
         deafened: !!peer.deafened,
       })
 
-      const state = await this.ensurePeerConnection(peer.peer_id)
-      const offer = await state.pc.createOffer()
-      await state.pc.setLocalDescription(offer)
+      try {
+        console.info(`[voice] Creating offer for peer ${peer.peer_id}`)
+        const state = await this.ensurePeerConnection(peer.peer_id)
+        const offer = await state.pc.createOffer()
+        await state.pc.setLocalDescription(offer)
+        console.info(`[voice] Sending sdp_offer to ${peer.peer_id}, sdp length=${(offer.sdp ?? '').length}`)
 
-      this.sendSignal({
-        type: 'sdp_offer',
-        from: this.selfPeerID,
-        to: peer.peer_id,
-        server_id: this.serverID,
-        channel_id: this.channelID,
-        payload: { sdp: offer.sdp ?? '' },
-      })
+        this.sendSignal({
+          type: 'sdp_offer',
+          from: this.selfPeerID,
+          to: peer.peer_id,
+          server_id: this.serverID,
+          channel_id: this.channelID,
+          payload: { sdp: offer.sdp ?? '' },
+        })
+      } catch (e) {
+        console.error(`[voice] Failed to create/send offer to ${peer.peer_id}:`, e)
+      }
     }
     this.emitStatus()
   }
@@ -504,6 +506,7 @@ export class VoiceRTCClient {
 
   private async onSDPOffer(fromPeerID: string, payload: unknown): Promise<void> {
     const sdp = this.extractSDP(payload)
+    console.info(`[voice] sdp_offer received from ${fromPeerID}, sdp length=${sdp.length}`)
     if (!sdp) return
 
     const meta = this.peersMeta.get(fromPeerID) ?? {
@@ -545,11 +548,16 @@ export class VoiceRTCClient {
 
   private async onSDPAnswer(fromPeerID: string, payload: unknown): Promise<void> {
     const sdp = this.extractSDP(payload)
+    console.info(`[voice] sdp_answer received from ${fromPeerID}, sdp length=${sdp.length}`)
     if (!sdp) return
     const peer = this.peers.get(fromPeerID)
-    if (!peer) return
+    if (!peer) {
+      console.warn(`[voice] sdp_answer from ${fromPeerID} but no peer connection exists`)
+      return
+    }
     await peer.pc.setRemoteDescription({ type: 'answer', sdp })
     await this.flushPendingICE(fromPeerID)
+    console.info(`[voice] Remote description set for ${fromPeerID}, connectionState=${peer.pc.connectionState}`)
   }
 
   private async onICECandidate(fromPeerID: string, payload: unknown): Promise<void> {
@@ -597,7 +605,14 @@ export class VoiceRTCClient {
     }
 
     pc.onicecandidate = (event) => {
-      if (!event.candidate) return
+      if (!event.candidate) {
+        console.info(`[voice] ICE gathering complete for ${peerID}`)
+        return
+      }
+      // Log candidate type for diagnostics (host/srflx/relay)
+      const candStr = event.candidate.candidate
+      const typeMatch = candStr.match(/typ\s+(\w+)/)
+      console.info(`[voice] ICE candidate for ${peerID}: type=${typeMatch?.[1] ?? 'unknown'} ${candStr.substring(0, 80)}`)
       this.sendSignal({
         type: 'ice_candidate',
         from: this.selfPeerID,
@@ -657,11 +672,12 @@ export class VoiceRTCClient {
     }
 
     pc.oniceconnectionstatechange = () => {
-      console.debug(`[voice] ICE state for ${peerID}: ${pc.iceConnectionState}`)
+      console.info(`[voice] ICE connection state for ${peerID}: ${pc.iceConnectionState}`)
     }
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
+      console.info(`[voice] Connection state for ${peerID}: ${s}`)
 
       if (s === 'connected') {
         this.clearDisconnectTimer(peerID)
