@@ -378,13 +378,31 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
   channelStartedAt = null
 
   try {
+    const mode = isServerMode() ? 'server' : 'p2p'
+    console.info(`[voice] joinVoice called: mode=${mode}, serverID=${serverID}, channelID=${channelID}, userID=${userID}, username=${username}`)
+
     if (isServerMode()) {
       // Server mode: voice runs entirely in the browser via WebRTC.
       // No Go backend involvement — connects directly to central signaling server.
+      console.info('[voice] Step 1: ensuring valid token...')
       await ensureValidToken()
+      console.info('[voice] Step 1: token OK')
 
       if (typeof RTCPeerConnection === 'undefined') {
         throw new Error('WebRTC is not supported in this browser. Voice requires RTCPeerConnection.')
+      }
+      console.info('[voice] Step 2: RTCPeerConnection available')
+
+      // Pre-check microphone access before proceeding — fail fast with clear error.
+      console.info('[voice] Step 2.5: checking microphone access...')
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        testStream.getTracks().forEach(t => t.stop()) // release immediately
+        console.info('[voice] Step 2.5: microphone access granted')
+      } catch (micErr) {
+        const detail = micErr instanceof DOMException ? `${micErr.name}: ${micErr.message}` : String(micErr)
+        console.error('[voice] Microphone access FAILED:', detail)
+        throw new Error(`Microphone access denied: ${detail}. Please allow microphone access and try again.`)
       }
 
       const settings = getSettings()
@@ -392,17 +410,19 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
       if (!baseURL) {
         throw new Error('Server URL not configured. Cannot connect to voice signaling.')
       }
+      console.info('[voice] Step 3: baseURL =', baseURL)
 
       rtcClient = new VoiceRTCClient(
         (status: VoiceRTCStatus) => {
           applyVoiceStatus(status as unknown as VoiceStatusData)
         },
         (message: string) => {
+          console.error('[voice] RTC error callback:', message)
           error = message
         },
       )
 
-      console.info('[voice] Server mode: connecting via browser WebRTC to', baseURL)
+      console.info('[voice] Step 4: calling rtcClient.join...')
       await rtcClient.join({
         baseURL,
         serverID,
@@ -414,11 +434,13 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         outputDeviceId: settings.audioOutputDevice,
         authToken: apiClient.getTokens()?.accessToken || '',
       })
+      console.info('[voice] Step 5: rtcClient.join completed successfully')
     } else {
       // P2P mode: voice runs through Go backend (local signaling server + Pion WebRTC).
       // Completely independent path — no shared logic with server mode.
       console.info('[voice] P2P mode: connecting via Go voice engine')
       await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
+      console.info('[voice] P2P mode: JoinVoice completed')
     }
 
     await refreshVoiceStatus()
@@ -429,9 +451,10 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
     startVoicePolling()
     startVoiceActivityDetection()
     setupTranslatedAudioListener()
+    console.info('[voice] Join complete — state:', state)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to join voice channel'
-    console.error('[voice] Join failed:', msg, e)
+    console.error('[voice] Join FAILED at:', msg, e)
     error = msg
     state = 'disconnected'
     // Clean up partial state

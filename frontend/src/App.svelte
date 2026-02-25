@@ -278,6 +278,7 @@
   }
 
   async function handleJoinVoice(channelId: string) {
+    console.info('[App] handleJoinVoice called:', channelId, 'current:', vc.channelId, 'state:', vc.state, 'user:', auth.user?.username)
     if (vc.channelId === channelId) {
       await leaveVoice()
     } else {
