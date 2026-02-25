@@ -134,8 +134,8 @@ func main() {
 	})
 	friendRepo := friends.NewRepository(pgAdapter, friendTx, logger)
 	// Keep online status responsive: clients send frequent authenticated polls.
-	// 30s avoids stale "online" while tolerating transient network jitter.
-	presenceTracker := presence.NewTracker(30 * time.Second)
+	// 15s avoids stale "online" while still tolerating short jitter.
+	presenceTracker := presence.NewTracker(15 * time.Second)
 	friendsSvc := friends.NewService(friendRepo, presenceTracker, logger)
 
 	logger.Info().Msg("all services initialized with postgresql backend")

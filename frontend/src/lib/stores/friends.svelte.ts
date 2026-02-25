@@ -73,9 +73,12 @@ const STORAGE_KEY = 'concord_friends'
 const DM_MESSAGES_KEY = 'concord_dm_messages'
 const POLL_INTERVAL = 2_500 // near real-time polling for friends/pending requests
 const WAILS_STORE_TIMEOUT_MS = 10_000
+const STALE_PRESENCE_MS = 20_000
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let loadFriendsInFlight = false
+let lastPresenceSyncAt = 0
+let consecutivePresenceSyncFailures = 0
 
 // Track recently rejected request IDs so polling doesn't re-add them
 const recentlyRejected = new Set<string>()
@@ -132,6 +135,37 @@ function maybeNotify(title: string, body: string): void {
   })
 }
 
+function forceOfflineFriend(friend: Friend): Friend {
+  return {
+    ...friend,
+    status: 'offline',
+    activity: undefined,
+    game: undefined,
+    gameSince: undefined,
+    streaming: false,
+    streamTitle: undefined,
+  }
+}
+
+function forceAllPresenceOffline(): void {
+  state.friends = state.friends.map(forceOfflineFriend)
+  state.dms = state.dms.map(dm => ({ ...dm, status: 'offline' }))
+}
+
+function markPresenceSyncSuccess(): void {
+  lastPresenceSyncAt = Date.now()
+  consecutivePresenceSyncFailures = 0
+}
+
+function markPresenceSyncFailure(): void {
+  consecutivePresenceSyncFailures += 1
+  const now = Date.now()
+  if (lastPresenceSyncAt === 0 || now - lastPresenceSyncAt >= STALE_PRESENCE_MS) {
+    forceAllPresenceOffline()
+    persist()
+  }
+}
+
 // ── Persistence (localStorage cache) ────────────────────────────────────
 
 function persist() {
@@ -141,6 +175,7 @@ function persist() {
       pendingRequests: state.pendingRequests,
       blocked: state.blocked,
       dms: state.dms,
+      cachedAt: Date.now(),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   } catch { /* localStorage unavailable */ }
@@ -157,7 +192,14 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const data = JSON.parse(raw)
-      if (data.friends) state.friends = data.friends
+      const cachedAt = typeof data.cachedAt === 'number' ? data.cachedAt : 0
+      const stalePresence = cachedAt <= 0 || Date.now() - cachedAt > STALE_PRESENCE_MS
+
+      if (data.friends) {
+        state.friends = stalePresence
+          ? data.friends.map((f: Friend) => forceOfflineFriend(f))
+          : data.friends
+      }
       if (data.pendingRequests) {
         state.pendingRequests = data.pendingRequests
         seenIncomingRequestIDs.clear()
@@ -166,7 +208,11 @@ function loadFromStorage() {
         }
       }
       if (data.blocked) state.blocked = data.blocked
-      if (data.dms) state.dms = data.dms
+      if (data.dms) {
+        state.dms = stalePresence
+          ? data.dms.map((dm: DMConversation) => ({ ...dm, status: 'offline' }))
+          : data.dms
+      }
     }
     const dmRaw = localStorage.getItem(DM_MESSAGES_KEY)
     if (dmRaw) {
@@ -263,7 +309,9 @@ async function fetchFriendsFromBackend(): Promise<Friend[]> {
       'GetFriends timeout',
     )
   }
-  return (raw ?? []).map(mapBackendFriend)
+  const mapped = (raw ?? []).map(mapBackendFriend)
+  markPresenceSyncSuccess()
+  return mapped
 }
 
 async function fetchPendingFromBackend(): Promise<FriendRequest[]> {
@@ -354,6 +402,7 @@ export async function loadFriends() {
     persist()
   } catch {
     // Keep cached data on error
+    markPresenceSyncFailure()
   } finally {
     state.loading = false
     loadFriendsInFlight = false
@@ -383,7 +432,7 @@ function startPolling() {
       syncDMsFromFriends(friends)
       persist()
     } catch {
-      // Silently ignore polling errors
+      markPresenceSyncFailure()
     }
   }, POLL_INTERVAL)
 }
