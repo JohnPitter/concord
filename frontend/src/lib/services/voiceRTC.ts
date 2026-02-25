@@ -104,6 +104,14 @@ export class VoiceRTCClient {
   private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private iceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS
 
+  // WebSocket reconnect state
+  private joinOpts: VoiceJoinOptions | null = null
+  private reconnectAttempts = 0
+  private readonly maxReconnectAttempts = 5
+  private readonly reconnectBaseDelay = 1000 // 1s, exponential backoff
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private intentionalDisconnect = false
+
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
     private readonly onError: (message: string) => void,
@@ -112,6 +120,9 @@ export class VoiceRTCClient {
   async join(opts: VoiceJoinOptions): Promise<void> {
     if (this.state !== 'disconnected') return
 
+    this.joinOpts = opts
+    this.intentionalDisconnect = false
+    this.reconnectAttempts = 0
     this.state = 'connecting'
     this.serverID = opts.serverID
     this.channelID = opts.channelID
@@ -140,14 +151,27 @@ export class VoiceRTCClient {
       this.initAudioAnalysis()
       this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
 
-      const wsURL = this.toSignalingURL(opts.baseURL)
-      this.ws = await this.openWebSocket(wsURL)
+      await this.connectWebSocket(opts, localUsername)
 
-      this.ws.onmessage = (event) => {
-        void this.handleSignal(event.data)
-      }
+      this.state = 'connected'
+      this.emitStatus()
+    } catch (e) {
+      await this.leave()
+      throw e
+    }
+  }
 
-      this.ws.onclose = () => {
+  private async connectWebSocket(opts: VoiceJoinOptions, localUsername: string): Promise<void> {
+    const wsURL = this.toSignalingURL(opts.baseURL)
+    this.ws = await this.openWebSocket(wsURL)
+
+    this.ws.onmessage = (event) => {
+      void this.handleSignal(event.data)
+    }
+
+    this.ws.onclose = () => {
+      if (this.intentionalDisconnect || this.state === 'disconnected') {
+        // User explicitly left — do full cleanup
         if (this.state !== 'disconnected') {
           this.state = 'disconnected'
           this.cleanupPeers()
@@ -158,34 +182,96 @@ export class VoiceRTCClient {
           this.channelStartedAt = null
           this.emitStatus()
         }
+        return
       }
 
-      this.sendSignal({
-        type: 'join',
-        server_id: this.serverID,
-        channel_id: this.channelID,
-        payload: {
-          user_id: opts.userID,
+      // Unexpected close — attempt reconnect
+      console.warn('[voice] WebSocket closed unexpectedly, attempting reconnect...')
+      this.cleanupPeers()
+      this.ws = null
+      void this.scheduleReconnect()
+    }
+
+    this.sendSignal({
+      type: 'join',
+      server_id: this.serverID,
+      channel_id: this.channelID,
+      payload: {
+        user_id: opts.userID,
+        peer_id: this.selfPeerID,
+        username: localUsername,
+        avatar_url: opts.avatarURL,
+        addresses: [],
+        public_key: [],
+        muted: this.muted,
+        deafened: this.deafened,
+      },
+    })
+  }
+
+  private async scheduleReconnect(): Promise<void> {
+    if (this.intentionalDisconnect || this.state === 'disconnected') return
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error(`[voice] Max reconnect attempts (${this.maxReconnectAttempts}) reached, disconnecting`)
+      this.state = 'disconnected'
+      this.cleanupPeers()
+      this.cleanupLocalStream()
+      this.cleanupAudioAnalysis()
+      this.participants.clear()
+      this.peersMeta.clear()
+      this.channelStartedAt = null
+      this.emitStatus()
+      this.onError('voice connection lost')
+      return
+    }
+
+    this.reconnectAttempts++
+    const delay = Math.min(this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts - 1), 10_000)
+    console.info(`[voice] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+
+    await new Promise<void>((resolve) => {
+      this.reconnectTimer = setTimeout(resolve, delay)
+    })
+
+    if (this.intentionalDisconnect || this.state === 'disconnected') return
+
+    const opts = this.joinOpts
+    if (!opts) return
+
+    try {
+      const localUsername = this.safeUsername(opts.username, opts.userID, this.selfPeerID)
+      // Re-add self to participants if cleared
+      if (!this.participants.has(this.selfPeerID)) {
+        this.participants.set(this.selfPeerID, {
           peer_id: this.selfPeerID,
+          user_id: opts.userID,
           username: localUsername,
           avatar_url: opts.avatarURL,
-          addresses: [],
-          public_key: [],
+          volume: 0,
+          speaking: false,
           muted: this.muted,
           deafened: this.deafened,
-        },
-      })
+        })
+      }
 
-      this.state = 'connected'
+      await this.connectWebSocket(opts, localUsername)
+      this.reconnectAttempts = 0
+      console.info('[voice] WebSocket reconnected successfully')
       this.emitStatus()
     } catch (e) {
-      await this.leave()
-      throw e
+      console.warn('[voice] Reconnect attempt failed:', e)
+      void this.scheduleReconnect()
     }
   }
 
   async leave(): Promise<void> {
     if (this.state === 'disconnected') return
+
+    this.intentionalDisconnect = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
 
     try {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -207,6 +293,7 @@ export class VoiceRTCClient {
     this.participants.clear()
     this.peersMeta.clear()
     this.channelStartedAt = null
+    this.joinOpts = null
 
     if (this.ws) {
       this.ws.onmessage = null
