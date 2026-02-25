@@ -212,9 +212,7 @@ func extractExecutableFromArchive(archivePath, workDir string) (string, error) {
 
 func normalizeSHA256(digest string) string {
 	trimmed := strings.TrimSpace(strings.ToLower(digest))
-	if strings.HasPrefix(trimmed, "sha256:") {
-		trimmed = strings.TrimPrefix(trimmed, "sha256:")
-	}
+	trimmed = strings.TrimPrefix(trimmed, "sha256:")
 	return strings.TrimSpace(trimmed)
 }
 
