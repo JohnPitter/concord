@@ -3,7 +3,7 @@
 
 const API_STORAGE_KEY = 'concord-api-tokens'
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000
-const DISCOVERY_TIMEOUT_MS = 2500
+const DISCOVERY_TIMEOUT_MS = 5000
 const API_UNAVAILABLE_MESSAGE = 'Servidor indisponível. Tente novamente.'
 
 interface ApiTokens {
@@ -205,7 +205,7 @@ async function isReachable(url: string): Promise<boolean> {
     const res = await fetchWithTimeout(
       `${base}/health`,
       { cache: 'no-store' },
-      1500,
+      3000,
     )
     return res.ok
   } catch {

@@ -34,7 +34,7 @@ const USER_ID_KEY = 'concord_user_id'
 
 // Refresh token 2 minutes before expiry
 const REFRESH_BUFFER_MS = 2 * 60 * 1000
-const SERVER_DISCOVERY_MAX_WAIT_MS = 3500
+const SERVER_DISCOVERY_MAX_WAIT_MS = 8000
 const AUTH_INIT_HARD_TIMEOUT_MS = 15000
 const WAILS_CALL_TIMEOUT_MS = 8000
 const PRESENCE_OFFLINE_PATH = '/api/v1/presence/offline'
