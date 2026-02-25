@@ -540,10 +540,13 @@ export class VoiceRTCClient {
     try {
       if (type === 'offer') {
         // Perfect negotiation: check for collision
+        const sigState = pc.signalingState
         const readyForOffer =
           !peer.makingOffer &&
-          (pc.signalingState === 'stable' || peer.isSettingRemoteAnswerPending)
+          (sigState === 'stable' || peer.isSettingRemoteAnswerPending)
         const offerCollision = !readyForOffer
+
+        console.info(`[voice] offer check: polite=${peer.polite}, makingOffer=${peer.makingOffer}, signalingState=${sigState}, readyForOffer=${readyForOffer}, collision=${offerCollision}`)
 
         peer.ignoreOffer = !peer.polite && offerCollision
         if (peer.ignoreOffer) {
@@ -557,30 +560,35 @@ export class VoiceRTCClient {
 
         peer.isSettingRemoteAnswerPending = false
         await pc.setRemoteDescription(description)
+        console.info(`[voice] Remote offer set for ${fromPeerID}, signalingState=${pc.signalingState}`)
 
         await pc.setLocalDescription()
         const answer = pc.localDescription
-        if (answer) {
-          console.info(`[voice] >> sdp_answer to ${fromPeerID}, sdp=${(answer.sdp ?? '').length}B`)
+        console.info(`[voice] Local answer created for ${fromPeerID}, type=${answer?.type}, sdp=${(answer?.sdp ?? '').length}B`)
+        if (answer && answer.sdp) {
+          console.info(`[voice] >> sdp_answer to ${fromPeerID}`)
           this.sendSignal({
             type: 'sdp_answer',
             from: this.selfPeerID,
             to: fromPeerID,
             server_id: this.serverID,
             channel_id: this.channelID,
-            payload: { sdp: answer.sdp ?? '' },
+            payload: { sdp: answer.sdp },
           })
         }
       } else {
         // Answer
+        const sigState = pc.signalingState
+        console.info(`[voice] Setting remote answer for ${fromPeerID}, signalingState=${sigState}`)
         peer.isSettingRemoteAnswerPending = true
         await pc.setRemoteDescription(description)
         peer.isSettingRemoteAnswerPending = false
-        console.info(`[voice] Remote answer set for ${fromPeerID}, state=${pc.connectionState}`)
+        console.info(`[voice] Remote answer set for ${fromPeerID}, connectionState=${pc.connectionState}`)
       }
     } catch (e) {
       peer.isSettingRemoteAnswerPending = false
-      console.error(`[voice] Failed to handle ${type} from ${fromPeerID}:`, e)
+      const errMsg = e instanceof Error ? e.message : String(e)
+      console.error(`[voice] FAILED to handle ${type} from ${fromPeerID}: ${errMsg}`, e)
     }
   }
 
