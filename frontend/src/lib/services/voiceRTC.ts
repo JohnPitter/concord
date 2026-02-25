@@ -583,7 +583,9 @@ export class VoiceRTCClient {
     const audio = new Audio()
     audio.autoplay = true
     audio.setAttribute('playsinline', 'true')
+    audio.volume = 1.0
     audio.srcObject = stream
+    // Only mute audio output when the local user is deafened — never mute by default.
     audio.muted = this.deafened
 
     await this.applyOutputDevice(audio)
@@ -611,6 +613,7 @@ export class VoiceRTCClient {
     }
 
     pc.ontrack = (event) => {
+      console.info(`[voice] ontrack from ${peerID}: kind=${event.track.kind}, id=${event.track.id}`)
       if (event.streams.length > 0 && event.streams[0]) {
         for (const track of event.streams[0].getTracks()) {
           if (!stream.getTracks().some((t) => t.id === track.id)) {
@@ -623,18 +626,28 @@ export class VoiceRTCClient {
 
       // Re-assign srcObject so the audio element picks up the new track.
       audio.srcObject = stream
+      audio.volume = 1.0
+      audio.muted = this.deafened
 
       this.setupPeerAnalyser(peerID, stream)
-      void audio.play().catch(() => {
-        // Autoplay blocked — retry on user interaction.
-        const resume = () => {
-          void audio.play().catch(() => {})
-          document.removeEventListener('click', resume)
-          document.removeEventListener('keydown', resume)
-        }
-        document.addEventListener('click', resume, { once: true })
-        document.addEventListener('keydown', resume, { once: true })
-      })
+
+      // Force play — WebView2 may block autoplay without user gesture.
+      const playAudio = () => {
+        audio.play().then(() => {
+          console.info(`[voice] Audio playing for peer ${peerID}`)
+        }).catch((e) => {
+          console.warn(`[voice] Autoplay blocked for peer ${peerID}:`, e)
+          // Retry on next user interaction
+          const resume = () => {
+            void audio.play().catch(() => {})
+            document.removeEventListener('click', resume)
+            document.removeEventListener('keydown', resume)
+          }
+          document.addEventListener('click', resume, { once: true })
+          document.addEventListener('keydown', resume, { once: true })
+        })
+      }
+      playAudio()
     }
 
     pc.onicecandidateerror = (event) => {

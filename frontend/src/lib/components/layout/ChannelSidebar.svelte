@@ -304,6 +304,19 @@
             <span class="truncate">{channel.name}</span>
             {#if voiceChannelId === channel.id && voiceElapsed}
               <span class="ml-auto text-[11px] font-mono text-void-online tabular-nums">{voiceElapsed}</span>
+            {:else}
+              {@const spectatorParticipants = getChannelParticipants?.(channel.id) ?? []}
+              {#if spectatorParticipants.length > 0}
+                <span class="ml-auto flex items-center gap-1 text-[11px] text-void-text-muted">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                  {spectatorParticipants.length}
+                </span>
+              {/if}
             {/if}
           </button>
           {#if canManageChannels}
