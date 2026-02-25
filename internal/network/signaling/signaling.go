@@ -49,8 +49,8 @@ type JoinPayload struct {
 	AvatarURL string   `json:"avatar_url,omitempty"`
 	Addresses []string `json:"addresses"`
 	PublicKey []byte   `json:"public_key,omitempty"`
-	Muted     bool     `json:"muted,omitempty"`
-	Deafened  bool     `json:"deafened,omitempty"`
+	Muted     bool     `json:"muted"`
+	Deafened  bool     `json:"deafened"`
 }
 
 // OfferPayload carries connection details for P2P establishment.
@@ -75,8 +75,8 @@ type PeerEntry struct {
 	AvatarURL string   `json:"avatar_url,omitempty"`
 	Addresses []string `json:"addresses"`
 	PublicKey []byte   `json:"public_key,omitempty"`
-	Muted     bool     `json:"muted,omitempty"`
-	Deafened  bool     `json:"deafened,omitempty"`
+	Muted     bool     `json:"muted"`
+	Deafened  bool     `json:"deafened"`
 }
 
 // PeerStatePayload carries mute/deafen state updates.
