@@ -148,17 +148,31 @@ export class VoiceRTCClient {
 
     try {
       this.localStream = await this.createLocalStream(opts.inputDeviceId)
-      this.applyMuteState()
-      this.initAudioAnalysis()
+    } catch (e) {
+      await this.leave()
+      const detail = e instanceof DOMException ? e.message : String(e)
+      throw new Error(`Microphone access denied or unavailable: ${detail}`)
+    }
+
+    this.applyMuteState()
+    this.initAudioAnalysis()
+
+    try {
       this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
+    } catch {
+      // Non-fatal: fall back to default STUN/TURN servers
+      console.warn('[voice] Failed to fetch ICE config, using defaults')
+      this.iceServers = DEFAULT_ICE_SERVERS
+    }
 
+    try {
       await this.connectWebSocket(opts, localUsername)
-
       this.state = 'connected'
       this.emitStatus()
     } catch (e) {
       await this.leave()
-      throw e
+      const detail = e instanceof Error ? e.message : String(e)
+      throw new Error(`Failed to connect to voice signaling server: ${detail}`)
     }
   }
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Complete decoupling of server mode from P2P voice** (`main.go`, `voice.svelte.ts`, `voiceRTC.ts`): server mode now runs voice entirely in the browser via WebRTC connecting directly to the central signaling server. Go voice engine, orchestrator, and local signaling server are no longer initialized at startup — they are lazily created only when P2P mode is used. This eliminates resource waste, potential port/socket conflicts, and cross-mode interference. Server mode and P2P mode share zero business logic, only utility code.
+- **Explicit voice error messages** (`voiceRTC.ts`, `voice.svelte.ts`): microphone permission denied, missing WebRTC support, and signaling connection failures now surface clear error messages to the user instead of failing silently. The `joinVoice` catch block now logs and cleans up partial state on failure.
+
 ### Fixed
 
 - **Voice WebSocket drops causing auto-disconnect** (`voiceRTC.ts`, `server.go`, `client.go`): added automatic WebSocket reconnect with exponential backoff (up to 5 attempts) when the signaling connection drops unexpectedly. Added client-side keepalive pings every 10s to prevent tunnel/proxy idle disconnects. Reduced server and Go client ping interval from 50s to 15s and pong wait from 60s to 30s for faster detection and tunnel compatibility.

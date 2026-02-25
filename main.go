@@ -189,28 +189,11 @@ func (a *App) startup(ctx context.Context) {
 	a.fileService = files.NewService(fileRepo, fileStorage, a.logger)
 	a.logger.Info().Str("storage_dir", storageDir).Msg("file service initialized")
 
-	// Initialize local signaling server for voice WebRTC coordination
-	a.sigServer = signaling.NewServer(a.logger)
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ws/signaling", a.sigServer.Handler())
-
-	sigListener, err := net.Listen("tcp", "127.0.0.1:0") // random free port
-	if err != nil {
-		a.logger.Fatal().Err(err).Msg("failed to start signaling listener")
-	}
-	a.sigListener = sigListener
-	go func() {
-		if err := http.Serve(sigListener, mux); err != nil && !errors.Is(err, net.ErrClosed) {
-			a.logger.Error().Err(err).Msg("signaling HTTP server error")
-		}
-	}()
-	sigAddr := sigListener.Addr().String()
-	a.logger.Info().Str("addr", sigAddr).Msg("local signaling server started")
-
-	// Initialize voice engine + orchestrator
-	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
-	a.voiceOrch = voice.NewOrchestrator(a.voiceEngine, a.logger)
-	a.logger.Info().Msg("voice engine initialized")
+	// Local signaling server + voice engine are only needed in P2P mode.
+	// In server mode, voice is handled entirely by the browser via WebRTC
+	// connecting directly to the central signaling server. This avoids
+	// conflicts and resource waste when running in server mode.
+	a.logger.Info().Msg("local voice engine deferred (lazy-init for P2P mode only)")
 
 	// Initialize translation service
 	a.translationService = translation.NewService(cfg.Translation, a.logger)
@@ -244,8 +227,9 @@ func (a *App) startup(ctx context.Context) {
 		vtCfg.SegmentLength,
 		a.logger,
 	)
-	a.voiceEngine.SetTranslator(a.voiceTranslator)
-	a.logger.Info().Msg("voice translator initialized")
+	// Translator will be attached to voice engine when it's lazily initialized (P2P mode).
+	// In server mode, voice translation runs in-browser.
+	a.logger.Info().Msg("voice translator initialized (pending engine attachment)")
 
 	a.logger.Info().Msg("Concord started successfully")
 }
@@ -497,33 +481,86 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 	return a.chatService.SearchMessages(a.ctx, channelID, query, limit)
 }
 
-// --- Voice Bindings ---
+// --- Voice Bindings (P2P mode only) ---
+// In server mode, voice is handled entirely by the browser's VoiceRTCClient
+// connecting to the central signaling server. These Go bindings are only
+// used when running in P2P mode (no central server).
 
-// JoinVoice joins a voice channel via signaling.
-// serverID identifies which server the channel belongs to.
+// ensureLocalVoice lazily initializes the local signaling server, voice engine,
+// and orchestrator. This is only called from P2P voice bindings to avoid
+// allocating resources in server mode.
+func (a *App) ensureLocalVoice() error {
+	if a.voiceEngine != nil && a.voiceOrch != nil && a.sigListener != nil {
+		return nil // already initialized
+	}
+
+	a.logger.Info().Msg("initializing local voice engine for P2P mode")
+
+	a.sigServer = signaling.NewServer(a.logger)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/signaling", a.sigServer.Handler())
+
+	sigListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fmt.Errorf("failed to start local signaling listener: %w", err)
+	}
+	a.sigListener = sigListener
+	go func() {
+		if err := http.Serve(sigListener, mux); err != nil && !errors.Is(err, net.ErrClosed) {
+			a.logger.Error().Err(err).Msg("signaling HTTP server error")
+		}
+	}()
+	a.logger.Info().Str("addr", sigListener.Addr().String()).Msg("local signaling server started")
+
+	a.voiceEngine = voice.NewEngine(voice.DefaultEngineConfig(), a.logger)
+	a.voiceOrch = voice.NewOrchestrator(a.voiceEngine, a.logger)
+
+	// Attach translator if already created
+	if a.voiceTranslator != nil {
+		a.voiceEngine.SetTranslator(a.voiceTranslator)
+	}
+	a.logger.Info().Msg("voice engine initialized for P2P")
+
+	return nil
+}
+
+// JoinVoice joins a voice channel via local signaling (P2P mode only).
+// In server mode, the frontend uses VoiceRTCClient directly.
 func (a *App) JoinVoice(serverID, channelID, userID, username, avatarURL string) error {
-	// Use the local embedded signaling server
+	if err := a.ensureLocalVoice(); err != nil {
+		return err
+	}
 	wsURL := fmt.Sprintf("http://%s", a.sigListener.Addr().String())
 	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID, username, avatarURL)
 }
 
 // JoinVoiceWithURL joins a voice channel using a specific signaling base URL.
-// Used in central server mode so all clients share the same signaling backend.
+// This is a P2P fallback that routes through the Go voice engine.
+// In server mode, the frontend MUST use VoiceRTCClient instead.
 func (a *App) JoinVoiceWithURL(baseURL, serverID, channelID, userID, username, avatarURL string) error {
 	wsURL := strings.TrimSpace(baseURL)
 	if wsURL == "" {
 		return errors.New("voice signaling base URL is required")
 	}
+	if err := a.ensureLocalVoice(); err != nil {
+		return err
+	}
 	return a.voiceOrch.Join(a.ctx, wsURL, serverID, channelID, userID, username, avatarURL)
 }
 
-// LeaveVoice leaves the current voice channel.
+// LeaveVoice leaves the current voice channel (P2P mode).
 func (a *App) LeaveVoice() error {
+	if a.voiceOrch == nil {
+		return nil
+	}
 	return a.voiceOrch.Leave()
 }
 
-// ToggleMute toggles the microphone mute state.
+// ToggleMute toggles the microphone mute state (P2P mode).
 func (a *App) ToggleMute() bool {
+	if a.voiceEngine == nil {
+		return false
+	}
 	a.voiceEngine.Mute()
 	muted := a.voiceEngine.IsMuted()
 	if a.voiceOrch != nil {
@@ -532,8 +569,11 @@ func (a *App) ToggleMute() bool {
 	return muted
 }
 
-// ToggleDeafen toggles the audio output deafen state.
+// ToggleDeafen toggles the audio output deafen state (P2P mode).
 func (a *App) ToggleDeafen() bool {
+	if a.voiceEngine == nil {
+		return false
+	}
 	a.voiceEngine.Deafen()
 	deafened := a.voiceEngine.IsDeafened()
 	if a.voiceOrch != nil {
@@ -542,13 +582,17 @@ func (a *App) ToggleDeafen() bool {
 	return deafened
 }
 
-// GetVoiceStatus returns the current voice status.
+// GetVoiceStatus returns the current voice status (P2P mode).
 func (a *App) GetVoiceStatus() voice.VoiceStatus {
+	if a.voiceEngine == nil {
+		return voice.VoiceStatus{State: "disconnected"}
+	}
 	return a.voiceEngine.GetStatus()
 }
 
 // GetVoiceParticipants returns the list of peers currently in a voice channel.
-// This works for any user browsing the server, not just those connected.
+// For P2P mode, queries the local signaling server.
+// In server mode, the frontend queries the central server API directly.
 func (a *App) GetVoiceParticipants(serverID, channelID string) []signaling.PeerEntry {
 	if a.sigServer == nil {
 		return []signaling.PeerEntry{}

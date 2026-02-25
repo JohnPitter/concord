@@ -378,9 +378,21 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
   channelStartedAt = null
 
   try {
-    await ensureValidToken()
-    if (isServerMode() && typeof RTCPeerConnection !== 'undefined') {
+    if (isServerMode()) {
+      // Server mode: voice runs entirely in the browser via WebRTC.
+      // No Go backend involvement — connects directly to central signaling server.
+      await ensureValidToken()
+
+      if (typeof RTCPeerConnection === 'undefined') {
+        throw new Error('WebRTC is not supported in this browser. Voice requires RTCPeerConnection.')
+      }
+
       const settings = getSettings()
+      const baseURL = apiClient.getBaseURL()
+      if (!baseURL) {
+        throw new Error('Server URL not configured. Cannot connect to voice signaling.')
+      }
+
       rtcClient = new VoiceRTCClient(
         (status: VoiceRTCStatus) => {
           applyVoiceStatus(status as unknown as VoiceStatusData)
@@ -390,8 +402,9 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         },
       )
 
+      console.info('[voice] Server mode: connecting via browser WebRTC to', baseURL)
       await rtcClient.join({
-        baseURL: apiClient.getBaseURL(),
+        baseURL,
         serverID,
         channelID,
         userID,
@@ -402,12 +415,12 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         authToken: apiClient.getTokens()?.accessToken || '',
       })
     } else {
-      if (isServerMode()) {
-        await App.JoinVoiceWithURL(apiClient.getBaseURL(), serverID, channelID, userID, username, avatarURL)
-      } else {
-        await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
-      }
+      // P2P mode: voice runs through Go backend (local signaling server + Pion WebRTC).
+      // Completely independent path — no shared logic with server mode.
+      console.info('[voice] P2P mode: connecting via Go voice engine')
+      await App.JoinVoice(serverID, channelID, userID, username, avatarURL)
     }
+
     await refreshVoiceStatus()
     playJoinSound()
     // Timer: prefer server-provided channel_started_at for synchronized display.
@@ -417,8 +430,15 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
     startVoiceActivityDetection()
     setupTranslatedAudioListener()
   } catch (e) {
-    error = e instanceof Error ? e.message : 'Failed to join voice channel'
+    const msg = e instanceof Error ? e.message : 'Failed to join voice channel'
+    console.error('[voice] Join failed:', msg, e)
+    error = msg
     state = 'disconnected'
+    // Clean up partial state
+    if (rtcClient) {
+      void rtcClient.leave().catch(() => {})
+      rtcClient = null
+    }
   }
 }
 
