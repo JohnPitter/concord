@@ -1,6 +1,8 @@
 <script lang="ts">
-  import Tooltip from '../ui/Tooltip.svelte'
+  import type { VoiceDiagnosticsSnapshot, VoiceScreenShare } from '../../services/voiceRTC'
   import { translations, t } from '../../i18n'
+  import ScreenShareTile from './ScreenShareTile.svelte'
+  import Tooltip from '../ui/Tooltip.svelte'
 
   let {
     connected,
@@ -9,6 +11,8 @@
     deafened,
     noiseSuppression = true,
     screenSharing = false,
+    screenShares = [],
+    diagnostics = null,
     onToggleMute,
     onToggleDeafen,
     onToggleNoiseSuppression,
@@ -21,6 +25,8 @@
     deafened: boolean
     noiseSuppression?: boolean
     screenSharing?: boolean
+    screenShares?: VoiceScreenShare[]
+    diagnostics?: VoiceDiagnosticsSnapshot | null
     onToggleMute: () => void
     onToggleDeafen: () => void
     onToggleNoiseSuppression?: () => void
@@ -28,12 +34,54 @@
     onDisconnect: () => void
   } = $props()
 
+  let showDiagnostics = $state(false)
   const trans = $derived($translations)
+  const recentEvents = $derived([...(diagnostics?.events ?? [])].slice(-8).reverse())
+  const troubleshootingHints = $derived(
+    diagnostics
+      ? (() => {
+        const hints: string[] = []
+        if (diagnostics.ws_state !== WebSocket.OPEN) {
+          hints.push('Signaling offline: check tunnel/server and firewall, then reconnect to voice.')
+        }
+        if (diagnostics.reconnect_attempts >= 2) {
+          hints.push('Frequent reconnects detected: network instability or proxy timeout likely.')
+        }
+        if (diagnostics.peers.some(p => p.connection_state === 'failed' || p.ice_connection_state === 'failed')) {
+          hints.push('ICE failed for at least one peer: TURN relay is recommended for restrictive NATs.')
+        }
+        if (diagnostics.peers.some(p => p.quality === 'poor' || p.quality_score < 40)) {
+          hints.push('Poor media quality detected: reduce screen sharing and test another network path.')
+        }
+        if (diagnostics.events.some(e => e.code === 'audio:autoplay')) {
+          hints.push('Audio playback was blocked: click inside the app window to resume remote audio.')
+        }
+        return hints
+      })()
+      : []
+  )
+
+  function wsLabel(state: number | undefined): string {
+    if (state === WebSocket.OPEN) return 'open'
+    if (state === WebSocket.CONNECTING) return 'connecting'
+    if (state === WebSocket.CLOSING) return 'closing'
+    return 'closed'
+  }
+
+  function fmtTime(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  }
+
+  function qualityStyle(quality: string): string {
+    if (quality === 'good') return 'text-void-online'
+    if (quality === 'fair') return 'text-void-warning'
+    if (quality === 'poor') return 'text-void-danger'
+    return 'text-void-text-muted'
+  }
 </script>
 
 {#if connected}
   <div class="border-t border-void-border bg-void-bg-primary">
-    <!-- Connected indicator -->
     <div class="flex items-center justify-between px-3 py-2">
       <div class="flex items-center gap-2 min-w-0">
         <div class="h-2 w-2 shrink-0 rounded-full bg-void-online animate-pulse"></div>
@@ -56,7 +104,6 @@
       </Tooltip>
     </div>
 
-    <!-- Controls -->
     <div class="flex items-center justify-center gap-1 border-t border-void-border px-3 py-1.5">
       <Tooltip text={noiseSuppression ? t(trans, 'voice.disableNoiseSuppression') : t(trans, 'voice.enableNoiseSuppression')} position="top">
         <button
@@ -87,6 +134,20 @@
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
             <line x1="8" y1="21" x2="16" y2="21"/>
             <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </button>
+      </Tooltip>
+      <Tooltip text={showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'} position="top">
+        <button
+          aria-label={showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}
+          class="rounded-md p-2 transition-colors cursor-pointer
+            {showDiagnostics
+              ? 'bg-void-accent/20 text-void-accent hover:bg-void-accent/30'
+              : 'text-void-text-secondary hover:bg-void-bg-hover hover:text-void-text-primary'}"
+          onclick={() => showDiagnostics = !showDiagnostics}
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
         </button>
       </Tooltip>
@@ -143,5 +204,63 @@
         </button>
       </Tooltip>
     </div>
+
+    {#if screenShares.length > 0}
+      <div class="border-t border-void-border px-2 py-2">
+        <p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-void-text-muted">screen shares</p>
+        <div class="space-y-1.5">
+          {#each screenShares as share (share.peer_id)}
+            <ScreenShareTile
+              stream={share.stream}
+              username={share.username}
+              local={share.local}
+            />
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if showDiagnostics}
+      <div class="border-t border-void-border px-2 py-2">
+        <div class="grid grid-cols-2 gap-1 text-[10px] text-void-text-muted">
+          <span>ws: {wsLabel(diagnostics?.ws_state)}</span>
+          <span>reconnect: {diagnostics?.reconnect_attempts ?? 0}</span>
+          <span>peers: {diagnostics?.peers.length ?? 0}</span>
+          <span>screen: {diagnostics?.screen_sharing ? 'on' : 'off'}</span>
+        </div>
+        {#if diagnostics && diagnostics.peers.length > 0}
+          <div class="mt-2 max-h-20 space-y-1 overflow-y-auto rounded-md border border-void-border bg-void-bg-secondary p-1.5">
+            {#each diagnostics.peers as peer (peer.peer_id)}
+              <div class="flex items-center justify-between text-[10px]">
+                <span class="truncate text-void-text-muted">{peer.peer_id.slice(0, 8)}</span>
+                <span class="font-semibold {qualityStyle(peer.quality)}">{peer.quality} ({Math.round(peer.quality_score)})</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if troubleshootingHints.length > 0}
+          <div class="mt-2 rounded-md border border-void-warning/30 bg-void-warning/10 p-1.5">
+            <p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-void-warning">troubleshooting</p>
+            <div class="space-y-1">
+              {#each troubleshootingHints as hint, i (`hint-${i}`)}
+                <p class="text-[10px] text-void-text-secondary">{hint}</p>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        <div class="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-md border border-void-border bg-void-bg-secondary p-1.5">
+          {#if recentEvents.length === 0}
+            <p class="text-[10px] text-void-text-muted">no diagnostic events yet</p>
+          {:else}
+            {#each recentEvents as ev (`${ev.ts}-${ev.code}`)}
+              <div class="rounded bg-void-bg-primary px-1.5 py-1 text-[10px]">
+                <p class="font-mono text-void-text-muted">[{fmtTime(ev.ts)}] {ev.level} {ev.code}</p>
+                <p class="text-void-text-secondary">{ev.message}</p>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}

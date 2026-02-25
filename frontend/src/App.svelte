@@ -415,6 +415,8 @@
         voiceSpeakers={vc.speakers}
         voiceNoiseSuppression={vc.noiseSuppression}
         voiceScreenSharing={vc.screenSharing}
+        voiceScreenShares={vc.screenShares}
+        voiceDiagnostics={vc.diagnostics}
         onToggleMute={toggleMute}
         onToggleDeafen={toggleDeafen}
         onToggleNoiseSuppression={toggleNoiseSuppression}
@@ -555,6 +557,8 @@
         voiceElapsed={vc.elapsed}
         voiceNoiseSuppression={vc.noiseSuppression}
         voiceScreenSharing={vc.screenSharing}
+        voiceScreenShares={vc.screenShares}
+        voiceDiagnostics={vc.diagnostics}
         voiceLocalSpeaking={vc.localSpeaking}
         {getChannelParticipants}
         onJoinVoice={handleJoinVoice}

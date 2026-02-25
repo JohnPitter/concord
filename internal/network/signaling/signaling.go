@@ -12,18 +12,18 @@ import (
 type SignalType string
 
 const (
-	SignalJoin       SignalType = "join"        // Peer joins a server/channel
-	SignalLeave      SignalType = "leave"       // Peer leaves
-	SignalOffer      SignalType = "offer"       // Connection offer (addrs + public key)
-	SignalAnswer     SignalType = "answer"      // Connection answer
-	SignalPeerList   SignalType = "peer_list"   // Current peers in channel
-	SignalPeerJoined SignalType = "peer_joined" // New peer notification
-	SignalPeerLeft      SignalType = "peer_left"      // Peer departed notification
-	SignalError         SignalType = "error"         // Error message
-	SignalSDPOffer      SignalType = "sdp_offer"     // WebRTC SDP offer
-	SignalSDPAnswer     SignalType = "sdp_answer"    // WebRTC SDP answer
-	SignalICECandidate  SignalType = "ice_candidate" // WebRTC ICE candidate
-	SignalPeerState     SignalType = "peer_state"    // Peer mute/deafen state update
+	SignalJoin         SignalType = "join"          // Peer joins a server/channel
+	SignalLeave        SignalType = "leave"         // Peer leaves
+	SignalOffer        SignalType = "offer"         // Connection offer (addrs + public key)
+	SignalAnswer       SignalType = "answer"        // Connection answer
+	SignalPeerList     SignalType = "peer_list"     // Current peers in channel
+	SignalPeerJoined   SignalType = "peer_joined"   // New peer notification
+	SignalPeerLeft     SignalType = "peer_left"     // Peer departed notification
+	SignalError        SignalType = "error"         // Error message
+	SignalSDPOffer     SignalType = "sdp_offer"     // WebRTC SDP offer
+	SignalSDPAnswer    SignalType = "sdp_answer"    // WebRTC SDP answer
+	SignalICECandidate SignalType = "ice_candidate" // WebRTC ICE candidate
+	SignalPeerState    SignalType = "peer_state"    // Peer mute/deafen state update
 )
 
 var (
@@ -33,24 +33,25 @@ var (
 
 // Signal is the envelope for all signaling messages.
 type Signal struct {
-	Type      SignalType       `json:"type"`
-	From      string           `json:"from,omitempty"`
-	To        string           `json:"to,omitempty"`
-	ServerID  string           `json:"server_id,omitempty"`
-	ChannelID string           `json:"channel_id,omitempty"`
-	Payload   json.RawMessage  `json:"payload,omitempty"`
+	Type      SignalType      `json:"type"`
+	From      string          `json:"from,omitempty"`
+	To        string          `json:"to,omitempty"`
+	ServerID  string          `json:"server_id,omitempty"`
+	ChannelID string          `json:"channel_id,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
 }
 
 // JoinPayload is sent when joining a server/channel.
 type JoinPayload struct {
-	UserID    string   `json:"user_id"`
-	PeerID    string   `json:"peer_id"`
-	Username  string   `json:"username,omitempty"`
-	AvatarURL string   `json:"avatar_url,omitempty"`
-	Addresses []string `json:"addresses"`
-	PublicKey []byte   `json:"public_key,omitempty"`
-	Muted     bool     `json:"muted"`
-	Deafened  bool     `json:"deafened"`
+	UserID        string   `json:"user_id"`
+	PeerID        string   `json:"peer_id"`
+	Username      string   `json:"username,omitempty"`
+	AvatarURL     string   `json:"avatar_url,omitempty"`
+	Addresses     []string `json:"addresses"`
+	PublicKey     []byte   `json:"public_key,omitempty"`
+	Muted         bool     `json:"muted"`
+	Deafened      bool     `json:"deafened"`
+	ScreenSharing bool     `json:"screen_sharing,omitempty"`
 }
 
 // OfferPayload carries connection details for P2P establishment.
@@ -69,21 +70,23 @@ type PeerListPayload struct {
 
 // PeerEntry represents a single peer in the peer list.
 type PeerEntry struct {
-	UserID    string   `json:"user_id"`
-	PeerID    string   `json:"peer_id"`
-	Username  string   `json:"username,omitempty"`
-	AvatarURL string   `json:"avatar_url,omitempty"`
-	Addresses []string `json:"addresses"`
-	PublicKey []byte   `json:"public_key,omitempty"`
-	Muted     bool     `json:"muted"`
-	Deafened  bool     `json:"deafened"`
+	UserID        string   `json:"user_id"`
+	PeerID        string   `json:"peer_id"`
+	Username      string   `json:"username,omitempty"`
+	AvatarURL     string   `json:"avatar_url,omitempty"`
+	Addresses     []string `json:"addresses"`
+	PublicKey     []byte   `json:"public_key,omitempty"`
+	Muted         bool     `json:"muted"`
+	Deafened      bool     `json:"deafened"`
+	ScreenSharing bool     `json:"screen_sharing,omitempty"`
 }
 
 // PeerStatePayload carries mute/deafen state updates.
 type PeerStatePayload struct {
-	PeerID   string `json:"peer_id"`
-	Muted    bool   `json:"muted"`
-	Deafened bool   `json:"deafened"`
+	PeerID        string `json:"peer_id"`
+	Muted         bool   `json:"muted"`
+	Deafened      bool   `json:"deafened"`
+	ScreenSharing bool   `json:"screen_sharing,omitempty"`
 }
 
 // SDPPayload carries a WebRTC session description (offer or answer).

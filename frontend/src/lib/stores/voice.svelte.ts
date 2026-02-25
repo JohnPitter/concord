@@ -7,7 +7,14 @@ import { ensureValidToken } from './auth.svelte'
 import { apiClient } from '../api/client'
 import { isServerMode } from '../api/mode'
 import { getSettings } from './settings.svelte'
-import { VoiceRTCClient, type VoiceRTCStatus } from '../services/voiceRTC'
+import {
+  type VoiceConnectionQuality,
+  VoiceRTCClient,
+  type VoiceDiagnosticsSnapshot,
+  type VoiceRTCStatus,
+  type VoiceScreenShare,
+} from '../services/voiceRTC'
+import { toastWarning } from './toast.svelte'
 
 export interface SpeakerData {
   peer_id: string
@@ -17,6 +24,9 @@ export interface SpeakerData {
   volume: number
   speaking: boolean
   screenSharing?: boolean
+  dominant?: boolean
+  quality?: VoiceConnectionQuality
+  qualityScore?: number
   muted?: boolean
   deafened?: boolean
 }
@@ -28,6 +38,9 @@ export interface VoiceStatusData {
   deafened: boolean
   peer_count: number
   speakers: SpeakerData[]
+  screen_shares?: VoiceScreenShare[]
+  noise_suppression?: boolean
+  diagnostics?: VoiceDiagnosticsSnapshot
   channel_started_at?: number
 }
 
@@ -44,6 +57,20 @@ let joinedAt = $state<number | null>(null)
 let elapsedSeconds = $state(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 let rtcClient: VoiceRTCClient | null = null
+let screenShares = $state<VoiceScreenShare[]>([])
+let voiceDiagnostics = $state<VoiceDiagnosticsSnapshot>({
+  ts: Date.now(),
+  ws_state: WebSocket.CLOSED,
+  reconnect_attempts: 0,
+  muted: false,
+  deafened: false,
+  noise_suppression: true,
+  screen_sharing: false,
+  peers: [],
+  events: [],
+})
+const POOR_QUALITY_ALERT_COOLDOWN_MS = 45_000
+let lastPoorQualityAlertAt = new Map<string, number>()
 
 function startTimer(startAt?: number) {
   const now = Date.now()
@@ -96,6 +123,7 @@ export function getVoice() {
           ...s,
           speaking: s.speaking || (localSpeaking && local),
           screenSharing: local ? screenSharing : false,
+          dominant: s.dominant || (localSpeaking && local),
           muted: local ? muted : s.muted,
           deafened: local ? deafened : s.deafened,
         }
@@ -122,6 +150,8 @@ export function getVoice() {
     get error() { return error },
     get connected() { return state === 'connected' },
     get elapsed() { return formatElapsed(elapsedSeconds) },
+    get screenShares() { return screenShares },
+    get diagnostics() { return voiceDiagnostics },
   }
 }
 
@@ -130,6 +160,13 @@ function normalizeSpeaker(raw: Partial<SpeakerData>): SpeakerData {
   const userID = (raw.user_id || '').trim() || peerID
   const usernameRaw = (raw.username || '').trim()
   const username = usernameRaw || userID.slice(0, 12) || peerID.slice(0, 12) || 'user'
+  const rawRecord = raw as Record<string, unknown>
+  const serverScreenSharing = typeof rawRecord.screen_sharing === 'boolean' ? rawRecord.screen_sharing : false
+  const dominantSpeaker = typeof rawRecord.dominant_speaker === 'boolean' ? rawRecord.dominant_speaker : false
+  const connectionQuality = typeof rawRecord.connection_quality === 'string'
+    ? rawRecord.connection_quality as VoiceConnectionQuality
+    : 'unknown'
+  const qualityScoreRaw = typeof rawRecord.quality_score === 'number' ? rawRecord.quality_score : 0
   return {
     peer_id: peerID,
     user_id: userID,
@@ -137,7 +174,12 @@ function normalizeSpeaker(raw: Partial<SpeakerData>): SpeakerData {
     avatar_url: (raw.avatar_url || '').trim(),
     volume: Number.isFinite(raw.volume as number) ? Number(raw.volume) : 0,
     speaking: !!raw.speaking,
-    screenSharing: !!raw.screenSharing,
+    screenSharing: !!raw.screenSharing || serverScreenSharing,
+    dominant: !!(raw as { dominant?: boolean }).dominant || dominantSpeaker,
+    quality: (raw as { quality?: VoiceConnectionQuality }).quality || connectionQuality,
+    qualityScore: Number.isFinite((raw as { qualityScore?: number }).qualityScore)
+      ? Number((raw as { qualityScore?: number }).qualityScore)
+      : qualityScoreRaw,
     muted: !!raw.muted,
     deafened: !!raw.deafened,
   }
@@ -148,20 +190,72 @@ function sortSpeakersStable(list: SpeakerData[]): SpeakerData[] {
     const aLocal = isLocalUser(a) ? 0 : 1
     const bLocal = isLocalUser(b) ? 0 : 1
     if (aLocal !== bLocal) return aLocal - bLocal
+    const aDominant = a.dominant ? 0 : 1
+    const bDominant = b.dominant ? 0 : 1
+    if (aDominant !== bDominant) return aDominant - bDominant
     const byName = a.username.localeCompare(b.username)
     if (byName !== 0) return byName
     return (a.peer_id || a.user_id).localeCompare(b.peer_id || b.user_id)
   })
 }
 
+function notifyPoorQualityTransitions(previous: SpeakerData[], next: SpeakerData[]): void {
+  if (state !== 'connected') return
+
+  const previousByPeer = new Map<string, SpeakerData>()
+  for (const speaker of previous) {
+    if (!speaker.peer_id) continue
+    previousByPeer.set(speaker.peer_id, speaker)
+  }
+
+  const activePeers = new Set<string>()
+  const now = Date.now()
+
+  for (const speaker of next) {
+    if (!speaker.peer_id) continue
+    activePeers.add(speaker.peer_id)
+    if (isLocalUser(speaker)) continue
+
+    const currentQuality = speaker.quality ?? 'unknown'
+    const previousQuality = previousByPeer.get(speaker.peer_id)?.quality ?? 'unknown'
+    if (currentQuality !== 'poor' || previousQuality === 'poor') continue
+
+    const lastAlertAt = lastPoorQualityAlertAt.get(speaker.peer_id) ?? 0
+    if (now - lastAlertAt < POOR_QUALITY_ALERT_COOLDOWN_MS) continue
+
+    lastPoorQualityAlertAt.set(speaker.peer_id, now)
+    const suffix = typeof speaker.qualityScore === 'number' && speaker.qualityScore > 0
+      ? ` (score ${Math.round(speaker.qualityScore)})`
+      : ''
+    toastWarning('Conexao instavel no voice', `${speaker.username} esta com qualidade ruim${suffix}.`)
+  }
+
+  for (const peerID of lastPoorQualityAlertAt.keys()) {
+    if (!activePeers.has(peerID)) {
+      lastPoorQualityAlertAt.delete(peerID)
+    }
+  }
+}
+
 function applyVoiceStatus(status: VoiceStatusData): void {
+  const previousSpeakers = speakers
   state = status.state as VoiceStatusData['state']
   channelId = status.channel_id || null
   muted = status.muted
   deafened = status.deafened
+  if (typeof status.noise_suppression === 'boolean') {
+    noiseSuppression = status.noise_suppression
+  }
+  screenShares = Array.isArray(status.screen_shares) ? status.screen_shares : []
+  if (status.diagnostics) {
+    voiceDiagnostics = status.diagnostics
+  }
   if (state === 'disconnected') {
     stopTimer()
     channelStartedAt = null
+    screenSharing = false
+    screenShares = []
+    lastPoorQualityAlertAt.clear()
   }
   const startedAt = typeof status.channel_started_at === 'number' ? status.channel_started_at : null
   if (startedAt && startedAt > 0) {
@@ -185,7 +279,9 @@ function applyVoiceStatus(status: VoiceStatusData): void {
   }
 
   previousSpeakerCount = newSpeakers.length
+  notifyPoorQualityTransitions(previousSpeakers, newSpeakers)
   speakers = newSpeakers
+  screenSharing = newSpeakers.some(s => isLocalUser(s) && !!s.screenSharing)
 }
 
 // Client-side voice activity detection via Web Audio API
@@ -246,6 +342,19 @@ function stopVoiceActivityDetection() {
 let screenStream: MediaStream | null = null
 
 export async function startScreenShare(): Promise<boolean> {
+  if (rtcClient) {
+    try {
+      const ok = await rtcClient.startScreenShare()
+      screenSharing = ok
+      applyVoiceStatus(rtcClient.getStatus() as unknown as VoiceStatusData)
+      return ok
+    } catch (e) {
+      console.error('Failed to start RTC screen share:', e)
+      screenSharing = false
+      return false
+    }
+  }
+
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
@@ -265,6 +374,12 @@ export async function startScreenShare(): Promise<boolean> {
 }
 
 export function stopScreenShare(): void {
+  if (rtcClient) {
+    rtcClient.stopScreenShare()
+    applyVoiceStatus(rtcClient.getStatus() as unknown as VoiceStatusData)
+    return
+  }
+
   if (screenStream) {
     screenStream.getTracks().forEach(t => t.stop())
     screenStream = null
@@ -420,6 +535,9 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
           console.error('[voice] RTC error callback:', message)
           error = message
         },
+        (snapshot: VoiceDiagnosticsSnapshot) => {
+          voiceDiagnostics = snapshot
+        },
       )
 
       console.info('[voice] Step 4: calling rtcClient.join...')
@@ -433,6 +551,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         inputDeviceId: settings.audioInputDevice,
         outputDeviceId: settings.audioOutputDevice,
         authToken: apiClient.getTokens()?.accessToken || '',
+        noiseSuppression,
       })
       console.info('[voice] Step 5: rtcClient.join completed successfully')
     } else {
@@ -487,9 +606,22 @@ export async function leaveVoice(): Promise<void> {
     channelId = null
     channelStartedAt = null
     speakers = []
+    screenShares = []
     muted = false
     deafened = false
+    voiceDiagnostics = {
+      ts: Date.now(),
+      ws_state: WebSocket.CLOSED,
+      reconnect_attempts: 0,
+      muted: false,
+      deafened: false,
+      noise_suppression: noiseSuppression,
+      screen_sharing: false,
+      peers: [],
+      events: [],
+    }
     previousSpeakerCount = 0
+    lastPoorQualityAlertAt.clear()
   }
 }
 
@@ -514,6 +646,18 @@ export async function toggleDeafen(): Promise<void> {
 
 export function toggleNoiseSuppression(): void {
   noiseSuppression = !noiseSuppression
+  const client = rtcClient
+  if (client) {
+    void client.setNoiseSuppression(noiseSuppression)
+      .then(() => {
+        if (rtcClient === client) {
+          applyVoiceStatus(client.getStatus() as unknown as VoiceStatusData)
+        }
+      })
+      .catch((e) => {
+        console.error('Failed to toggle RTC noise suppression:', e)
+      })
+  }
 }
 
 export async function toggleScreenSharing(): Promise<void> {
@@ -598,6 +742,7 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
             avatar_url: p.avatar_url || '',
             volume: 0,
             speaking: false,
+            screenSharing: !!p.screen_sharing,
             muted: !!p.muted,
             deafened: !!p.deafened,
           })),
@@ -618,6 +763,7 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
                 avatar_url: p.avatar_url || '',
                 volume: 0,
                 speaking: false,
+                screenSharing: !!p.screen_sharing,
                 muted: !!p.muted,
                 deafened: !!p.deafened,
               })),
@@ -672,7 +818,20 @@ export function resetVoice(): void {
   muted = false
   deafened = false
   speakers = []
+  screenShares = []
   error = null
+  voiceDiagnostics = {
+    ts: Date.now(),
+    ws_state: WebSocket.CLOSED,
+    reconnect_attempts: 0,
+    muted: false,
+    deafened: false,
+    noise_suppression: noiseSuppression,
+    screen_sharing: false,
+    peers: [],
+    events: [],
+  }
   previousSpeakerCount = 0
+  lastPoorQualityAlertAt.clear()
   stopParticipantsPolling()
 }

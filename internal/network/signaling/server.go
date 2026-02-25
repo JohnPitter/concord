@@ -37,15 +37,16 @@ type Server struct {
 }
 
 type peerConn struct {
-	conn      *websocket.Conn
-	userID    string
-	peerID    string
-	username  string
-	avatarURL string
-	muted     bool
-	deafened  bool
-	send      chan []byte
-	closeOnce sync.Once
+	conn          *websocket.Conn
+	userID        string
+	peerID        string
+	username      string
+	avatarURL     string
+	muted         bool
+	deafened      bool
+	screenSharing bool
+	send          chan []byte
+	closeOnce     sync.Once
 }
 
 // enqueueJSON serializes and enqueues a message without blocking.
@@ -181,14 +182,15 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			currentChannel = channelKey
 			currentPeerID = payload.PeerID
 			currentPC = &peerConn{
-				conn:      conn,
-				userID:    payload.UserID,
-				peerID:    payload.PeerID,
-				username:  payload.Username,
-				avatarURL: payload.AvatarURL,
-				muted:     payload.Muted,
-				deafened:  payload.Deafened,
-				send:      make(chan []byte, peerSendBuffer),
+				conn:          conn,
+				userID:        payload.UserID,
+				peerID:        payload.PeerID,
+				username:      payload.Username,
+				avatarURL:     payload.AvatarURL,
+				muted:         payload.Muted,
+				deafened:      payload.Deafened,
+				screenSharing: payload.ScreenSharing,
+				send:          make(chan []byte, peerSendBuffer),
 			}
 
 			s.addPeer(channelKey, currentPC)
@@ -269,14 +271,16 @@ func (s *Server) handleConnection(conn *websocket.Conn) {
 			if deafened {
 				muted = true
 			}
+			screenSharing := payload.ScreenSharing
 
-			s.updatePeerState(currentChannel, currentPeerID, muted, deafened)
+			s.updatePeerState(currentChannel, currentPeerID, muted, deafened, screenSharing)
 
 			parts := splitChannelKey(currentChannel)
 			peerPayload := PeerStatePayload{
-				PeerID:   currentPeerID,
-				Muted:    muted,
-				Deafened: deafened,
+				PeerID:        currentPeerID,
+				Muted:         muted,
+				Deafened:      deafened,
+				ScreenSharing: screenSharing,
 			}
 			sig, err := NewSignal(SignalPeerState, currentPeerID, peerPayload)
 			if err == nil {
@@ -337,12 +341,13 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, peerID string) {
 			continue
 		}
 		peers = append(peers, PeerEntry{
-			UserID:    p.userID,
-			PeerID:    p.peerID,
-			Username:  p.username,
-			AvatarURL: p.avatarURL,
-			Muted:     p.muted,
-			Deafened:  p.deafened,
+			UserID:        p.userID,
+			PeerID:        p.peerID,
+			Username:      p.username,
+			AvatarURL:     p.avatarURL,
+			Muted:         p.muted,
+			Deafened:      p.deafened,
+			ScreenSharing: p.screenSharing,
 		})
 	}
 	startedAt := s.channelStart[channelKey]
@@ -398,13 +403,14 @@ func (s *Server) broadcast(channelKey, excludePeerID string, signal *Signal) {
 	}
 }
 
-func (s *Server) updatePeerState(channelKey, peerID string, muted, deafened bool) {
+func (s *Server) updatePeerState(channelKey, peerID string, muted, deafened, screenSharing bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ch, ok := s.channels[channelKey]; ok {
 		if pc, ok := ch[peerID]; ok {
 			pc.muted = muted
 			pc.deafened = deafened
+			pc.screenSharing = screenSharing
 		}
 	}
 }
@@ -465,12 +471,13 @@ func (s *Server) GetChannelPeers(serverID, channelID string) []PeerEntry {
 	peers := make([]PeerEntry, 0, len(ch))
 	for _, pc := range ch {
 		peers = append(peers, PeerEntry{
-			UserID:    pc.userID,
-			PeerID:    pc.peerID,
-			Username:  pc.username,
-			AvatarURL: pc.avatarURL,
-			Muted:     pc.muted,
-			Deafened:  pc.deafened,
+			UserID:        pc.userID,
+			PeerID:        pc.peerID,
+			Username:      pc.username,
+			AvatarURL:     pc.avatarURL,
+			Muted:         pc.muted,
+			Deafened:      pc.deafened,
+			ScreenSharing: pc.screenSharing,
 		})
 	}
 	s.mu.RUnlock()
@@ -500,12 +507,13 @@ func (s *Server) GetServerChannelPeers(serverID string) map[string][]PeerEntry {
 		peers := make([]PeerEntry, 0, len(ch))
 		for _, pc := range ch {
 			peers = append(peers, PeerEntry{
-				UserID:    pc.userID,
-				PeerID:    pc.peerID,
-				Username:  pc.username,
-				AvatarURL: pc.avatarURL,
-				Muted:     pc.muted,
-				Deafened:  pc.deafened,
+				UserID:        pc.userID,
+				PeerID:        pc.peerID,
+				Username:      pc.username,
+				AvatarURL:     pc.avatarURL,
+				Muted:         pc.muted,
+				Deafened:      pc.deafened,
+				ScreenSharing: pc.screenSharing,
 			})
 		}
 		result[channelID] = peers

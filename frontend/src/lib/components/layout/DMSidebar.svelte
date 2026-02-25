@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DMConversation } from '../../stores/friends.svelte'
   import type { SpeakerData } from '../../stores/voice.svelte'
+  import type { VoiceDiagnosticsSnapshot, VoiceScreenShare } from '../../services/voiceRTC'
   import Skeleton from '../ui/Skeleton.svelte'
   import VoiceControls from '../voice/VoiceControls.svelte'
   import Tooltip from '../ui/Tooltip.svelte'
@@ -26,6 +27,8 @@
     voiceSpeakers = [],
     voiceNoiseSuppression = true,
     voiceScreenSharing = false,
+    voiceScreenShares = [],
+    voiceDiagnostics = null,
     onToggleMute,
     onToggleDeafen,
     onToggleNoiseSuppression,
@@ -47,6 +50,8 @@
     voiceSpeakers?: SpeakerData[]
     voiceNoiseSuppression?: boolean
     voiceScreenSharing?: boolean
+    voiceScreenShares?: VoiceScreenShare[]
+    voiceDiagnostics?: VoiceDiagnosticsSnapshot | null
     onToggleMute?: () => void
     onToggleDeafen?: () => void
     onToggleNoiseSuppression?: () => void
@@ -232,6 +237,8 @@
     deafened={voiceDeafened}
     noiseSuppression={voiceNoiseSuppression}
     screenSharing={voiceScreenSharing}
+    screenShares={voiceScreenShares}
+    diagnostics={voiceDiagnostics}
     onToggleMute={() => onToggleMute?.()}
     onToggleDeafen={() => onToggleDeafen?.()}
     onToggleNoiseSuppression={() => onToggleNoiseSuppression?.()}

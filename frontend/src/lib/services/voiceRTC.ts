@@ -7,6 +7,56 @@ export interface VoiceParticipant {
   speaking: boolean
   muted: boolean
   deafened: boolean
+  screen_sharing?: boolean
+  dominant_speaker?: boolean
+  connection_quality?: VoiceConnectionQuality
+  quality_score?: number
+}
+
+export type VoiceConnectionQuality = 'good' | 'fair' | 'poor' | 'unknown'
+
+export interface VoiceScreenShare {
+  peer_id: string
+  user_id: string
+  username: string
+  avatar_url?: string
+  stream: MediaStream
+  local: boolean
+}
+
+export type VoiceDiagnosticLevel = 'info' | 'warn' | 'error'
+
+export interface VoiceDiagnosticEvent {
+  ts: number
+  level: VoiceDiagnosticLevel
+  code: string
+  message: string
+}
+
+export interface VoicePeerConnectionStats {
+  peer_id: string
+  connection_state: RTCPeerConnectionState
+  ice_connection_state: RTCIceConnectionState
+  quality: VoiceConnectionQuality
+  quality_score: number
+  loss_ratio: number
+  packets_received: number
+  packets_lost: number
+  audio_jitter_ms: number
+  round_trip_time_ms: number
+  available_outgoing_bitrate: number
+}
+
+export interface VoiceDiagnosticsSnapshot {
+  ts: number
+  ws_state: number
+  reconnect_attempts: number
+  muted: boolean
+  deafened: boolean
+  noise_suppression: boolean
+  screen_sharing: boolean
+  peers: VoicePeerConnectionStats[]
+  events: VoiceDiagnosticEvent[]
 }
 
 export interface VoiceRTCStatus {
@@ -16,7 +66,10 @@ export interface VoiceRTCStatus {
   deafened: boolean
   peer_count: number
   speakers: VoiceParticipant[]
+  screen_shares?: VoiceScreenShare[]
+  noise_suppression?: boolean
   channel_started_at?: number
+  diagnostics?: VoiceDiagnosticsSnapshot
 }
 
 interface VoicePeerMeta {
@@ -26,6 +79,7 @@ interface VoicePeerMeta {
   avatar_url?: string
   muted?: boolean
   deafened?: boolean
+  screen_sharing?: boolean
 }
 
 interface VoiceJoinOptions {
@@ -38,6 +92,7 @@ interface VoiceJoinOptions {
   inputDeviceId?: string
   outputDeviceId?: string
   authToken?: string
+  noiseSuppression?: boolean
 }
 
 interface SignalMessage {
@@ -57,6 +112,8 @@ interface PeerConnectionState {
   analyser: AnalyserNode | null
   analyserData: Uint8Array<ArrayBuffer> | null
   sourceNode: MediaStreamAudioSourceNode | null
+  screenVideoSender: RTCRtpSender | null
+  screenAudioSender: RTCRtpSender | null
   // Perfect negotiation state (MDN pattern)
   makingOffer: boolean
   ignoreOffer: boolean
@@ -74,6 +131,26 @@ interface IceConfigResponse {
   servers?: unknown
 }
 
+type ScreenShareQoSProfile = 'high' | 'balanced' | 'low'
+
+const SCREEN_SHARE_QOS_CONSTRAINTS: Record<ScreenShareQoSProfile, MediaTrackConstraints> = {
+  high: {
+    frameRate: { ideal: 24, max: 30 },
+    width: { max: 1920 },
+    height: { max: 1080 },
+  },
+  balanced: {
+    frameRate: { ideal: 15, max: 18 },
+    width: { max: 1600 },
+    height: { max: 900 },
+  },
+  low: {
+    frameRate: { ideal: 10, max: 12 },
+    width: { max: 1280 },
+    height: { max: 720 },
+  },
+}
+
 // Default STUN servers for ICE candidate gathering.
 // TURN relay servers are provided by the backend via /api/v1/voice/ice-config
 // when CONCORD_TURN_ENABLED=true (requires coturn or similar).
@@ -87,6 +164,10 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
 export class VoiceRTCClient {
   private ws: WebSocket | null = null
   private localStream: MediaStream | null = null
+  private screenStream: MediaStream | null = null
+  private screenVideoTrack: MediaStreamTrack | null = null
+  private screenAudioTrack: MediaStreamTrack | null = null
+  private remoteScreenStreams = new Map<string, MediaStream>()
   private peers = new Map<string, PeerConnectionState>()
   private peersMeta = new Map<string, VoicePeerMeta>()
   private participants = new Map<string, VoiceParticipant>()
@@ -98,10 +179,25 @@ export class VoiceRTCClient {
   private channelStartedAt: number | null = null
   private state: VoiceRTCStatus['state'] = 'disconnected'
   private outputDeviceId = ''
+  private noiseSuppressionEnabled = true
   private audioContext: AudioContext | null = null
   private speakingLoop: ReturnType<typeof setInterval> | null = null
+  private statsLoop: ReturnType<typeof setInterval> | null = null
   private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private peerStats = new Map<string, VoicePeerConnectionStats>()
+  private diagnosticsEvents: VoiceDiagnosticEvent[] = []
   private iceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS
+  private iceRestartTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private iceRestartAttempts = new Map<string, number>()
+  private iceRestartLastAttempt = new Map<string, number>()
+  private screenQoSProfile: ScreenShareQoSProfile = 'high'
+  private lastScreenQoSAppliedAt = 0
+
+  private readonly maxIceRestartAttempts = 3
+  private readonly iceRestartCooldownMs = 6_000
+  private readonly disconnectedRestartDelayMs = 1_200
+  private readonly peerDisconnectGraceMs = 8_000
+  private readonly screenQoSCooldownMs = 10_000
 
   // WebSocket reconnect state
   private joinOpts: VoiceJoinOptions | null = null
@@ -115,6 +211,7 @@ export class VoiceRTCClient {
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
     private readonly onError: (message: string) => void,
+    private readonly onDiagnosticsChange?: (snapshot: VoiceDiagnosticsSnapshot) => void,
   ) {}
 
   async join(opts: VoiceJoinOptions): Promise<void> {
@@ -128,10 +225,18 @@ export class VoiceRTCClient {
     this.channelID = opts.channelID
     this.selfPeerID = crypto.randomUUID()
     this.outputDeviceId = opts.outputDeviceId ?? ''
+    this.noiseSuppressionEnabled = opts.noiseSuppression ?? true
     this.channelStartedAt = null
+    this.peerStats.clear()
     this.peersMeta.clear()
     this.participants.clear()
+    this.remoteScreenStreams.clear()
+    this.diagnosticsEvents = []
+    this.clearAllIceRestartState()
+    this.screenQoSProfile = 'high'
+    this.lastScreenQoSAppliedAt = 0
     this.emitStatus()
+    this.pushDiag('info', 'join:start', `joining ${opts.serverID}/${opts.channelID}`)
 
     const localUsername = this.safeUsername(opts.username, opts.userID, this.selfPeerID)
     this.participants.set(this.selfPeerID, {
@@ -143,6 +248,10 @@ export class VoiceRTCClient {
       speaking: false,
       muted: this.muted,
       deafened: this.deafened,
+      screen_sharing: false,
+      dominant_speaker: false,
+      connection_quality: 'unknown',
+      quality_score: 0,
     })
 
     try {
@@ -159,27 +268,29 @@ export class VoiceRTCClient {
     try {
       this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
     } catch {
-      console.warn('[voice] Failed to fetch ICE config, using defaults')
+      this.pushDiag('warn', 'ice:config', 'failed to fetch ICE config, using defaults')
       this.iceServers = DEFAULT_ICE_SERVERS
     }
-    console.info('[voice] ICE servers:', JSON.stringify(this.iceServers.map(s => ({ urls: s.urls, hasCredentials: !!(s.username || s.credential) }))))
+    this.pushDiag('info', 'ice:config', `resolved ${this.iceServers.length} ICE server entries`)
 
     try {
       await this.connectWebSocket(opts, localUsername)
       this.state = 'connected'
+      this.startStatsLoop()
       this.emitStatus()
     } catch (e) {
       await this.leave()
       const detail = e instanceof Error ? e.message : String(e)
+      this.pushDiag('error', 'join:failed', detail)
       throw new Error(`Failed to connect to voice signaling server: ${detail}`)
     }
   }
 
   private async connectWebSocket(opts: VoiceJoinOptions, localUsername: string): Promise<void> {
     const wsURL = this.toSignalingURL(opts.baseURL)
-    console.info('[voice] Connecting to signaling:', wsURL)
+    this.pushDiag('info', 'ws:connect', wsURL)
     this.ws = await this.openWebSocket(wsURL)
-    console.info('[voice] WebSocket connected')
+    this.pushDiag('info', 'ws:open', 'signaling connected')
 
     this.ws.onmessage = (event) => {
       void this.handleSignal(event.data)
@@ -192,16 +303,20 @@ export class VoiceRTCClient {
           this.state = 'disconnected'
           this.cleanupPeers()
           this.cleanupLocalStream()
+          this.stopScreenShare()
           this.cleanupAudioAnalysis()
+          this.stopStatsLoop()
           this.participants.clear()
           this.peersMeta.clear()
+          this.peerStats.clear()
+          this.remoteScreenStreams.clear()
           this.channelStartedAt = null
           this.emitStatus()
         }
         return
       }
 
-      console.warn('[voice] WebSocket closed unexpectedly, attempting reconnect...')
+      this.pushDiag('warn', 'ws:closed', 'signaling closed unexpectedly, reconnecting')
       this.cleanupPeers()
       this.ws = null
       void this.scheduleReconnect()
@@ -220,23 +335,28 @@ export class VoiceRTCClient {
         public_key: [],
         muted: this.muted,
         deafened: this.deafened,
+        screen_sharing: !!this.screenVideoTrack,
       },
     })
-    console.info('[voice] Join signal sent, selfPeerID:', this.selfPeerID)
+    this.pushDiag('info', 'signal:join', `self peer ${this.selfPeerID}`)
 
     this.startKeepalive()
   }
 
   private async scheduleReconnect(): Promise<void> {
-    if (this.intentionalDisconnect || this.state === 'disconnected') return
+    if (this.intentionalDisconnect || this.state !== 'connected') return
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`[voice] Max reconnect attempts (${this.maxReconnectAttempts}) reached, disconnecting`)
+      this.pushDiag('error', 'ws:reconnect', `max attempts (${this.maxReconnectAttempts}) reached`)
       this.state = 'disconnected'
       this.cleanupPeers()
       this.cleanupLocalStream()
+      this.stopScreenShare()
       this.cleanupAudioAnalysis()
+      this.stopStatsLoop()
       this.participants.clear()
       this.peersMeta.clear()
+      this.peerStats.clear()
+      this.remoteScreenStreams.clear()
       this.channelStartedAt = null
       this.emitStatus()
       this.onError('voice connection lost')
@@ -245,13 +365,13 @@ export class VoiceRTCClient {
 
     this.reconnectAttempts++
     const delay = Math.min(this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts - 1), 10_000)
-    console.info(`[voice] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+    this.pushDiag('info', 'ws:reconnect', `retry in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     await new Promise<void>((resolve) => {
       this.reconnectTimer = setTimeout(resolve, delay)
     })
 
-    if (this.intentionalDisconnect || this.state === 'disconnected') return
+    if (this.intentionalDisconnect || this.state !== 'connected') return
 
     const opts = this.joinOpts
     if (!opts) return
@@ -268,15 +388,19 @@ export class VoiceRTCClient {
           speaking: false,
           muted: this.muted,
           deafened: this.deafened,
+          screen_sharing: !!this.screenVideoTrack,
+          dominant_speaker: false,
+          connection_quality: 'unknown',
+          quality_score: 0,
         })
       }
 
       await this.connectWebSocket(opts, localUsername)
       this.reconnectAttempts = 0
-      console.info('[voice] WebSocket reconnected successfully')
+      this.pushDiag('info', 'ws:reconnect', 'reconnected')
       this.emitStatus()
     } catch (e) {
-      console.warn('[voice] Reconnect attempt failed:', e)
+      this.pushDiag('warn', 'ws:reconnect', e instanceof Error ? e.message : String(e))
       void this.scheduleReconnect()
     }
   }
@@ -305,9 +429,13 @@ export class VoiceRTCClient {
 
     this.state = 'disconnected'
     this.stopKeepalive()
+    this.stopStatsLoop()
     this.cleanupPeers()
     this.cleanupLocalStream()
+    this.stopScreenShare()
+    this.remoteScreenStreams.clear()
     this.cleanupAudioAnalysis()
+    this.peerStats.clear()
     this.participants.clear()
     this.peersMeta.clear()
     this.channelStartedAt = null
@@ -331,10 +459,14 @@ export class VoiceRTCClient {
       const aLocal = a.peer_id === this.selfPeerID ? 0 : 1
       const bLocal = b.peer_id === this.selfPeerID ? 0 : 1
       if (aLocal !== bLocal) return aLocal - bLocal
+      const aDominant = a.dominant_speaker ? 0 : 1
+      const bDominant = b.dominant_speaker ? 0 : 1
+      if (aDominant !== bDominant) return aDominant - bDominant
       const byUser = a.username.localeCompare(b.username)
       if (byUser !== 0) return byUser
       return a.peer_id.localeCompare(b.peer_id)
     })
+    const screenShares = this.buildScreenShares()
 
     return {
       state: this.state,
@@ -343,7 +475,24 @@ export class VoiceRTCClient {
       deafened: this.deafened,
       peer_count: Math.max(0, this.participants.size - 1),
       speakers,
+      screen_shares: screenShares,
+      noise_suppression: this.noiseSuppressionEnabled,
       channel_started_at: this.channelStartedAt ?? undefined,
+      diagnostics: this.getDiagnostics(),
+    }
+  }
+
+  getDiagnostics(): VoiceDiagnosticsSnapshot {
+    return {
+      ts: Date.now(),
+      ws_state: this.ws?.readyState ?? WebSocket.CLOSED,
+      reconnect_attempts: this.reconnectAttempts,
+      muted: this.muted,
+      deafened: this.deafened,
+      noise_suppression: this.noiseSuppressionEnabled,
+      screen_sharing: !!this.screenVideoTrack,
+      peers: Array.from(this.peerStats.values()),
+      events: [...this.diagnosticsEvents],
     }
   }
 
@@ -371,33 +520,128 @@ export class VoiceRTCClient {
 
   async setInputDevice(deviceId: string): Promise<void> {
     if (this.state !== 'connected') return
+    if (this.joinOpts) this.joinOpts.inputDeviceId = deviceId
 
     const nextStream = await this.createLocalStream(deviceId)
-    const nextTrack = nextStream.getAudioTracks()[0]
-    if (!nextTrack) return
-
-    const replaceOps: Promise<void>[] = []
-    for (const peer of this.peers.values()) {
-      for (const sender of peer.pc.getSenders()) {
-        if (sender.track?.kind === 'audio') {
-          replaceOps.push(sender.replaceTrack(nextTrack))
-        }
-      }
-    }
-    await Promise.allSettled(replaceOps)
-
-    this.cleanupLocalStream()
-    this.localStream = nextStream
-    this.applyMuteState()
+    await this.replaceLocalAudioTrack(nextStream)
   }
 
   async setOutputDevice(deviceId: string): Promise<void> {
     this.outputDeviceId = deviceId
+    if (this.joinOpts) this.joinOpts.outputDeviceId = deviceId
     const applyOps: Promise<void>[] = []
     for (const peer of this.peers.values()) {
       applyOps.push(this.applyOutputDevice(peer.audio))
     }
     await Promise.allSettled(applyOps)
+  }
+
+  async setNoiseSuppression(enabled: boolean): Promise<boolean> {
+    this.noiseSuppressionEnabled = enabled
+    if (this.joinOpts) this.joinOpts.noiseSuppression = enabled
+    this.pushDiag('info', 'audio:noise', enabled ? 'noise suppression enabled' : 'noise suppression disabled')
+
+    if (this.state !== 'connected') {
+      this.emitStatus()
+      return this.noiseSuppressionEnabled
+    }
+
+    const nextStream = await this.createLocalStream(this.joinOpts?.inputDeviceId)
+    await this.replaceLocalAudioTrack(nextStream)
+    this.emitStatus()
+    return this.noiseSuppressionEnabled
+  }
+
+  async startScreenShare(): Promise<boolean> {
+    if (this.state !== 'connected') return false
+    if (this.screenVideoTrack) return true
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 15, max: 30 },
+          width: { max: 1920 },
+          height: { max: 1080 },
+        },
+        audio: true,
+      })
+    } catch {
+      this.pushDiag('warn', 'screen:start', 'screen picker canceled or denied')
+      return false
+    }
+
+    const videoTrack = stream.getVideoTracks()[0]
+    if (!videoTrack) {
+      stream.getTracks().forEach(t => t.stop())
+      this.pushDiag('warn', 'screen:start', 'display stream has no video track')
+      return false
+    }
+
+    this.screenStream = stream
+    this.screenVideoTrack = videoTrack
+    this.screenAudioTrack = stream.getAudioTracks()[0] ?? null
+    this.screenQoSProfile = 'high'
+    this.lastScreenQoSAppliedAt = 0
+    this.applyMuteState()
+
+    videoTrack.addEventListener('ended', () => {
+      this.stopScreenShare()
+    })
+
+    for (const peer of this.peers.values()) {
+      peer.screenVideoSender = peer.pc.addTrack(videoTrack, stream)
+      if (this.screenAudioTrack) {
+        peer.screenAudioSender = peer.pc.addTrack(this.screenAudioTrack, stream)
+      }
+    }
+
+    await this.applyScreenShareQoS('high', true)
+
+    this.updateSelfParticipantState()
+    this.sendPeerState()
+    this.pushDiag('info', 'screen:start', 'screen sharing started')
+    this.emitStatus()
+    return true
+  }
+
+  stopScreenShare(): void {
+    if (!this.screenStream && !this.screenVideoTrack && !this.screenAudioTrack) return
+
+    for (const peer of this.peers.values()) {
+      if (peer.screenVideoSender) {
+        try {
+          peer.pc.removeTrack(peer.screenVideoSender)
+        } catch {
+          // ignore
+        }
+        peer.screenVideoSender = null
+      }
+      if (peer.screenAudioSender) {
+        try {
+          peer.pc.removeTrack(peer.screenAudioSender)
+        } catch {
+          // ignore
+        }
+        peer.screenAudioSender = null
+      }
+    }
+
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(t => t.stop())
+      this.screenStream = null
+    }
+    if (this.screenVideoTrack) this.screenVideoTrack = null
+    if (this.screenAudioTrack) this.screenAudioTrack = null
+    this.screenQoSProfile = 'high'
+    this.lastScreenQoSAppliedAt = 0
+
+    this.updateSelfParticipantState()
+    if (this.state === 'connected') {
+      this.sendPeerState()
+    }
+    this.pushDiag('info', 'screen:stop', 'screen sharing stopped')
+    this.emitStatus()
   }
 
   // ---------------------------------------------------------------------------
@@ -411,13 +655,13 @@ export class VoiceRTCClient {
     try {
       signal = JSON.parse(rawData) as SignalMessage
     } catch {
-      console.warn('[voice] Failed to parse signaling message')
+      this.pushDiag('warn', 'signal:parse', 'failed to parse signaling message')
       return
     }
 
     // Log every signal except keepalive pings
     if (signal.type !== 'ping') {
-      console.info(`[voice] << ${signal.type} from=${signal.from ?? '-'} to=${signal.to ?? '-'}`)
+      this.pushDiag('info', `signal:${signal.type}`, `from=${signal.from ?? '-'} to=${signal.to ?? '-'}`)
     }
 
     try {
@@ -445,7 +689,7 @@ export class VoiceRTCClient {
           break
         case 'error': {
           const errPayload = signal.payload as { message?: string } | undefined
-          console.error('[voice] Server error:', errPayload?.message ?? 'unknown')
+          this.pushDiag('error', 'signal:error', errPayload?.message ?? 'unknown')
           break
         }
         default:
@@ -454,7 +698,7 @@ export class VoiceRTCClient {
     } catch (e) {
       // Log but do NOT propagate to onError — that would surface transient
       // signaling issues as user-visible errors and potentially break the flow.
-      console.error(`[voice] Error handling signal '${signal.type}':`, e)
+      this.pushDiag('warn', `signal:${signal.type}:handler`, e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -466,7 +710,7 @@ export class VoiceRTCClient {
     const peers = this.extractPeers(payload)
     const startedAt = this.extractChannelStartedAt(payload)
     if (startedAt) this.channelStartedAt = startedAt
-    console.info(`[voice] peer_list: ${peers.length} peers`, peers.map(p => p.peer_id))
+    this.pushDiag('info', 'peer:list', `${peers.length} peers`)
 
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
@@ -481,7 +725,7 @@ export class VoiceRTCClient {
   private onPeerJoined(payload: unknown): void {
     const peer = this.extractJoinPeer(payload)
     if (!peer || peer.peer_id === this.selfPeerID) return
-    console.info(`[voice] peer_joined: ${peer.peer_id} (${peer.username})`)
+    this.pushDiag('info', 'peer:joined', `${peer.peer_id} (${peer.username})`)
     this.registerPeer(peer)
     // Create a PeerConnection — onnegotiationneeded fires automatically
     this.ensurePeerConnection(peer.peer_id)
@@ -499,13 +743,16 @@ export class VoiceRTCClient {
       speaking: false,
       muted: peer.deafened ? true : !!peer.muted,
       deafened: !!peer.deafened,
+      screen_sharing: !!peer.screen_sharing,
+      dominant_speaker: false,
+      connection_quality: 'unknown',
+      quality_score: 0,
     })
   }
 
   private onPeerLeft(peerID: string): void {
-    this.removePeer(peerID)
-    this.participants.delete(peerID)
-    this.peersMeta.delete(peerID)
+    this.pushDiag('info', 'peer:left', peerID)
+    this.removePeerFromSession(peerID)
     this.emitStatus()
   }
 
@@ -644,12 +891,22 @@ export class VoiceRTCClient {
       analyser: null,
       analyserData: null,
       sourceNode: null,
+      screenVideoSender: null,
+      screenAudioSender: null,
       makingOffer: false,
       ignoreOffer: false,
       isSettingRemoteAnswerPending: false,
       polite,
     }
     this.peers.set(peerID, state)
+
+    // If local screen share is active, publish it to late-joining peers.
+    if (this.screenStream && this.screenVideoTrack) {
+      state.screenVideoSender = pc.addTrack(this.screenVideoTrack, this.screenStream)
+      if (this.screenAudioTrack) {
+        state.screenAudioSender = pc.addTrack(this.screenAudioTrack, this.screenStream)
+      }
+    }
 
     // --- Perfect Negotiation: onnegotiationneeded ---
     pc.onnegotiationneeded = async () => {
@@ -701,14 +958,31 @@ export class VoiceRTCClient {
 
     // --- Remote tracks ---
     pc.ontrack = (event) => {
-      console.info(`[voice] ontrack from ${peerID}: kind=${event.track.kind}, id=${event.track.id}`)
+      this.pushDiag('info', 'track:remote', `${peerID} ${event.track.kind}:${event.track.id}`)
+
+      if (event.track.kind === 'video') {
+        const current = this.remoteScreenStreams.get(peerID) ?? new MediaStream()
+        if (!current.getTracks().some(t => t.id === event.track.id)) {
+          current.addTrack(event.track)
+        }
+        this.remoteScreenStreams.set(peerID, current)
+        const participant = this.participants.get(peerID)
+        if (participant) participant.screen_sharing = true
+
+        event.track.addEventListener('ended', () => {
+          this.removeRemoteScreenTrack(peerID, event.track.id)
+        })
+        this.emitStatus()
+        return
+      }
+
       if (event.streams.length > 0 && event.streams[0]) {
-        for (const track of event.streams[0].getTracks()) {
+        for (const track of event.streams[0].getAudioTracks()) {
           if (!stream.getTracks().some(t => t.id === track.id)) {
             stream.addTrack(track)
           }
         }
-      } else if (!stream.getTracks().some(t => t.id === event.track.id)) {
+      } else if (event.track.kind === 'audio' && !stream.getTracks().some(t => t.id === event.track.id)) {
         stream.addTrack(event.track)
       }
 
@@ -719,9 +993,9 @@ export class VoiceRTCClient {
       this.setupPeerAnalyser(peerID, stream)
 
       audio.play().then(() => {
-        console.info(`[voice] Audio playing for ${peerID}`)
+        this.pushDiag('info', 'audio:play', `remote audio playing for ${peerID}`)
       }).catch((e) => {
-        console.warn(`[voice] Autoplay blocked for ${peerID}:`, e)
+        this.pushDiag('warn', 'audio:autoplay', e instanceof Error ? e.message : String(e))
         const resume = () => {
           void audio.play().catch(() => {})
           document.removeEventListener('click', resume)
@@ -734,41 +1008,49 @@ export class VoiceRTCClient {
 
     pc.onicecandidateerror = (event) => {
       const ev = event as RTCPeerConnectionIceErrorEvent
-      console.warn(`[voice] ICE error for ${peerID}: ${ev.errorCode} ${ev.errorText ?? ''}`)
+      this.pushDiag('warn', 'ice:error', `${peerID} ${ev.errorCode} ${ev.errorText ?? ''}`.trim())
     }
 
     pc.oniceconnectionstatechange = () => {
-      console.info(`[voice] ICE state ${peerID}: ${pc.iceConnectionState}`)
+      const iceState = pc.iceConnectionState
+      const level = iceState === 'failed' ? 'error' : (iceState === 'disconnected' ? 'warn' : 'info')
+      this.pushDiag(level, 'ice:state', `${peerID} ${iceState}`)
+      if (iceState === 'connected' || iceState === 'completed') {
+        this.clearIceRestartState(peerID)
+      } else if (iceState === 'failed') {
+        this.scheduleIceRestart(peerID, 'failed')
+      } else if (iceState === 'disconnected') {
+        this.scheduleIceRestart(peerID, 'disconnected')
+      }
     }
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
-      console.info(`[voice] Connection state ${peerID}: ${s}`)
+      const level = s === 'failed' || s === 'disconnected' ? 'warn' : 'info'
+      this.pushDiag(level, 'pc:state', `${peerID} ${s}`)
 
       if (s === 'connected') {
         this.clearDisconnectTimer(peerID)
+        this.clearIceRestartState(peerID)
         return
       }
 
       if (s === 'disconnected') {
-        this.clearDisconnectTimer(peerID)
-        const timer = setTimeout(() => {
-          const current = this.peers.get(peerID)
-          if (!current || current.pc.connectionState === 'connected') return
-          this.removePeer(peerID)
-          this.participants.delete(peerID)
-          this.peersMeta.delete(peerID)
-          this.emitStatus()
-        }, 8_000)
-        this.disconnectTimers.set(peerID, timer)
+        this.scheduleIceRestart(peerID, 'disconnected')
+        this.schedulePeerDisconnectCleanup(peerID)
         return
       }
 
-      if (s === 'failed' || s === 'closed') {
+      if (s === 'failed') {
+        this.scheduleIceRestart(peerID, 'failed')
+        this.schedulePeerDisconnectCleanup(peerID)
+        return
+      }
+
+      if (s === 'closed') {
         this.clearDisconnectTimer(peerID)
-        this.removePeer(peerID)
-        this.participants.delete(peerID)
-        this.peersMeta.delete(peerID)
+        this.clearIceRestartState(peerID)
+        this.removePeerFromSession(peerID)
         this.emitStatus()
       }
     }
@@ -776,11 +1058,22 @@ export class VoiceRTCClient {
     return state
   }
 
+  private removePeerFromSession(peerID: string): void {
+    this.removePeer(peerID)
+    this.remoteScreenStreams.delete(peerID)
+    this.peerStats.delete(peerID)
+    this.participants.delete(peerID)
+    this.peersMeta.delete(peerID)
+  }
+
   private removePeer(peerID: string): void {
     this.clearDisconnectTimer(peerID)
+    this.clearIceRestartState(peerID)
     const peer = this.peers.get(peerID)
     if (!peer) return
     this.peers.delete(peerID)
+    this.peerStats.delete(peerID)
+    this.remoteScreenStreams.delete(peerID)
 
     try {
       peer.audio.pause()
@@ -800,6 +1093,8 @@ export class VoiceRTCClient {
     peer.pc.ontrack = null
     peer.pc.onicecandidate = null
     peer.pc.onconnectionstatechange = null
+    peer.pc.oniceconnectionstatechange = null
+    peer.pc.onicecandidateerror = null
     peer.pc.onnegotiationneeded = null
     peer.pc.close()
   }
@@ -813,6 +1108,9 @@ export class VoiceRTCClient {
     for (const peerID of this.peers.keys()) {
       this.removePeer(peerID)
     }
+    this.clearAllIceRestartState()
+    this.remoteScreenStreams.clear()
+    this.peerStats.clear()
   }
 
   private clearDisconnectTimer(peerID: string): void {
@@ -820,6 +1118,135 @@ export class VoiceRTCClient {
     if (!timer) return
     clearTimeout(timer)
     this.disconnectTimers.delete(peerID)
+  }
+
+  private schedulePeerDisconnectCleanup(peerID: string): void {
+    this.clearDisconnectTimer(peerID)
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(peerID)
+      const current = this.peers.get(peerID)
+      if (!current) return
+
+      const state = current.pc.connectionState
+      if (state === 'connected') {
+        this.clearIceRestartState(peerID)
+        return
+      }
+
+      const attempts = this.iceRestartAttempts.get(peerID) ?? 0
+      if ((state === 'disconnected' || state === 'failed') && attempts < this.maxIceRestartAttempts) {
+        this.pushDiag('warn', 'peer:degraded', `${peerID} still ${state}; waiting for ICE restart`)
+        this.scheduleIceRestart(peerID, state === 'failed' ? 'failed' : 'disconnected')
+        this.schedulePeerDisconnectCleanup(peerID)
+        return
+      }
+
+      this.pushDiag('warn', 'peer:drop', `${peerID} removed after ${state} (${attempts} restart attempts)`)
+      this.removePeerFromSession(peerID)
+      this.emitStatus()
+    }, this.peerDisconnectGraceMs)
+    this.disconnectTimers.set(peerID, timer)
+  }
+
+  private scheduleIceRestart(peerID: string, reason: 'failed' | 'disconnected'): void {
+    if (this.state !== 'connected') return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (!this.peers.has(peerID)) return
+    if (this.iceRestartTimers.has(peerID)) return
+
+    const attempts = this.iceRestartAttempts.get(peerID) ?? 0
+    if (attempts >= this.maxIceRestartAttempts) return
+
+    const delay = reason === 'failed' ? 0 : this.disconnectedRestartDelayMs
+    this.queueIceRestart(peerID, delay, reason)
+  }
+
+  private queueIceRestart(peerID: string, delayMs: number, reason: 'failed' | 'disconnected'): void {
+    if (this.iceRestartTimers.has(peerID)) return
+    const timer = setTimeout(() => {
+      this.iceRestartTimers.delete(peerID)
+      void this.performIceRestart(peerID, reason)
+    }, Math.max(0, delayMs))
+    this.iceRestartTimers.set(peerID, timer)
+  }
+
+  private async performIceRestart(peerID: string, reason: 'failed' | 'disconnected'): Promise<void> {
+    const peer = this.peers.get(peerID)
+    if (!peer) return
+    if (this.state !== 'connected') return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (peer.pc.connectionState === 'closed') return
+
+    const attempts = this.iceRestartAttempts.get(peerID) ?? 0
+    if (attempts >= this.maxIceRestartAttempts) return
+
+    const now = Date.now()
+    const lastAttemptAt = this.iceRestartLastAttempt.get(peerID) ?? 0
+    const remainingCooldown = this.iceRestartCooldownMs - (now - lastAttemptAt)
+    if (remainingCooldown > 0) {
+      this.queueIceRestart(peerID, remainingCooldown, reason)
+      return
+    }
+
+    if (peer.makingOffer || peer.isSettingRemoteAnswerPending || peer.pc.signalingState !== 'stable') {
+      this.queueIceRestart(peerID, 800, reason)
+      return
+    }
+
+    const nextAttempt = attempts + 1
+    this.iceRestartAttempts.set(peerID, nextAttempt)
+    this.iceRestartLastAttempt.set(peerID, now)
+    this.pushDiag('warn', 'ice:restart', `${peerID} attempt ${nextAttempt}/${this.maxIceRestartAttempts} (${reason})`)
+
+    try {
+      peer.makingOffer = true
+      const offer = await peer.pc.createOffer({ iceRestart: true })
+      await peer.pc.setLocalDescription(offer)
+
+      const sdp = peer.pc.localDescription?.sdp ?? offer.sdp ?? ''
+      if (!sdp) {
+        throw new Error('empty restart offer')
+      }
+
+      this.sendSignal({
+        type: 'sdp_offer',
+        from: this.selfPeerID,
+        to: peerID,
+        server_id: this.serverID,
+        channel_id: this.channelID,
+        payload: { sdp },
+      })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      this.pushDiag('warn', 'ice:restart:error', `${peerID} ${message}`)
+      if (nextAttempt < this.maxIceRestartAttempts) {
+        this.scheduleIceRestart(peerID, reason)
+      }
+    } finally {
+      peer.makingOffer = false
+    }
+  }
+
+  private clearIceRestartTimer(peerID: string): void {
+    const timer = this.iceRestartTimers.get(peerID)
+    if (!timer) return
+    clearTimeout(timer)
+    this.iceRestartTimers.delete(peerID)
+  }
+
+  private clearIceRestartState(peerID: string): void {
+    this.clearIceRestartTimer(peerID)
+    this.iceRestartAttempts.delete(peerID)
+    this.iceRestartLastAttempt.delete(peerID)
+  }
+
+  private clearAllIceRestartState(): void {
+    for (const timer of this.iceRestartTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.iceRestartTimers.clear()
+    this.iceRestartAttempts.clear()
+    this.iceRestartLastAttempt.clear()
   }
 
   private cleanupLocalStream(): void {
@@ -839,6 +1266,9 @@ export class VoiceRTCClient {
     for (const track of this.localStream?.getAudioTracks() ?? []) {
       track.enabled = enabled
     }
+    if (this.screenAudioTrack) {
+      this.screenAudioTrack.enabled = enabled
+    }
   }
 
   private applyDeafenState(): void {
@@ -848,9 +1278,14 @@ export class VoiceRTCClient {
   }
 
   private async createLocalStream(deviceId?: string): Promise<MediaStream> {
-    const audio = deviceId
-      ? { deviceId: { exact: deviceId } }
-      : true
+    const audio: MediaTrackConstraints = {
+      echoCancellation: true,
+      autoGainControl: true,
+      noiseSuppression: this.noiseSuppressionEnabled,
+    }
+    if (deviceId) {
+      audio.deviceId = { exact: deviceId }
+    }
     return navigator.mediaDevices.getUserMedia({ audio, video: false })
   }
 
@@ -862,13 +1297,294 @@ export class VoiceRTCClient {
     }
   }
 
+  private async replaceLocalAudioTrack(nextStream: MediaStream): Promise<void> {
+    const nextTrack = nextStream.getAudioTracks()[0]
+    if (!nextTrack) return
+
+    const replaceOps: Promise<void>[] = []
+    for (const peer of this.peers.values()) {
+      for (const sender of peer.pc.getSenders()) {
+        if (sender.track?.kind !== 'audio') continue
+        if (peer.screenAudioSender && sender === peer.screenAudioSender) continue
+        replaceOps.push(sender.replaceTrack(nextTrack))
+      }
+    }
+    await Promise.allSettled(replaceOps)
+
+    this.cleanupLocalStream()
+    this.localStream = nextStream
+    this.applyMuteState()
+  }
+
+  private removeRemoteScreenTrack(peerID: string, trackID: string): void {
+    const stream = this.remoteScreenStreams.get(peerID)
+    if (!stream) return
+
+    for (const track of stream.getVideoTracks()) {
+      if (track.id === trackID) {
+        stream.removeTrack(track)
+      }
+    }
+
+    if (stream.getVideoTracks().length === 0) {
+      this.remoteScreenStreams.delete(peerID)
+      const participant = this.participants.get(peerID)
+      if (participant) participant.screen_sharing = false
+    }
+    this.emitStatus()
+  }
+
+  private buildScreenShares(): VoiceScreenShare[] {
+    const shares: VoiceScreenShare[] = []
+
+    if (this.screenStream && this.screenVideoTrack && this.selfPeerID) {
+      const local = this.participants.get(this.selfPeerID)
+      shares.push({
+        peer_id: this.selfPeerID,
+        user_id: local?.user_id || this.selfPeerID,
+        username: local?.username || this.safeUsername('', this.selfPeerID, this.selfPeerID),
+        avatar_url: local?.avatar_url,
+        stream: this.screenStream,
+        local: true,
+      })
+    }
+
+    for (const [peerID, stream] of this.remoteScreenStreams.entries()) {
+      if (stream.getVideoTracks().length === 0) continue
+      const participant = this.participants.get(peerID)
+      shares.push({
+        peer_id: peerID,
+        user_id: participant?.user_id || peerID,
+        username: participant?.username || this.safeUsername('', peerID, peerID),
+        avatar_url: participant?.avatar_url,
+        stream,
+        local: false,
+      })
+    }
+
+    return shares.sort((a, b) => {
+      const aLocal = a.local ? 0 : 1
+      const bLocal = b.local ? 0 : 1
+      if (aLocal !== bLocal) return aLocal - bLocal
+      return a.username.localeCompare(b.username)
+    })
+  }
+
+  private pushDiag(level: VoiceDiagnosticLevel, code: string, message: string): void {
+    const entry: VoiceDiagnosticEvent = {
+      ts: Date.now(),
+      level,
+      code,
+      message,
+    }
+    this.diagnosticsEvents.push(entry)
+    if (this.diagnosticsEvents.length > 120) {
+      this.diagnosticsEvents.splice(0, this.diagnosticsEvents.length - 120)
+    }
+
+    const log = `[voice][${code}] ${message}`
+    if (level === 'error') console.error(log)
+    else if (level === 'warn') console.warn(log)
+    else console.info(log)
+
+    this.emitDiagnostics()
+  }
+
+  private emitDiagnostics(): void {
+    if (!this.onDiagnosticsChange) return
+    this.onDiagnosticsChange(this.getDiagnostics())
+  }
+
+  private startStatsLoop(): void {
+    this.stopStatsLoop()
+    this.statsLoop = setInterval(() => {
+      void this.collectPeerStats()
+    }, 5_000)
+    void this.collectPeerStats()
+  }
+
+  private stopStatsLoop(): void {
+    if (!this.statsLoop) return
+    clearInterval(this.statsLoop)
+    this.statsLoop = null
+  }
+
+  private async collectPeerStats(): Promise<void> {
+    let participantsChanged = false
+
+    for (const [peerID, peer] of this.peers.entries()) {
+      const snapshot: VoicePeerConnectionStats = {
+        peer_id: peerID,
+        connection_state: peer.pc.connectionState,
+        ice_connection_state: peer.pc.iceConnectionState,
+        quality: 'unknown',
+        quality_score: 0,
+        loss_ratio: 0,
+        packets_received: 0,
+        packets_lost: 0,
+        audio_jitter_ms: 0,
+        round_trip_time_ms: 0,
+        available_outgoing_bitrate: 0,
+      }
+
+      try {
+        const stats = await peer.pc.getStats()
+        stats.forEach((report) => {
+          const item = report as unknown as Record<string, unknown>
+          const reportType = this.safeString(item.type)
+
+          if (reportType === 'candidate-pair') {
+            const state = this.safeString(item.state)
+            const nominated = this.safeBool(item.nominated)
+            if (state === 'succeeded' && nominated) {
+              snapshot.round_trip_time_ms = this.safeNumber(item.currentRoundTripTime) * 1000
+              snapshot.available_outgoing_bitrate = this.safeNumber(item.availableOutgoingBitrate)
+            }
+            return
+          }
+
+          if (reportType !== 'inbound-rtp') return
+          const kind = this.safeString(item.kind || item.mediaType)
+          if (kind !== 'audio') return
+
+          snapshot.packets_received += Math.max(0, Math.floor(this.safeNumber(item.packetsReceived)))
+          snapshot.packets_lost += Math.max(0, Math.floor(this.safeNumber(item.packetsLost)))
+          snapshot.audio_jitter_ms = Math.max(snapshot.audio_jitter_ms, this.safeNumber(item.jitter) * 1000)
+        })
+      } catch {
+        // Keep stale stats if getStats fails transiently.
+      }
+
+      const total = snapshot.packets_received + snapshot.packets_lost
+      snapshot.loss_ratio = total > 0 ? snapshot.packets_lost / total : 0
+      const quality = this.deriveConnectionQuality(snapshot)
+      snapshot.quality = quality.quality
+      snapshot.quality_score = quality.score
+
+      this.peerStats.set(peerID, snapshot)
+
+      const participant = this.participants.get(peerID)
+      if (participant) {
+        const prevQuality = participant.connection_quality
+        const prevScore = participant.quality_score
+        participant.connection_quality = snapshot.quality
+        participant.quality_score = snapshot.quality_score
+        if (prevQuality !== participant.connection_quality || prevScore !== participant.quality_score) {
+          participantsChanged = true
+        }
+      }
+    }
+
+    const stale: string[] = []
+    for (const peerID of this.peerStats.keys()) {
+      if (!this.peers.has(peerID)) stale.push(peerID)
+    }
+    for (const peerID of stale) {
+      this.peerStats.delete(peerID)
+    }
+
+    if (this.screenVideoTrack) {
+      await this.maybeAdjustScreenShareQoS()
+    }
+
+    if (participantsChanged) {
+      this.emitStatus()
+    }
+    this.emitDiagnostics()
+  }
+
+  private deriveConnectionQuality(stats: VoicePeerConnectionStats): { quality: VoiceConnectionQuality; score: number } {
+    if (stats.connection_state === 'failed' || stats.ice_connection_state === 'failed') {
+      return { quality: 'poor', score: 10 }
+    }
+    if (stats.connection_state === 'disconnected' || stats.ice_connection_state === 'disconnected') {
+      return { quality: 'poor', score: 20 }
+    }
+    if (stats.connection_state === 'connecting' || stats.ice_connection_state === 'checking') {
+      return { quality: 'fair', score: 45 }
+    }
+    if (stats.connection_state !== 'connected') {
+      return { quality: 'unknown', score: 0 }
+    }
+
+    let score = 100
+    if (stats.round_trip_time_ms > 0) {
+      score -= Math.min(35, Math.floor(stats.round_trip_time_ms / 6))
+    }
+    if (stats.audio_jitter_ms > 0) {
+      score -= Math.min(25, Math.floor(stats.audio_jitter_ms))
+    }
+    if (stats.loss_ratio > 0) {
+      score -= Math.min(40, Math.floor(stats.loss_ratio * 250))
+    }
+
+    const normalized = Math.max(0, Math.min(100, score))
+    if (normalized >= 70) return { quality: 'good', score: normalized }
+    if (normalized >= 40) return { quality: 'fair', score: normalized }
+    return { quality: 'poor', score: normalized }
+  }
+
+  private async maybeAdjustScreenShareQoS(): Promise<void> {
+    if (!this.screenVideoTrack) return
+    if (this.screenVideoTrack.readyState !== 'live') return
+
+    const nextProfile = this.pickScreenShareQoSProfile()
+    await this.applyScreenShareQoS(nextProfile)
+  }
+
+  private pickScreenShareQoSProfile(): ScreenShareQoSProfile {
+    if (!this.screenVideoTrack) return 'high'
+
+    const snapshots = Array.from(this.peerStats.values())
+      .filter(s => this.peers.has(s.peer_id))
+
+    if (snapshots.length === 0) return 'high'
+
+    let poorCount = 0
+    let fairOrUnknownCount = 0
+    let lowestScore = 100
+
+    for (const snapshot of snapshots) {
+      if (snapshot.quality === 'poor') poorCount++
+      if (snapshot.quality === 'fair' || snapshot.quality === 'unknown') fairOrUnknownCount++
+      if (snapshot.quality_score > 0) {
+        lowestScore = Math.min(lowestScore, snapshot.quality_score)
+      }
+    }
+
+    if (poorCount > 0 || lowestScore <= 35) return 'low'
+    if (fairOrUnknownCount > 0 || lowestScore <= 65) return 'balanced'
+    return 'high'
+  }
+
+  private async applyScreenShareQoS(profile: ScreenShareQoSProfile, force = false): Promise<void> {
+    if (!this.screenVideoTrack) return
+    if (this.screenVideoTrack.readyState !== 'live') return
+
+    const now = Date.now()
+    if (!force && profile === this.screenQoSProfile) return
+    if (!force && now - this.lastScreenQoSAppliedAt < this.screenQoSCooldownMs) return
+
+    const constraints = SCREEN_SHARE_QOS_CONSTRAINTS[profile]
+    try {
+      await this.screenVideoTrack.applyConstraints(constraints)
+      this.screenQoSProfile = profile
+      this.lastScreenQoSAppliedAt = now
+      this.pushDiag('info', 'screen:qos', `profile=${profile}`)
+    } catch (e) {
+      this.lastScreenQoSAppliedAt = now
+      const message = e instanceof Error ? e.message : String(e)
+      this.pushDiag('warn', 'screen:qos:error', `${profile} ${message}`)
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Signal helpers
   // ---------------------------------------------------------------------------
 
   private sendSignal(signal: SignalMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn(`[voice] Cannot send signal '${signal.type}': WS not open (state=${this.ws?.readyState})`)
+      this.pushDiag('warn', 'signal:send', `cannot send ${signal.type}; ws state=${this.ws?.readyState}`)
       return
     }
     const payload: SignalMessage = signal.from ? signal : { ...signal, from: this.selfPeerID || undefined }
@@ -900,6 +1616,7 @@ export class VoiceRTCClient {
         peer_id: this.selfPeerID,
         muted,
         deafened: this.deafened,
+        screen_sharing: !!this.screenVideoTrack,
       },
     })
   }
@@ -909,6 +1626,7 @@ export class VoiceRTCClient {
     if (!entry) return
     entry.deafened = this.deafened
     entry.muted = this.deafened ? true : this.muted
+    entry.screen_sharing = !!this.screenVideoTrack
   }
 
   private onPeerState(fromPeerID: string, payload: unknown): void {
@@ -916,17 +1634,36 @@ export class VoiceRTCClient {
     if (!data) return
     const peerID = this.safeString(data.peer_id) || fromPeerID
     if (!peerID) return
-    const entry = this.participants.get(peerID)
-    if (!entry) return
+    let entry = this.participants.get(peerID)
+    if (!entry) {
+      const meta = this.peersMeta.get(peerID) ?? {
+        peer_id: peerID,
+        user_id: peerID,
+        username: this.safeUsername('', peerID, peerID),
+        avatar_url: '',
+      }
+      this.registerPeer(meta)
+      entry = this.participants.get(peerID)
+      if (!entry) return
+    }
     const muted = this.safeBool(data.muted)
     const deafened = this.safeBool(data.deafened)
+    const screenSharing = this.safeBool(data.screen_sharing)
     entry.deafened = deafened
     entry.muted = deafened ? true : muted
+    entry.screen_sharing = screenSharing
+    if (!screenSharing) {
+      this.remoteScreenStreams.delete(peerID)
+    }
     this.emitStatus()
   }
 
   private emitStatus(): void {
-    this.onStatusChange(this.getStatus())
+    const status = this.getStatus()
+    this.onStatusChange(status)
+    if (this.onDiagnosticsChange && status.diagnostics) {
+      this.onDiagnosticsChange(status.diagnostics)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -958,6 +1695,7 @@ export class VoiceRTCClient {
       avatar_url: this.safeString(raw.avatar_url),
       muted: this.safeBool(raw.muted),
       deafened: this.safeBool(raw.deafened),
+      screen_sharing: this.safeBool(raw.screen_sharing),
     }
   }
 
@@ -1028,6 +1766,7 @@ export class VoiceRTCClient {
       const onError = () => {
         ws.removeEventListener('open', onOpen)
         ws.removeEventListener('error', onError)
+        this.pushDiag('error', 'ws:error', 'failed to connect to signaling')
         reject(new Error('failed to connect to voice signaling'))
       }
 
@@ -1117,6 +1856,15 @@ export class VoiceRTCClient {
     return false
   }
 
+  private safeNumber(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return 0
+  }
+
   private safeUsername(username: string, userID: string, peerID: string): string {
     if (username.trim().length > 0) return username.trim()
     if (userID.trim().length > 0) return userID.trim().slice(0, 12)
@@ -1176,14 +1924,17 @@ export class VoiceRTCClient {
 
     this.speakingLoop = setInterval(() => {
       let changed = false
+      let dominantPeerID = ''
+      let dominantVolume = 0
 
       for (const [peerID, peer] of this.peers.entries()) {
         const participant = this.participants.get(peerID)
         if (!participant) continue
 
         if (!peer.analyser || !peer.analyserData) {
-          if (participant.speaking) {
+          if (participant.speaking || participant.volume !== 0) {
             participant.speaking = false
+            participant.volume = 0
             changed = true
           }
           continue
@@ -1196,10 +1947,29 @@ export class VoiceRTCClient {
           sumSquares += normalized * normalized
         }
         const rms = Math.sqrt(sumSquares / peer.analyserData.length)
-        const speaking = rms > 0.02
+        const volume = Math.max(0, Math.min(1, rms))
+        const speaking = volume > 0.02 && !participant.muted && !participant.deafened
 
         if (participant.speaking !== speaking) {
           participant.speaking = speaking
+          changed = true
+        }
+        if (Math.abs(participant.volume - volume) > 0.005) {
+          participant.volume = Number(volume.toFixed(4))
+          changed = true
+        }
+
+        if (speaking && volume > dominantVolume) {
+          dominantVolume = volume
+          dominantPeerID = peerID
+        }
+      }
+
+      const hasDominant = dominantPeerID !== '' && dominantVolume > 0.03
+      for (const [peerID, participant] of this.participants.entries()) {
+        const shouldBeDominant = hasDominant && peerID === dominantPeerID
+        if (!!participant.dominant_speaker !== shouldBeDominant) {
+          participant.dominant_speaker = shouldBeDominant
           changed = true
         }
       }

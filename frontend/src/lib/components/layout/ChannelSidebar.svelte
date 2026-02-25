@@ -4,6 +4,7 @@
   import VoiceControls from '../voice/VoiceControls.svelte'
   import { translations, t } from '../../i18n'
   import type { SpeakerData } from '../../stores/voice.svelte'
+  import type { VoiceDiagnosticsSnapshot, VoiceScreenShare } from '../../services/voiceRTC'
 
   interface Channel {
     id: string
@@ -47,6 +48,8 @@
     voiceElapsed = '',
     voiceNoiseSuppression = true,
     voiceScreenSharing = false,
+    voiceScreenShares = [],
+    voiceDiagnostics = null,
     voiceLocalSpeaking = false,
     getChannelParticipants,
     onJoinVoice,
@@ -77,6 +80,8 @@
     voiceElapsed?: string
     voiceNoiseSuppression?: boolean
     voiceScreenSharing?: boolean
+    voiceScreenShares?: VoiceScreenShare[]
+    voiceDiagnostics?: VoiceDiagnosticsSnapshot | null
     voiceLocalSpeaking?: boolean
     getChannelParticipants?: (channelId: string) => SpeakerData[]
     onJoinVoice?: (channelId: string) => void
@@ -96,6 +101,20 @@
     // Try to find member avatar by matching username
     const member = serverMembers.find(m => m.username === speaker.username)
     return member?.avatar_url || speaker.avatar_url
+  }
+
+  function qualityStyle(quality?: SpeakerData['quality']): string {
+    if (quality === 'good') return 'bg-void-online/20 text-void-online'
+    if (quality === 'fair') return 'bg-void-warning/20 text-void-warning'
+    if (quality === 'poor') return 'bg-void-danger/20 text-void-danger'
+    return 'bg-void-bg-hover text-void-text-muted'
+  }
+
+  function qualityLabel(quality?: SpeakerData['quality']): string {
+    if (quality === 'good') return 'good'
+    if (quality === 'fair') return 'fair'
+    if (quality === 'poor') return 'poor'
+    return 'unknown'
   }
 
   const displayName = $derived(currentUser?.display_name || currentUser?.username || 'You')
@@ -354,9 +373,15 @@
                   {/if}
                 </div>
                 <span class="text-xs text-void-text-secondary truncate">{displaySpeakerName}</span>
+                {#if speaker.dominant}
+                  <span class="rounded bg-void-accent/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-void-accent">voice</span>
+                {/if}
                 {#if speaker.screenSharing || (isLocal && voiceScreenSharing)}
                   <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
+                <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase {qualityStyle(speaker.quality)}">
+                  {qualityLabel(speaker.quality)}
+                </span>
                 {#if speaker.deafened}
                   <Tooltip text={t(trans, 'voice.deafened')} position="top">
                     <svg class="h-3 w-3 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -397,6 +422,8 @@
     deafened={voiceDeafened}
     noiseSuppression={voiceNoiseSuppression}
     screenSharing={voiceScreenSharing}
+    screenShares={voiceScreenShares}
+    diagnostics={voiceDiagnostics}
     onToggleMute={() => onToggleMute?.()}
     onToggleDeafen={() => onToggleDeafen?.()}
     onToggleNoiseSuppression={() => onToggleNoiseSuppression?.()}
