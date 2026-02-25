@@ -353,6 +353,12 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, peerID string) {
 		startedAtMs = startedAt.UnixMilli()
 	}
 
+	s.logger.Info().
+		Str("to_peer", peerID).
+		Str("channel", channelKey).
+		Int("peer_count", len(peers)).
+		Msg("sending peer_list")
+
 	sig, err := NewSignal(SignalPeerList, "", PeerListPayload{
 		Peers:            peers,
 		ChannelStartedAt: startedAtMs,
@@ -363,6 +369,7 @@ func (s *Server) sendPeerList(pc *peerConn, channelKey, peerID string) {
 	}
 
 	if err := pc.enqueueJSON(sig); err != nil {
+		s.logger.Error().Err(err).Str("peer", peerID).Msg("failed to enqueue peer_list")
 		s.dropPeer(channelKey, peerID)
 	}
 }

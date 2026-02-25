@@ -402,13 +402,14 @@ export class VoiceRTCClient {
     try {
       if (typeof rawData !== 'string') return
       const signal = JSON.parse(rawData) as SignalMessage
+      console.info(`[voice] WS signal received: type=${signal.type}, from=${signal.from ?? 'none'}, to=${signal.to ?? 'none'}`)
 
       switch (signal.type) {
         case 'peer_list':
           await this.onPeerList(signal.payload)
           break
         case 'peer_joined':
-          this.onPeerJoined(signal.payload)
+          await this.onPeerJoined(signal.payload)
           break
         case 'peer_left':
           if (signal.from) this.onPeerLeft(signal.from)
@@ -438,10 +439,11 @@ export class VoiceRTCClient {
   }
 
   private async onPeerList(payload: unknown): Promise<void> {
+    console.info('[voice] peer_list raw payload:', JSON.stringify(payload))
     const peers = this.extractPeers(payload)
     const startedAt = this.extractChannelStartedAt(payload)
     if (startedAt) this.channelStartedAt = startedAt
-    console.info(`[voice] peer_list received: ${peers.length} peers`, peers.map((p) => p.peer_id))
+    console.info(`[voice] peer_list received: ${peers.length} peers, selfPeerID=${this.selfPeerID}`, peers.map((p) => p.peer_id))
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
 
@@ -479,9 +481,11 @@ export class VoiceRTCClient {
     this.emitStatus()
   }
 
-  private onPeerJoined(payload: unknown): void {
+  private async onPeerJoined(payload: unknown): Promise<void> {
     const peer = this.extractJoinPeer(payload)
     if (!peer || peer.peer_id === this.selfPeerID) return
+
+    console.info(`[voice] peer_joined: ${peer.peer_id} (${peer.username})`)
 
     this.peersMeta.set(peer.peer_id, peer)
     this.participants.set(peer.peer_id, {
@@ -495,6 +499,29 @@ export class VoiceRTCClient {
       deafened: !!peer.deafened,
     })
     this.emitStatus()
+
+    // Existing peers also create offers for newly joined peers.
+    // This ensures connectivity even if the joiner's peer_list is empty or delayed.
+    if (!this.peers.has(peer.peer_id)) {
+      try {
+        console.info(`[voice] Creating offer for newly joined peer ${peer.peer_id}`)
+        const state = await this.ensurePeerConnection(peer.peer_id)
+        const offer = await state.pc.createOffer()
+        await state.pc.setLocalDescription(offer)
+        console.info(`[voice] Sending sdp_offer to newly joined ${peer.peer_id}, sdp length=${(offer.sdp ?? '').length}`)
+
+        this.sendSignal({
+          type: 'sdp_offer',
+          from: this.selfPeerID,
+          to: peer.peer_id,
+          server_id: this.serverID,
+          channel_id: this.channelID,
+          payload: { sdp: offer.sdp ?? '' },
+        })
+      } catch (e) {
+        console.error(`[voice] Failed to create/send offer to newly joined ${peer.peer_id}:`, e)
+      }
+    }
   }
 
   private onPeerLeft(peerID: string): void {
@@ -530,6 +557,19 @@ export class VoiceRTCClient {
     }
 
     const state = await this.ensurePeerConnection(fromPeerID)
+
+    // Handle glare (both sides sent offers simultaneously).
+    // "Polite peer" pattern: the peer with lexicographically smaller ID rolls back.
+    if (state.pc.signalingState === 'have-local-offer') {
+      const isPolite = this.selfPeerID < fromPeerID
+      if (!isPolite) {
+        console.info(`[voice] Glare with ${fromPeerID}: we are impolite, ignoring incoming offer`)
+        return
+      }
+      console.info(`[voice] Glare with ${fromPeerID}: we are polite, rolling back our offer`)
+      await state.pc.setLocalDescription({ type: 'rollback' })
+    }
+
     await state.pc.setRemoteDescription({ type: 'offer', sdp })
     await this.flushPendingICE(fromPeerID)
     const answer = await state.pc.createAnswer()
