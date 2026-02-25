@@ -202,13 +202,16 @@ async function isReachable(url: string): Promise<boolean> {
   const base = url.replace(/\/$/, '')
 
   try {
+    const start = Date.now()
     const res = await fetchWithTimeout(
       `${base}/health`,
       { cache: 'no-store' },
       3000,
     )
+    console.info(`[discovery] isReachable ${base}: ${res.ok} (${Date.now() - start}ms)`)
     return res.ok
-  } catch {
+  } catch (e) {
+    console.warn(`[discovery] isReachable ${base}: FAILED`, e)
     return false
   }
 }
@@ -231,26 +234,38 @@ export const apiClient = new ApiClient(SERVER_URL)
  */
 export async function discoverServerURL(): Promise<string> {
   // Keep current URL as fallback; if unhealthy, swap to localhost.
-  const fallback = await chooseFallbackURL(apiClient.getBaseURL())
+  const currentBase = apiClient.getBaseURL()
+  console.info('[discovery] starting, current baseURL:', currentBase)
+  const fallback = await chooseFallbackURL(currentBase)
+  console.info('[discovery] fallback URL:', fallback)
 
   try {
+    console.info('[discovery] fetching gist:', DISCOVERY_URL)
     const res = await fetchWithTimeout(
       DISCOVERY_URL,
       { cache: 'no-store' },
       DISCOVERY_TIMEOUT_MS,
     )
+    console.info('[discovery] gist response:', res.status)
     if (!res.ok) {
+      console.warn('[discovery] gist not ok, using fallback:', fallback)
       apiClient.setBaseURL(fallback)
       return fallback
     }
     const data: { server_url?: string } = await res.json()
+    console.info('[discovery] gist data:', JSON.stringify(data))
     if (data.server_url) {
+      console.info('[discovery] checking reachability of:', data.server_url)
       const chosen = await chooseFallbackURL(data.server_url)
+      console.info('[discovery] chosen URL:', chosen)
       apiClient.setBaseURL(chosen)
       return chosen
     }
-  } catch { /* network error — keep build-time URL */ }
+  } catch (e) {
+    console.error('[discovery] fetch failed:', e)
+  }
 
+  console.warn('[discovery] no server_url found, using fallback:', fallback)
   apiClient.setBaseURL(fallback)
   return fallback
 }
