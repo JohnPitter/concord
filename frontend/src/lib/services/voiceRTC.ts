@@ -49,6 +49,7 @@ interface SignalMessage {
   payload?: unknown
 }
 
+// Per-peer state including the RTCPeerConnection and perfect negotiation flags.
 interface PeerConnectionState {
   pc: RTCPeerConnection
   audio: HTMLAudioElement
@@ -56,7 +57,11 @@ interface PeerConnectionState {
   analyser: AnalyserNode | null
   analyserData: Uint8Array<ArrayBuffer> | null
   sourceNode: MediaStreamAudioSourceNode | null
-  pendingICE: RTCIceCandidateInit[]
+  // Perfect negotiation state (MDN pattern)
+  makingOffer: boolean
+  ignoreOffer: boolean
+  isSettingRemoteAnswerPending: boolean
+  polite: boolean
 }
 
 interface IceConfigServer {
@@ -154,7 +159,6 @@ export class VoiceRTCClient {
     try {
       this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
     } catch {
-      // Non-fatal: fall back to default STUN servers
       console.warn('[voice] Failed to fetch ICE config, using defaults')
       this.iceServers = DEFAULT_ICE_SERVERS
     }
@@ -173,7 +177,9 @@ export class VoiceRTCClient {
 
   private async connectWebSocket(opts: VoiceJoinOptions, localUsername: string): Promise<void> {
     const wsURL = this.toSignalingURL(opts.baseURL)
+    console.info('[voice] Connecting to signaling:', wsURL)
     this.ws = await this.openWebSocket(wsURL)
+    console.info('[voice] WebSocket connected')
 
     this.ws.onmessage = (event) => {
       void this.handleSignal(event.data)
@@ -182,7 +188,6 @@ export class VoiceRTCClient {
     this.ws.onclose = () => {
       this.stopKeepalive()
       if (this.intentionalDisconnect || this.state === 'disconnected') {
-        // User explicitly left — do full cleanup
         if (this.state !== 'disconnected') {
           this.state = 'disconnected'
           this.cleanupPeers()
@@ -196,7 +201,6 @@ export class VoiceRTCClient {
         return
       }
 
-      // Unexpected close — attempt reconnect
       console.warn('[voice] WebSocket closed unexpectedly, attempting reconnect...')
       this.cleanupPeers()
       this.ws = null
@@ -218,9 +222,8 @@ export class VoiceRTCClient {
         deafened: this.deafened,
       },
     })
+    console.info('[voice] Join signal sent, selfPeerID:', this.selfPeerID)
 
-    // Start client-side keepalive to prevent tunnel/proxy idle timeouts.
-    // Browser WebSocket API has no ping() — send a lightweight signal instead.
     this.startKeepalive()
   }
 
@@ -255,7 +258,6 @@ export class VoiceRTCClient {
 
     try {
       const localUsername = this.safeUsername(opts.username, opts.userID, this.selfPeerID)
-      // Re-add self to participants if cleared
       if (!this.participants.has(this.selfPeerID)) {
         this.participants.set(this.selfPeerID, {
           peer_id: this.selfPeerID,
@@ -398,18 +400,33 @@ export class VoiceRTCClient {
     await Promise.allSettled(applyOps)
   }
 
-  private async handleSignal(rawData: unknown): Promise<void> {
-    try {
-      if (typeof rawData !== 'string') return
-      const signal = JSON.parse(rawData) as SignalMessage
-      console.info(`[voice] WS signal received: type=${signal.type}, from=${signal.from ?? 'none'}, to=${signal.to ?? 'none'}`)
+  // ---------------------------------------------------------------------------
+  // Signaling message handler
+  // ---------------------------------------------------------------------------
 
+  private async handleSignal(rawData: unknown): Promise<void> {
+    if (typeof rawData !== 'string') return
+
+    let signal: SignalMessage
+    try {
+      signal = JSON.parse(rawData) as SignalMessage
+    } catch {
+      console.warn('[voice] Failed to parse signaling message')
+      return
+    }
+
+    // Log every signal except keepalive pings
+    if (signal.type !== 'ping') {
+      console.info(`[voice] << ${signal.type} from=${signal.from ?? '-'} to=${signal.to ?? '-'}`)
+    }
+
+    try {
       switch (signal.type) {
         case 'peer_list':
-          await this.onPeerList(signal.payload)
+          this.onPeerList(signal.payload)
           break
         case 'peer_joined':
-          await this.onPeerJoined(signal.payload)
+          this.onPeerJoined(signal.payload)
           break
         case 'peer_left':
           if (signal.from) this.onPeerLeft(signal.from)
@@ -418,75 +435,60 @@ export class VoiceRTCClient {
           this.onPeerState(signal.from || '', signal.payload)
           break
         case 'sdp_offer':
-          if (signal.from) await this.onSDPOffer(signal.from, signal.payload)
+          if (signal.from) await this.onDescription(signal.from, 'offer', signal.payload)
           break
         case 'sdp_answer':
-          if (signal.from) await this.onSDPAnswer(signal.from, signal.payload)
+          if (signal.from) await this.onDescription(signal.from, 'answer', signal.payload)
           break
         case 'ice_candidate':
           if (signal.from) await this.onICECandidate(signal.from, signal.payload)
           break
-        case 'error':
-          this.onError('voice signaling error')
+        case 'error': {
+          const errPayload = signal.payload as { message?: string } | undefined
+          console.error('[voice] Server error:', errPayload?.message ?? 'unknown')
           break
+        }
         default:
           break
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'invalid signaling message'
-      this.onError(msg)
+      // Log but do NOT propagate to onError — that would surface transient
+      // signaling issues as user-visible errors and potentially break the flow.
+      console.error(`[voice] Error handling signal '${signal.type}':`, e)
     }
   }
 
-  private async onPeerList(payload: unknown): Promise<void> {
-    console.info('[voice] peer_list raw payload:', JSON.stringify(payload))
+  // ---------------------------------------------------------------------------
+  // Peer list / join / leave handlers
+  // ---------------------------------------------------------------------------
+
+  private onPeerList(payload: unknown): void {
     const peers = this.extractPeers(payload)
     const startedAt = this.extractChannelStartedAt(payload)
     if (startedAt) this.channelStartedAt = startedAt
-    console.info(`[voice] peer_list received: ${peers.length} peers, selfPeerID=${this.selfPeerID}`, peers.map((p) => p.peer_id))
+    console.info(`[voice] peer_list: ${peers.length} peers`, peers.map(p => p.peer_id))
+
     for (const peer of peers) {
       if (peer.peer_id === this.selfPeerID) continue
-
-      this.peersMeta.set(peer.peer_id, peer)
-      this.participants.set(peer.peer_id, {
-        peer_id: peer.peer_id,
-        user_id: peer.user_id,
-        username: peer.username,
-        avatar_url: peer.avatar_url,
-        volume: 0,
-        speaking: false,
-        muted: peer.deafened ? true : !!peer.muted,
-        deafened: !!peer.deafened,
-      })
-
-      try {
-        console.info(`[voice] Creating offer for peer ${peer.peer_id}`)
-        const state = await this.ensurePeerConnection(peer.peer_id)
-        const offer = await state.pc.createOffer()
-        await state.pc.setLocalDescription(offer)
-        console.info(`[voice] Sending sdp_offer to ${peer.peer_id}, sdp length=${(offer.sdp ?? '').length}`)
-
-        this.sendSignal({
-          type: 'sdp_offer',
-          from: this.selfPeerID,
-          to: peer.peer_id,
-          server_id: this.serverID,
-          channel_id: this.channelID,
-          payload: { sdp: offer.sdp ?? '' },
-        })
-      } catch (e) {
-        console.error(`[voice] Failed to create/send offer to ${peer.peer_id}:`, e)
-      }
+      this.registerPeer(peer)
+      // Create a PeerConnection with tracks — onnegotiationneeded will fire
+      // and the perfect negotiation pattern will handle the offer/answer exchange.
+      this.ensurePeerConnection(peer.peer_id)
     }
     this.emitStatus()
   }
 
-  private async onPeerJoined(payload: unknown): Promise<void> {
+  private onPeerJoined(payload: unknown): void {
     const peer = this.extractJoinPeer(payload)
     if (!peer || peer.peer_id === this.selfPeerID) return
-
     console.info(`[voice] peer_joined: ${peer.peer_id} (${peer.username})`)
+    this.registerPeer(peer)
+    // Create a PeerConnection — onnegotiationneeded fires automatically
+    this.ensurePeerConnection(peer.peer_id)
+    this.emitStatus()
+  }
 
+  private registerPeer(peer: VoicePeerMeta): void {
     this.peersMeta.set(peer.peer_id, peer)
     this.participants.set(peer.peer_id, {
       peer_id: peer.peer_id,
@@ -498,30 +500,6 @@ export class VoiceRTCClient {
       muted: peer.deafened ? true : !!peer.muted,
       deafened: !!peer.deafened,
     })
-    this.emitStatus()
-
-    // Existing peers also create offers for newly joined peers.
-    // This ensures connectivity even if the joiner's peer_list is empty or delayed.
-    if (!this.peers.has(peer.peer_id)) {
-      try {
-        console.info(`[voice] Creating offer for newly joined peer ${peer.peer_id}`)
-        const state = await this.ensurePeerConnection(peer.peer_id)
-        const offer = await state.pc.createOffer()
-        await state.pc.setLocalDescription(offer)
-        console.info(`[voice] Sending sdp_offer to newly joined ${peer.peer_id}, sdp length=${(offer.sdp ?? '').length}`)
-
-        this.sendSignal({
-          type: 'sdp_offer',
-          from: this.selfPeerID,
-          to: peer.peer_id,
-          server_id: this.serverID,
-          channel_id: this.channelID,
-          payload: { sdp: offer.sdp ?? '' },
-        })
-      } catch (e) {
-        console.error(`[voice] Failed to create/send offer to newly joined ${peer.peer_id}:`, e)
-      }
-    }
   }
 
   private onPeerLeft(peerID: string): void {
@@ -531,101 +509,105 @@ export class VoiceRTCClient {
     this.emitStatus()
   }
 
-  private async onSDPOffer(fromPeerID: string, payload: unknown): Promise<void> {
+  // ---------------------------------------------------------------------------
+  // Perfect Negotiation Pattern (MDN)
+  // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Perfect_negotiation
+  // ---------------------------------------------------------------------------
+
+  private async onDescription(fromPeerID: string, type: 'offer' | 'answer', payload: unknown): Promise<void> {
     const sdp = this.extractSDP(payload)
-    console.info(`[voice] sdp_offer received from ${fromPeerID}, sdp length=${sdp.length}`)
-    if (!sdp) return
-
-    const meta = this.peersMeta.get(fromPeerID) ?? {
-      peer_id: fromPeerID,
-      user_id: fromPeerID,
-      username: this.safeUsername('', fromPeerID, fromPeerID),
-      avatar_url: '',
-    }
-
-    if (!this.participants.has(fromPeerID)) {
-      this.participants.set(fromPeerID, {
-        peer_id: fromPeerID,
-        user_id: meta.user_id,
-        username: meta.username,
-        avatar_url: meta.avatar_url,
-        volume: 0,
-        speaking: false,
-        muted: meta.deafened ? true : !!meta.muted,
-        deafened: !!meta.deafened,
-      })
-    }
-
-    const state = await this.ensurePeerConnection(fromPeerID)
-
-    // Handle glare (both sides sent offers simultaneously).
-    // "Polite peer" pattern: the peer with lexicographically smaller ID rolls back.
-    if (state.pc.signalingState === 'have-local-offer') {
-      const isPolite = this.selfPeerID < fromPeerID
-      if (!isPolite) {
-        console.info(`[voice] Glare with ${fromPeerID}: we are impolite, ignoring incoming offer`)
-        return
-      }
-      console.info(`[voice] Glare with ${fromPeerID}: we are polite, rolling back our offer`)
-      await state.pc.setLocalDescription({ type: 'rollback' })
-    }
-
-    await state.pc.setRemoteDescription({ type: 'offer', sdp })
-    await this.flushPendingICE(fromPeerID)
-    const answer = await state.pc.createAnswer()
-    await state.pc.setLocalDescription(answer)
-
-    this.sendSignal({
-      type: 'sdp_answer',
-      from: this.selfPeerID,
-      to: fromPeerID,
-      server_id: this.serverID,
-      channel_id: this.channelID,
-      payload: { sdp: answer.sdp ?? '' },
-    })
-    this.emitStatus()
-  }
-
-  private async onSDPAnswer(fromPeerID: string, payload: unknown): Promise<void> {
-    const sdp = this.extractSDP(payload)
-    console.info(`[voice] sdp_answer received from ${fromPeerID}, sdp length=${sdp.length}`)
-    if (!sdp) return
-    const peer = this.peers.get(fromPeerID)
-    if (!peer) {
-      console.warn(`[voice] sdp_answer from ${fromPeerID} but no peer connection exists`)
+    if (!sdp) {
+      console.warn(`[voice] Empty SDP in ${type} from ${fromPeerID}`)
       return
     }
-    await peer.pc.setRemoteDescription({ type: 'answer', sdp })
-    await this.flushPendingICE(fromPeerID)
-    console.info(`[voice] Remote description set for ${fromPeerID}, connectionState=${peer.pc.connectionState}`)
+    console.info(`[voice] ${type} from ${fromPeerID}, sdp=${sdp.length}B`)
+
+    // Ensure we have metadata for this peer
+    if (!this.participants.has(fromPeerID)) {
+      const meta = this.peersMeta.get(fromPeerID) ?? {
+        peer_id: fromPeerID,
+        user_id: fromPeerID,
+        username: this.safeUsername('', fromPeerID, fromPeerID),
+        avatar_url: '',
+      }
+      this.registerPeer(meta)
+    }
+
+    const peer = this.ensurePeerConnection(fromPeerID)
+    const pc = peer.pc
+    const description: RTCSessionDescriptionInit = { type, sdp }
+
+    try {
+      if (type === 'offer') {
+        // Perfect negotiation: check for collision
+        const readyForOffer =
+          !peer.makingOffer &&
+          (pc.signalingState === 'stable' || peer.isSettingRemoteAnswerPending)
+        const offerCollision = !readyForOffer
+
+        peer.ignoreOffer = !peer.polite && offerCollision
+        if (peer.ignoreOffer) {
+          console.info(`[voice] Ignoring colliding offer from ${fromPeerID} (we are impolite)`)
+          return
+        }
+
+        if (offerCollision) {
+          console.info(`[voice] Offer collision with ${fromPeerID}, rolling back (we are polite)`)
+        }
+
+        peer.isSettingRemoteAnswerPending = false
+        await pc.setRemoteDescription(description)
+
+        await pc.setLocalDescription()
+        const answer = pc.localDescription
+        if (answer) {
+          console.info(`[voice] >> sdp_answer to ${fromPeerID}, sdp=${(answer.sdp ?? '').length}B`)
+          this.sendSignal({
+            type: 'sdp_answer',
+            from: this.selfPeerID,
+            to: fromPeerID,
+            server_id: this.serverID,
+            channel_id: this.channelID,
+            payload: { sdp: answer.sdp ?? '' },
+          })
+        }
+      } else {
+        // Answer
+        peer.isSettingRemoteAnswerPending = true
+        await pc.setRemoteDescription(description)
+        peer.isSettingRemoteAnswerPending = false
+        console.info(`[voice] Remote answer set for ${fromPeerID}, state=${pc.connectionState}`)
+      }
+    } catch (e) {
+      peer.isSettingRemoteAnswerPending = false
+      console.error(`[voice] Failed to handle ${type} from ${fromPeerID}:`, e)
+    }
   }
 
   private async onICECandidate(fromPeerID: string, payload: unknown): Promise<void> {
     const candidate = this.extractICE(payload)
     if (!candidate) return
     const peer = this.peers.get(fromPeerID)
-    if (!peer) {
-      const state = await this.ensurePeerConnection(fromPeerID)
-      state.pendingICE.push(candidate)
-      return
-    }
-
-    if (!peer.pc.remoteDescription) {
-      peer.pendingICE.push(candidate)
-      return
-    }
+    if (!peer) return
 
     try {
       await peer.pc.addIceCandidate(candidate)
-    } catch {
-      peer.pendingICE.push(candidate)
+    } catch (e) {
+      if (!peer.ignoreOffer) {
+        console.warn(`[voice] Failed to add ICE candidate from ${fromPeerID}:`, e)
+      }
     }
   }
 
-  private async ensurePeerConnection(peerID: string): Promise<PeerConnectionState> {
+  // ---------------------------------------------------------------------------
+  // PeerConnection lifecycle
+  // ---------------------------------------------------------------------------
+
+  private ensurePeerConnection(peerID: string): PeerConnectionState {
     const existing = this.peers.get(peerID)
     if (existing) return existing
 
+    console.info(`[voice] Creating PeerConnection for ${peerID}`)
     const pc = new RTCPeerConnection({ iceServers: this.iceServers })
     const stream = new MediaStream()
     const audio = new Audio()
@@ -633,26 +615,68 @@ export class VoiceRTCClient {
     audio.setAttribute('playsinline', 'true')
     audio.volume = 1.0
     audio.srcObject = stream
-    // Only mute audio output when the local user is deafened — never mute by default.
     audio.muted = this.deafened
 
-    await this.applyOutputDevice(audio)
+    void this.applyOutputDevice(audio)
 
+    // Add local tracks — this triggers onnegotiationneeded
     if (this.localStream) {
       for (const track of this.localStream.getAudioTracks()) {
         pc.addTrack(track, this.localStream)
       }
     }
 
+    // Polite peer: the one with the smaller peerID rolls back on collision.
+    const polite = this.selfPeerID < peerID
+
+    const state: PeerConnectionState = {
+      pc,
+      audio,
+      stream,
+      analyser: null,
+      analyserData: null,
+      sourceNode: null,
+      makingOffer: false,
+      ignoreOffer: false,
+      isSettingRemoteAnswerPending: false,
+      polite,
+    }
+    this.peers.set(peerID, state)
+
+    // --- Perfect Negotiation: onnegotiationneeded ---
+    pc.onnegotiationneeded = async () => {
+      try {
+        console.info(`[voice] negotiationneeded for ${peerID}`)
+        state.makingOffer = true
+        await pc.setLocalDescription()
+        const offer = pc.localDescription
+        if (offer) {
+          console.info(`[voice] >> sdp_offer to ${peerID}, sdp=${(offer.sdp ?? '').length}B`)
+          this.sendSignal({
+            type: 'sdp_offer',
+            from: this.selfPeerID,
+            to: peerID,
+            server_id: this.serverID,
+            channel_id: this.channelID,
+            payload: { sdp: offer.sdp ?? '' },
+          })
+        }
+      } catch (e) {
+        console.error(`[voice] negotiationneeded error for ${peerID}:`, e)
+      } finally {
+        state.makingOffer = false
+      }
+    }
+
+    // --- ICE candidates ---
     pc.onicecandidate = (event) => {
       if (!event.candidate) {
         console.info(`[voice] ICE gathering complete for ${peerID}`)
         return
       }
-      // Log candidate type for diagnostics (host/srflx/relay)
       const candStr = event.candidate.candidate
       const typeMatch = candStr.match(/typ\s+(\w+)/)
-      console.info(`[voice] ICE candidate for ${peerID}: type=${typeMatch?.[1] ?? 'unknown'} ${candStr.substring(0, 80)}`)
+      console.info(`[voice] ICE candidate for ${peerID}: type=${typeMatch?.[1] ?? '?'} ${candStr.substring(0, 80)}`)
       this.sendSignal({
         type: 'ice_candidate',
         from: this.selfPeerID,
@@ -667,57 +691,51 @@ export class VoiceRTCClient {
       })
     }
 
+    // --- Remote tracks ---
     pc.ontrack = (event) => {
       console.info(`[voice] ontrack from ${peerID}: kind=${event.track.kind}, id=${event.track.id}`)
       if (event.streams.length > 0 && event.streams[0]) {
         for (const track of event.streams[0].getTracks()) {
-          if (!stream.getTracks().some((t) => t.id === track.id)) {
+          if (!stream.getTracks().some(t => t.id === track.id)) {
             stream.addTrack(track)
           }
         }
-      } else if (!stream.getTracks().some((t) => t.id === event.track.id)) {
+      } else if (!stream.getTracks().some(t => t.id === event.track.id)) {
         stream.addTrack(event.track)
       }
 
-      // Re-assign srcObject so the audio element picks up the new track.
       audio.srcObject = stream
       audio.volume = 1.0
       audio.muted = this.deafened
 
       this.setupPeerAnalyser(peerID, stream)
 
-      // Force play — WebView2 may block autoplay without user gesture.
-      const playAudio = () => {
-        audio.play().then(() => {
-          console.info(`[voice] Audio playing for peer ${peerID}`)
-        }).catch((e) => {
-          console.warn(`[voice] Autoplay blocked for peer ${peerID}:`, e)
-          // Retry on next user interaction
-          const resume = () => {
-            void audio.play().catch(() => {})
-            document.removeEventListener('click', resume)
-            document.removeEventListener('keydown', resume)
-          }
-          document.addEventListener('click', resume, { once: true })
-          document.addEventListener('keydown', resume, { once: true })
-        })
-      }
-      playAudio()
+      audio.play().then(() => {
+        console.info(`[voice] Audio playing for ${peerID}`)
+      }).catch((e) => {
+        console.warn(`[voice] Autoplay blocked for ${peerID}:`, e)
+        const resume = () => {
+          void audio.play().catch(() => {})
+          document.removeEventListener('click', resume)
+          document.removeEventListener('keydown', resume)
+        }
+        document.addEventListener('click', resume, { once: true })
+        document.addEventListener('keydown', resume, { once: true })
+      })
     }
 
     pc.onicecandidateerror = (event) => {
-      // Log ICE failures to help diagnose connectivity issues.
       const ev = event as RTCPeerConnectionIceErrorEvent
-      console.warn(`[voice] ICE candidate error for ${peerID}: ${ev.errorCode} ${ev.errorText ?? ''}`)
+      console.warn(`[voice] ICE error for ${peerID}: ${ev.errorCode} ${ev.errorText ?? ''}`)
     }
 
     pc.oniceconnectionstatechange = () => {
-      console.info(`[voice] ICE connection state for ${peerID}: ${pc.iceConnectionState}`)
+      console.info(`[voice] ICE state ${peerID}: ${pc.iceConnectionState}`)
     }
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState
-      console.info(`[voice] Connection state for ${peerID}: ${s}`)
+      console.info(`[voice] Connection state ${peerID}: ${s}`)
 
       if (s === 'connected') {
         this.clearDisconnectTimer(peerID)
@@ -728,9 +746,7 @@ export class VoiceRTCClient {
         this.clearDisconnectTimer(peerID)
         const timer = setTimeout(() => {
           const current = this.peers.get(peerID)
-          if (!current) return
-          const currentState = current.pc.connectionState
-          if (currentState === 'connected') return
+          if (!current || current.pc.connectionState === 'connected') return
           this.removePeer(peerID)
           this.participants.delete(peerID)
           this.peersMeta.delete(peerID)
@@ -749,16 +765,6 @@ export class VoiceRTCClient {
       }
     }
 
-    const state: PeerConnectionState = {
-      pc,
-      audio,
-      stream,
-      analyser: null,
-      analyserData: null,
-      sourceNode: null,
-      pendingICE: [],
-    }
-    this.peers.set(peerID, state)
     return state
   }
 
@@ -786,6 +792,7 @@ export class VoiceRTCClient {
     peer.pc.ontrack = null
     peer.pc.onicecandidate = null
     peer.pc.onconnectionstatechange = null
+    peer.pc.onnegotiationneeded = null
     peer.pc.close()
   }
 
@@ -807,21 +814,6 @@ export class VoiceRTCClient {
     this.disconnectTimers.delete(peerID)
   }
 
-  private async flushPendingICE(peerID: string): Promise<void> {
-    const peer = this.peers.get(peerID)
-    if (!peer || !peer.pc.remoteDescription || peer.pendingICE.length === 0) return
-
-    const pending = [...peer.pendingICE]
-    peer.pendingICE = []
-    for (const candidate of pending) {
-      try {
-        await peer.pc.addIceCandidate(candidate)
-      } catch {
-        // Ignore invalid/stale candidates after reconnect churn.
-      }
-    }
-  }
-
   private cleanupLocalStream(): void {
     if (!this.localStream) return
     for (const track of this.localStream.getTracks()) {
@@ -829,6 +821,10 @@ export class VoiceRTCClient {
     }
     this.localStream = null
   }
+
+  // ---------------------------------------------------------------------------
+  // Mute / deafen
+  // ---------------------------------------------------------------------------
 
   private applyMuteState(): void {
     const enabled = !this.muted && !this.deafened
@@ -847,7 +843,6 @@ export class VoiceRTCClient {
     const audio = deviceId
       ? { deviceId: { exact: deviceId } }
       : true
-
     return navigator.mediaDevices.getUserMedia({ audio, video: false })
   }
 
@@ -859,68 +854,21 @@ export class VoiceRTCClient {
     }
   }
 
-  private extractPeers(payload: unknown): VoicePeerMeta[] {
-    const raw = (payload as { peers?: unknown[] } | undefined)?.peers
-    if (!Array.isArray(raw)) return []
-    return raw.map((entry) => this.normalizePeerMeta(entry)).filter((v): v is VoicePeerMeta => !!v)
-  }
-
-  private extractJoinPeer(payload: unknown): VoicePeerMeta | null {
-    return this.normalizePeerMeta(payload)
-  }
-
-  private normalizePeerMeta(payload: unknown): VoicePeerMeta | null {
-    const raw = payload as Record<string, unknown> | null
-    if (!raw) return null
-
-    const peerID = this.safeString(raw.peer_id)
-    const userID = this.safeString(raw.user_id) || peerID
-    if (!peerID) return null
-
-    return {
-      peer_id: peerID,
-      user_id: userID,
-      username: this.safeUsername(this.safeString(raw.username), userID, peerID),
-      avatar_url: this.safeString(raw.avatar_url),
-      muted: this.safeBool(raw.muted),
-      deafened: this.safeBool(raw.deafened),
-    }
-  }
-
-  private extractSDP(payload: unknown): string {
-    return this.safeString((payload as { sdp?: unknown } | undefined)?.sdp)
-  }
-
-  private extractICE(payload: unknown): RTCIceCandidateInit | null {
-    const data = payload as Record<string, unknown> | null
-    if (!data) return null
-
-    const candidate = this.safeString(data.candidate)
-    if (!candidate) return null
-
-    const init: RTCIceCandidateInit = { candidate }
-
-    const sdpMid = this.safeString(data.sdp_mid)
-    if (sdpMid) init.sdpMid = sdpMid
-
-    const rawIndex = data.sdp_mline_index
-    if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
-      init.sdpMLineIndex = rawIndex
-    }
-
-    return init
-  }
+  // ---------------------------------------------------------------------------
+  // Signal helpers
+  // ---------------------------------------------------------------------------
 
   private sendSignal(signal: SignalMessage): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn(`[voice] Cannot send signal '${signal.type}': WS not open (state=${this.ws?.readyState})`)
+      return
+    }
     const payload: SignalMessage = signal.from ? signal : { ...signal, from: this.selfPeerID || undefined }
     this.ws.send(JSON.stringify(payload))
   }
 
   private startKeepalive(): void {
     this.stopKeepalive()
-    // Send a lightweight ping every 10s to prevent tunnel/proxy idle disconnects.
-    // The server ignores unknown signal types, so this is safe.
     this.keepaliveInterval = setInterval(() => {
       this.sendSignal({ type: 'ping' })
     }, 10_000)
@@ -972,6 +920,78 @@ export class VoiceRTCClient {
   private emitStatus(): void {
     this.onStatusChange(this.getStatus())
   }
+
+  // ---------------------------------------------------------------------------
+  // Payload extraction
+  // ---------------------------------------------------------------------------
+
+  private extractPeers(payload: unknown): VoicePeerMeta[] {
+    const raw = (payload as { peers?: unknown[] } | undefined)?.peers
+    if (!Array.isArray(raw)) return []
+    return raw.map(entry => this.normalizePeerMeta(entry)).filter((v): v is VoicePeerMeta => !!v)
+  }
+
+  private extractJoinPeer(payload: unknown): VoicePeerMeta | null {
+    return this.normalizePeerMeta(payload)
+  }
+
+  private normalizePeerMeta(payload: unknown): VoicePeerMeta | null {
+    const raw = payload as Record<string, unknown> | null
+    if (!raw) return null
+
+    const peerID = this.safeString(raw.peer_id)
+    const userID = this.safeString(raw.user_id) || peerID
+    if (!peerID) return null
+
+    return {
+      peer_id: peerID,
+      user_id: userID,
+      username: this.safeUsername(this.safeString(raw.username), userID, peerID),
+      avatar_url: this.safeString(raw.avatar_url),
+      muted: this.safeBool(raw.muted),
+      deafened: this.safeBool(raw.deafened),
+    }
+  }
+
+  private extractSDP(payload: unknown): string {
+    return this.safeString((payload as { sdp?: unknown } | undefined)?.sdp)
+  }
+
+  private extractICE(payload: unknown): RTCIceCandidateInit | null {
+    const data = payload as Record<string, unknown> | null
+    if (!data) return null
+
+    const candidate = this.safeString(data.candidate)
+    if (!candidate) return null
+
+    const init: RTCIceCandidateInit = { candidate }
+
+    const sdpMid = this.safeString(data.sdp_mid)
+    if (sdpMid) init.sdpMid = sdpMid
+
+    const rawIndex = data.sdp_mline_index
+    if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
+      init.sdpMLineIndex = rawIndex
+    }
+
+    return init
+  }
+
+  private extractChannelStartedAt(payload: unknown): number | null {
+    const raw = (payload as { channel_started_at?: unknown } | undefined)?.channel_started_at
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return Math.floor(raw)
+    }
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed)
+    }
+    return null
+  }
+
+  // ---------------------------------------------------------------------------
+  // URL helpers
+  // ---------------------------------------------------------------------------
 
   private toSignalingURL(baseURL: string): string {
     const trimmed = baseURL.replace(/\/$/, '')
@@ -1070,6 +1090,10 @@ export class VoiceRTCClient {
     return urls
   }
 
+  // ---------------------------------------------------------------------------
+  // Safe type helpers
+  // ---------------------------------------------------------------------------
+
   private safeString(value: unknown): string {
     return typeof value === 'string' ? value.trim() : ''
   }
@@ -1091,24 +1115,14 @@ export class VoiceRTCClient {
     return peerID.trim().slice(0, 12) || 'user'
   }
 
-  private extractChannelStartedAt(payload: unknown): number | null {
-    const raw = (payload as { channel_started_at?: unknown } | undefined)?.channel_started_at
-    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
-      return Math.floor(raw)
-    }
-    if (typeof raw === 'string' && raw.trim() !== '') {
-      const parsed = Number(raw)
-      if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed)
-    }
-    return null
-  }
+  // ---------------------------------------------------------------------------
+  // Audio analysis (VAD for remote peers)
+  // ---------------------------------------------------------------------------
 
   private initAudioAnalysis(): void {
     try {
       this.audioContext = new AudioContext()
-      void this.audioContext.resume().catch(() => {
-        // ignore resume failures; VAD is best-effort
-      })
+      void this.audioContext.resume().catch(() => {})
       this.startSpeakingLoop()
     } catch {
       this.audioContext = null
@@ -1122,9 +1136,7 @@ export class VoiceRTCClient {
     }
 
     if (this.audioContext) {
-      void this.audioContext.close().catch(() => {
-        // ignore close failures
-      })
+      void this.audioContext.close().catch(() => {})
       this.audioContext = null
     }
   }
