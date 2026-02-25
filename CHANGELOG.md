@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Voice WebSocket drops causing auto-disconnect** (`voiceRTC.ts`): added automatic WebSocket reconnect with exponential backoff (up to 5 attempts) when the signaling connection drops unexpectedly (e.g., through Cloudflare tunnels). The local audio stream and voice state are preserved during reconnect, preventing users from being ejected from the voice channel on transient network interruptions.
+- **Voice WebSocket drops causing auto-disconnect** (`voiceRTC.ts`, `server.go`, `client.go`): added automatic WebSocket reconnect with exponential backoff (up to 5 attempts) when the signaling connection drops unexpectedly. Added client-side keepalive pings every 10s to prevent tunnel/proxy idle disconnects. Reduced server and Go client ping interval from 50s to 15s and pong wait from 60s to 30s for faster detection and tunnel compatibility.
 - **Nginx WebSocket proxy timeouts** (`nginx.conf`): added `proxy_send_timeout 3600s`, `proxy_buffering off`, and `proxy_cache off` to the `/ws` location block, preventing premature WebSocket connection drops through the reverse proxy.
 - **Voice mute/deaf not visible to other users** (`voice.svelte.ts`): removed `!isServerMode()` guard that prevented `channelParticipants` polling enrichment in server mode, ensuring mute/deaf indicators appear for all peers via both real-time signals and polling fallback.
 - **Friends appearing online when offline** (`friends.svelte.ts`): localStorage cache now always loads friends as offline regardless of cache age, preventing false-positive online status from stale sessions. The API provides authoritative presence within the first poll cycle (~2.5s).

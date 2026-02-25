@@ -13,8 +13,8 @@ import (
 
 const (
 	clientWriteWait      = 10 * time.Second
-	clientPongWait       = 60 * time.Second
-	clientPingPeriod     = 50 * time.Second
+	clientPongWait       = 30 * time.Second
+	clientPingPeriod     = 15 * time.Second
 	reconnectInitialWait = 1 * time.Second
 	reconnectMaxWait     = 30 * time.Second
 )

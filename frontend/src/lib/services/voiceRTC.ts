@@ -111,6 +111,7 @@ export class VoiceRTCClient {
   private readonly reconnectBaseDelay = 1000 // 1s, exponential backoff
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private intentionalDisconnect = false
+  private keepaliveInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
@@ -170,6 +171,7 @@ export class VoiceRTCClient {
     }
 
     this.ws.onclose = () => {
+      this.stopKeepalive()
       if (this.intentionalDisconnect || this.state === 'disconnected') {
         // User explicitly left — do full cleanup
         if (this.state !== 'disconnected') {
@@ -207,6 +209,10 @@ export class VoiceRTCClient {
         deafened: this.deafened,
       },
     })
+
+    // Start client-side keepalive to prevent tunnel/proxy idle timeouts.
+    // Browser WebSocket API has no ping() — send a lightweight signal instead.
+    this.startKeepalive()
   }
 
   private async scheduleReconnect(): Promise<void> {
@@ -287,6 +293,7 @@ export class VoiceRTCClient {
     }
 
     this.state = 'disconnected'
+    this.stopKeepalive()
     this.cleanupPeers()
     this.cleanupLocalStream()
     this.cleanupAudioAnalysis()
@@ -825,6 +832,22 @@ export class VoiceRTCClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const payload: SignalMessage = signal.from ? signal : { ...signal, from: this.selfPeerID || undefined }
     this.ws.send(JSON.stringify(payload))
+  }
+
+  private startKeepalive(): void {
+    this.stopKeepalive()
+    // Send a lightweight ping every 10s to prevent tunnel/proxy idle disconnects.
+    // The server ignores unknown signal types, so this is safe.
+    this.keepaliveInterval = setInterval(() => {
+      this.sendSignal({ type: 'ping' })
+    }, 10_000)
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval)
+      this.keepaliveInterval = null
+    }
   }
 
   private sendPeerState(): void {

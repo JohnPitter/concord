@@ -14,8 +14,8 @@ import (
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = 50 * time.Second
+	pongWait       = 30 * time.Second
+	pingPeriod     = 15 * time.Second
 	maxMessageSize = 64 * 1024
 	peerSendBuffer = 128
 )
