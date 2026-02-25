@@ -114,6 +114,7 @@ interface PeerConnectionState {
   sourceNode: MediaStreamAudioSourceNode | null
   screenVideoSender: RTCRtpSender | null
   screenAudioSender: RTCRtpSender | null
+  pendingRemoteCandidates: RTCIceCandidateInit[]
   // Perfect negotiation state (MDN pattern)
   makingOffer: boolean
   ignoreOffer: boolean
@@ -207,6 +208,7 @@ export class VoiceRTCClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private intentionalDisconnect = false
   private keepaliveInterval: ReturnType<typeof setInterval> | null = null
+  private signalQueue: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly onStatusChange: (status: VoiceRTCStatus) => void,
@@ -231,6 +233,7 @@ export class VoiceRTCClient {
     this.peersMeta.clear()
     this.participants.clear()
     this.remoteScreenStreams.clear()
+    this.signalQueue = Promise.resolve()
     this.diagnosticsEvents = []
     this.clearAllIceRestartState()
     this.screenQoSProfile = 'high'
@@ -290,10 +293,11 @@ export class VoiceRTCClient {
     const wsURL = this.toSignalingURL(opts.baseURL)
     this.pushDiag('info', 'ws:connect', wsURL)
     this.ws = await this.openWebSocket(wsURL)
+    this.signalQueue = Promise.resolve()
     this.pushDiag('info', 'ws:open', 'signaling connected')
 
     this.ws.onmessage = (event) => {
-      void this.handleSignal(event.data)
+      this.enqueueSignal(event.data)
     }
 
     this.ws.onclose = () => {
@@ -702,6 +706,17 @@ export class VoiceRTCClient {
     }
   }
 
+  private enqueueSignal(rawData: unknown): void {
+    this.signalQueue = this.signalQueue
+      .then(async () => {
+        await this.handleSignal(rawData)
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e)
+        this.pushDiag('warn', 'signal:queue', msg)
+      })
+  }
+
   // ---------------------------------------------------------------------------
   // Peer list / join / leave handlers
   // ---------------------------------------------------------------------------
@@ -727,8 +742,8 @@ export class VoiceRTCClient {
     if (!peer || peer.peer_id === this.selfPeerID) return
     this.pushDiag('info', 'peer:joined', `${peer.peer_id} (${peer.username})`)
     this.registerPeer(peer)
-    // Create a PeerConnection — onnegotiationneeded fires automatically
-    this.ensurePeerConnection(peer.peer_id)
+    // Avoid offer glare: existing peers wait for the joiner to initiate.
+    this.pushDiag('info', 'peer:joined:await-offer', peer.peer_id)
     this.emitStatus()
   }
 
@@ -817,6 +832,7 @@ export class VoiceRTCClient {
 
         peer.isSettingRemoteAnswerPending = false
         await pc.setRemoteDescription(description)
+        await this.flushPendingICECandidates(fromPeerID, peer)
         console.info(`[voice] Remote offer set for ${fromPeerID}, signalingState=${pc.signalingState}`)
 
         await pc.setLocalDescription()
@@ -840,6 +856,7 @@ export class VoiceRTCClient {
         console.info(`[voice] Setting remote answer for ${fromPeerID}, signalingState=${sigState}`)
         peer.isSettingRemoteAnswerPending = true
         await pc.setRemoteDescription(description)
+        await this.flushPendingICECandidates(fromPeerID, peer)
         peer.isSettingRemoteAnswerPending = false
         console.info(`[voice] Remote answer set for ${fromPeerID}, connectionState=${pc.connectionState}`)
       }
@@ -856,6 +873,13 @@ export class VoiceRTCClient {
     if (!candidate) return
     const peer = this.peers.get(fromPeerID)
     if (!peer) return
+
+    if (!peer.pc.remoteDescription) {
+      if (!peer.ignoreOffer) {
+        peer.pendingRemoteCandidates.push(candidate)
+      }
+      return
+    }
 
     try {
       await peer.pc.addIceCandidate(candidate)
@@ -905,6 +929,7 @@ export class VoiceRTCClient {
       sourceNode: null,
       screenVideoSender: null,
       screenAudioSender: null,
+      pendingRemoteCandidates: [],
       makingOffer: false,
       ignoreOffer: false,
       isSettingRemoteAnswerPending: false,
@@ -1073,6 +1098,21 @@ export class VoiceRTCClient {
     }
 
     return state
+  }
+
+  private async flushPendingICECandidates(peerID: string, peer: PeerConnectionState): Promise<void> {
+    if (peer.pendingRemoteCandidates.length === 0) return
+    const pending = peer.pendingRemoteCandidates.splice(0, peer.pendingRemoteCandidates.length)
+
+    for (const candidate of pending) {
+      try {
+        await peer.pc.addIceCandidate(candidate)
+      } catch (e) {
+        if (!peer.ignoreOffer) {
+          console.warn(`[voice] Failed to add buffered ICE candidate from ${peerID}:`, e)
+        }
+      }
+    }
   }
 
   private removePeerFromSession(peerID: string): void {
