@@ -84,7 +84,9 @@ export function getVoice() {
     get screenSharing() { return screenSharing },
     get speakers() {
       // Enrich speakers reactively: local user gets client-side VAD + screen sharing
-      const channelPeers = !isServerMode() && channelId
+      // channelParticipants polling provides a backup source for mute/deaf state
+      // in all modes (server + P2P), ensuring indicators stay visible.
+      const channelPeers = channelId
         ? (channelParticipants[channelId] ?? [])
         : []
 
@@ -163,10 +165,14 @@ function applyVoiceStatus(status: VoiceStatusData): void {
   }
   const startedAt = typeof status.channel_started_at === 'number' ? status.channel_started_at : null
   if (startedAt && startedAt > 0) {
-    if (channelStartedAt !== startedAt) {
-      channelStartedAt = startedAt
-      if (state === 'connected') startTimer(channelStartedAt)
-    }
+    const changed = channelStartedAt !== startedAt
+    channelStartedAt = startedAt
+    // Restart timer with authoritative server timestamp when it changes
+    if (changed && state === 'connected') startTimer(channelStartedAt)
+  }
+  // Start timer if connected with server timestamp but timer not yet ticking
+  if (state === 'connected' && channelStartedAt && !timerInterval) {
+    startTimer(channelStartedAt)
   }
   const normalized = (status.speakers ?? []).map(s => normalizeSpeaker(s))
   const newSpeakers = sortSpeakersStable(normalized)
@@ -404,7 +410,9 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
     }
     await refreshVoiceStatus()
     playJoinSound()
-    startTimer(channelStartedAt ?? Date.now())
+    // Timer: prefer server-provided channel_started_at for synchronized display.
+    // applyVoiceStatus may have already started it if peer_list arrived fast.
+    if (!timerInterval) startTimer(channelStartedAt ?? Date.now())
     startVoicePolling()
     startVoiceActivityDetection()
     setupTranslatedAudioListener()

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voice mute/deaf not visible to other users** (`voice.svelte.ts`): removed `!isServerMode()` guard that prevented `channelParticipants` polling enrichment in server mode, ensuring mute/deaf indicators appear for all peers via both real-time signals and polling fallback.
+- **Friends appearing online when offline** (`friends.svelte.ts`): localStorage cache now always loads friends as offline regardless of cache age, preventing false-positive online status from stale sessions. The API provides authoritative presence within the first poll cycle (~2.5s).
+- **Voice channel timer desynchronized between users** (`voice.svelte.ts`): removed eager `startTimer(Date.now())` before server timestamp arrives; `applyVoiceStatus` now starts the timer only when the authoritative `channel_started_at` is received from the signaling server, ensuring all users see the same elapsed time.
+
 ### Added
 
 - **Desktop update checker UI** (`frontend/src/lib/services/updater.ts`, `SettingsPanel.svelte`): app now checks GitHub Releases (`/releases/latest`), compares current vs latest version, shows update status in Settings, and provides an **Update now** action opening the release page.

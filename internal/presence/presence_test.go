@@ -22,8 +22,8 @@ func TestTrackerSetOffline(t *testing.T) {
 }
 
 func TestTrackerReaperEvictsStaleEntries(t *testing.T) {
-	// Use a very short TTL so entries expire quickly.
-	tracker := NewTracker(50 * time.Millisecond)
+	// TTL must be >= 2s so reaper interval (ttl/2) >= 1s (the enforced minimum).
+	tracker := NewTracker(2 * time.Second)
 	defer tracker.Stop()
 
 	tracker.Touch("user-a")
@@ -33,8 +33,8 @@ func TestTrackerReaperEvictsStaleEntries(t *testing.T) {
 		t.Fatal("expected both users to be online right after touch")
 	}
 
-	// Wait for TTL to expire and reaper to run (reaper runs every ttl/2 = 25ms).
-	time.Sleep(120 * time.Millisecond)
+	// Wait for TTL to expire (2s) + reaper cycle (1s) + margin.
+	time.Sleep(3500 * time.Millisecond)
 
 	if tracker.IsOnline("user-a") {
 		t.Error("expected user-a to be offline after TTL expired")

@@ -196,13 +196,10 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const data = JSON.parse(raw)
-      const cachedAt = typeof data.cachedAt === 'number' ? data.cachedAt : 0
-      const stalePresence = cachedAt <= 0 || Date.now() - cachedAt > STALE_PRESENCE_MS
-
+      // Always load cached friends/DMs as offline to prevent false online status.
+      // The API will provide the authoritative presence within the first poll cycle (~2.5s).
       if (data.friends) {
-        state.friends = stalePresence
-          ? data.friends.map((f: Friend) => forceOfflineFriend(f))
-          : data.friends
+        state.friends = data.friends.map((f: Friend) => forceOfflineFriend(f))
       }
       if (data.pendingRequests) {
         state.pendingRequests = data.pendingRequests
@@ -213,9 +210,7 @@ function loadFromStorage() {
       }
       if (data.blocked) state.blocked = data.blocked
       if (data.dms) {
-        state.dms = stalePresence
-          ? data.dms.map((dm: DMConversation) => ({ ...dm, status: 'offline' }))
-          : data.dms
+        state.dms = data.dms.map((dm: DMConversation) => ({ ...dm, status: 'offline' as FriendStatus }))
       }
     }
     const dmRaw = localStorage.getItem(DM_MESSAGES_KEY)
