@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Server-mode voice stuck in channel without audio for remote peers** (`internal/voice/ice_config.go`): ICE config now includes a public TURN relay fallback (`openrelay.metered.ca`) alongside self-hosted TURN credentials, preventing silent media failures when `CONCORD_TURN_HOST` points to a private/LAN address not reachable by internet clients.
+- **WebRTC glare could stall server-mode audio negotiation** (`frontend/src/lib/services/voiceRTC.ts`): added explicit polite-side rollback handling on offer collision plus negotiation guard while signaling state is unstable, reducing sessions where peers join the same channel but no `sdp_answer` is produced.
 - **Voice WebSocket drops causing auto-disconnect** (`voiceRTC.ts`, `server.go`, `client.go`): added automatic WebSocket reconnect with exponential backoff (up to 5 attempts) when the signaling connection drops unexpectedly. Added client-side keepalive pings every 10s to prevent tunnel/proxy idle disconnects. Reduced server and Go client ping interval from 50s to 15s and pong wait from 60s to 30s for faster detection and tunnel compatibility.
 - **Nginx WebSocket proxy timeouts** (`nginx.conf`): added `proxy_send_timeout 3600s`, `proxy_buffering off`, and `proxy_cache off` to the `/ws` location block, preventing premature WebSocket connection drops through the reverse proxy.
 - **Voice mute/deaf not visible to other users** (`voice.svelte.ts`): removed `!isServerMode()` guard that prevented `channelParticipants` polling enrichment in server mode, ensuring mute/deaf indicators appear for all peers via both real-time signals and polling fallback.

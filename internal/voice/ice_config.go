@@ -16,6 +16,8 @@ const (
 	defaultTurnTLSPort   = 5349
 	minCredentialTTL     = 5 * time.Minute
 	defaultCredentialTTL = 12 * time.Hour
+	openRelayUsername    = "openrelayproject"
+	openRelayCredential  = "openrelayproject"
 )
 
 // ICEServer represents a single ICE server entry for WebRTC peers.
@@ -117,6 +119,19 @@ func (p *ICECredentialsProvider) BuildConfig(userID, publicHost string) ICEConfi
 		URLs:       turnURLs,
 		Username:   username,
 		Credential: credential,
+	})
+
+	// Keep a public relay fallback available for server-mode browser clients.
+	// This mirrors the fallback already used in the P2P voice engine and helps
+	// when self-hosted TURN is unreachable from remote NATs.
+	resp.Servers = append(resp.Servers, ICEServer{
+		URLs: []string{
+			"turn:openrelay.metered.ca:80",
+			"turn:openrelay.metered.ca:443",
+			"turns:openrelay.metered.ca:443",
+		},
+		Username:   openRelayUsername,
+		Credential: openRelayCredential,
 	})
 	resp.TTLSeconds = int64(ttl.Seconds())
 	resp.ExpiresAt = expiresAt

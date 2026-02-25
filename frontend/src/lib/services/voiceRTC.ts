@@ -803,6 +803,16 @@ export class VoiceRTCClient {
 
         if (offerCollision) {
           console.info(`[voice] Offer collision with ${fromPeerID}, rolling back (we are polite)`)
+          if (pc.signalingState !== 'stable') {
+            try {
+              await pc.setLocalDescription({ type: 'rollback' })
+              this.pushDiag('info', 'sdp:rollback', `${fromPeerID} local rollback applied`)
+            } catch (rollbackErr) {
+              // Some engines already perform implicit rollback on setRemoteDescription(offer).
+              const msg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)
+              this.pushDiag('warn', 'sdp:rollback', `${fromPeerID} rollback failed: ${msg}`)
+            }
+          }
         }
 
         peer.isSettingRemoteAnswerPending = false
@@ -814,6 +824,7 @@ export class VoiceRTCClient {
         console.info(`[voice] Local answer created for ${fromPeerID}, type=${answer?.type}, sdp=${(answer?.sdp ?? '').length}B`)
         if (answer && answer.sdp) {
           console.info(`[voice] >> sdp_answer to ${fromPeerID}`)
+          this.pushDiag('info', 'sdp:answer', `${fromPeerID} ${answer.sdp.length}B`)
           this.sendSignal({
             type: 'sdp_answer',
             from: this.selfPeerID,
@@ -835,6 +846,7 @@ export class VoiceRTCClient {
     } catch (e) {
       peer.isSettingRemoteAnswerPending = false
       const errMsg = e instanceof Error ? e.message : String(e)
+      this.pushDiag('warn', 'sdp:handle:error', `${type} ${fromPeerID} ${errMsg}`)
       console.error(`[voice] FAILED to handle ${type} from ${fromPeerID}: ${errMsg}`, e)
     }
   }
@@ -911,6 +923,11 @@ export class VoiceRTCClient {
     // --- Perfect Negotiation: onnegotiationneeded ---
     pc.onnegotiationneeded = async () => {
       try {
+        if (pc.signalingState !== 'stable') {
+          this.pushDiag('info', 'sdp:offer:skip', `${peerID} signalingState=${pc.signalingState}`)
+          return
+        }
+
         console.info(`[voice] negotiationneeded for ${peerID}`)
         state.makingOffer = true
         await pc.setLocalDescription()

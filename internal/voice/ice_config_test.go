@@ -28,7 +28,7 @@ func TestICECredentialsProvider_Enabled(t *testing.T) {
 	resp := p.BuildConfig("user:42", "")
 
 	assert.True(t, p.Enabled())
-	require.Len(t, resp.Servers, 3)
+	require.Len(t, resp.Servers, 4)
 	assert.Greater(t, resp.TTLSeconds, int64(0))
 	assert.Greater(t, resp.ExpiresAt, time.Now().UTC().Unix())
 
@@ -49,15 +49,25 @@ func TestICECredentialsProvider_Enabled(t *testing.T) {
 	_, _ = mac.Write([]byte(turn.Username))
 	expectedCredential := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	assert.Equal(t, expectedCredential, turn.Credential)
+
+	fallback := resp.Servers[3]
+	assert.Contains(t, fallback.URLs, "turn:openrelay.metered.ca:80")
+	assert.Contains(t, fallback.URLs, "turn:openrelay.metered.ca:443")
+	assert.Contains(t, fallback.URLs, "turns:openrelay.metered.ca:443")
+	assert.Equal(t, "openrelayproject", fallback.Username)
+	assert.Equal(t, "openrelayproject", fallback.Credential)
 }
 
 func TestICECredentialsProvider_UsesRequestHostFallback(t *testing.T) {
 	p := NewICECredentialsProvider("", 3478, 0, "my-secret", 10*time.Minute)
 	resp := p.BuildConfig("user", "voice.example.com:443")
 
-	require.Len(t, resp.Servers, 3)
+	require.Len(t, resp.Servers, 4)
 	turn := resp.Servers[2]
 	assert.Contains(t, turn.URLs, "stun:voice.example.com:3478")
 	assert.Contains(t, turn.URLs, "turn:voice.example.com:3478?transport=udp")
 	assert.Contains(t, turn.URLs, "turn:voice.example.com:3478?transport=tcp")
+
+	fallback := resp.Servers[3]
+	assert.Contains(t, fallback.URLs, "turn:openrelay.metered.ca:80")
 }
