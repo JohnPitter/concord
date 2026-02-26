@@ -10,6 +10,7 @@
     message,
     isOwn = false,
     showAvatar = true,
+    canDeleteOthers = false,
     attachments = [],
     onEdit,
     onDelete,
@@ -19,6 +20,7 @@
     message: MessageData
     isOwn?: boolean
     showAvatar?: boolean
+    canDeleteOthers?: boolean
     attachments?: AttachmentData[]
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
@@ -163,7 +165,7 @@
           </svg>
         </button>
       {/if}
-      {#if onDelete}
+      {#if onDelete && (isOwn || canDeleteOthers)}
         <button
           class="rounded p-1 text-void-text-muted transition-colors hover:bg-void-danger/20 hover:text-void-danger"
           onclick={() => onDelete?.(message.id)}

@@ -430,6 +430,7 @@ export namespace signaling {
 	    public_key?: number[];
 	    muted: boolean;
 	    deafened: boolean;
+	    screen_sharing?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeerEntry(source);
@@ -445,6 +446,7 @@ export namespace signaling {
 	        this.public_key = source["public_key"];
 	        this.muted = source["muted"];
 	        this.deafened = source["deafened"];
+	        this.screen_sharing = source["screen_sharing"];
 	    }
 	}
 

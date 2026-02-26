@@ -12,6 +12,7 @@
     sendMessage, editMessage, deleteMessage, resetChat,
     uploadFile, downloadFile, deleteAttachment, loadAttachments,
     searchMessages, clearSearch,
+    startUnreadPolling, stopUnreadPolling,
   } from './lib/stores/chat.svelte'
   import {
     getVoice, joinVoice, leaveVoice,
@@ -20,6 +21,7 @@
     setLocalUsername,
     startParticipantsPolling, stopParticipantsPolling,
     getChannelParticipants,
+    getChannelElapsed,
   } from './lib/stores/voice.svelte'
   import { getSettings, loadSettings, setNetworkMode, setP2PProfile, resetMode, markWelcomeSeen } from './lib/stores/settings.svelte'
   import {
@@ -136,6 +138,17 @@
     }
   })
 
+  // Start unread polling for text channels when viewing a server
+  $effect(() => {
+    if (!isHome && srv.textChannels.length > 0) {
+      const textChIds = srv.textChannels.map(c => c.id)
+      startUnreadPolling(textChIds)
+      return () => { stopUnreadPolling() }
+    } else {
+      stopUnreadPolling()
+    }
+  })
+
   // Auto-select first text channel when channels change
   $effect(() => {
     if (!isHome && srv.textChannels.length > 0 && !activeChannelId) {
@@ -190,6 +203,7 @@
       id: c.id,
       name: c.name,
       type: c.type as 'text' | 'voice',
+      unreadCount: chat.unreadCounts[c.id] ?? 0,
     }))
   )
 
@@ -561,6 +575,7 @@
         voiceDiagnostics={vc.diagnostics}
         voiceLocalSpeaking={vc.localSpeaking}
         {getChannelParticipants}
+        {getChannelElapsed}
         onJoinVoice={handleJoinVoice}
         onLeaveVoice={leaveVoice}
         onToggleMute={toggleMute}
@@ -585,6 +600,7 @@
         onSend={handleSendMessage}
         onLoadMore={loadOlderMessages}
         onDelete={handleDeleteMessage}
+        canDeleteOthers={currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'moderator'}
         onFileSelect={handleFileSelect}
         onDownloadFile={handleDownloadFile}
         onDeleteFile={handleDeleteFile}

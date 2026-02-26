@@ -14,6 +14,7 @@
     onLoadMore,
     onEdit,
     onDelete,
+    canDeleteOthers = false,
     onDownloadFile,
     onDeleteFile,
   }: {
@@ -26,6 +27,7 @@
     onLoadMore?: () => void
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
+    canDeleteOthers?: boolean
     onDownloadFile?: (id: string) => void
     onDeleteFile?: (id: string) => void
   } = $props()
@@ -119,6 +121,7 @@
           {message}
           isOwn={message.author_id === currentUserId}
           showAvatar={shouldShowAvatar(message, index)}
+          {canDeleteOthers}
           attachments={attachmentsByMessage[message.id] ?? []}
           {onEdit}
           {onDelete}

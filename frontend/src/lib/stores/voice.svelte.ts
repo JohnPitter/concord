@@ -122,7 +122,7 @@ export function getVoice() {
         let merged: SpeakerData = {
           ...s,
           speaking: s.speaking || (localSpeaking && local),
-          screenSharing: local ? screenSharing : false,
+          screenSharing: local ? screenSharing : s.screenSharing,
           dominant: s.dominant || (localSpeaking && local),
           muted: local ? muted : s.muted,
           deafened: local ? deafened : s.deafened,
@@ -499,25 +499,10 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
     if (isServerMode()) {
       // Server mode: voice runs entirely in the browser via WebRTC.
       // No Go backend involvement — connects directly to central signaling server.
-      console.info('[voice] Step 1: ensuring valid token...')
       await ensureValidToken()
-      console.info('[voice] Step 1: token OK')
 
       if (typeof RTCPeerConnection === 'undefined') {
         throw new Error('WebRTC is not supported in this browser. Voice requires RTCPeerConnection.')
-      }
-      console.info('[voice] Step 2: RTCPeerConnection available')
-
-      // Pre-check microphone access before proceeding — fail fast with clear error.
-      console.info('[voice] Step 2.5: checking microphone access...')
-      try {
-        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        testStream.getTracks().forEach(t => t.stop()) // release immediately
-        console.info('[voice] Step 2.5: microphone access granted')
-      } catch (micErr) {
-        const detail = micErr instanceof DOMException ? `${micErr.name}: ${micErr.message}` : String(micErr)
-        console.error('[voice] Microphone access FAILED:', detail)
-        throw new Error(`Microphone access denied: ${detail}. Please allow microphone access and try again.`)
       }
 
       const settings = getSettings()
@@ -525,7 +510,6 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
       if (!baseURL) {
         throw new Error('Server URL not configured. Cannot connect to voice signaling.')
       }
-      console.info('[voice] Step 3: baseURL =', baseURL)
 
       rtcClient = new VoiceRTCClient(
         (status: VoiceRTCStatus) => {
@@ -540,7 +524,6 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         },
       )
 
-      console.info('[voice] Step 4: calling rtcClient.join...')
       await rtcClient.join({
         baseURL,
         serverID,
@@ -553,7 +536,6 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
         authToken: apiClient.getTokens()?.accessToken || '',
         noiseSuppression,
       })
-      console.info('[voice] Step 5: rtcClient.join completed successfully')
     } else {
       // P2P mode: voice runs through Go backend (local signaling server + Pion WebRTC).
       // Completely independent path — no shared logic with server mode.
@@ -562,7 +544,7 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
       console.info('[voice] P2P mode: JoinVoice completed')
     }
 
-    await refreshVoiceStatus()
+    refreshVoiceStatus()
     playJoinSound()
     // Timer: prefer server-provided channel_started_at for synchronized display.
     // applyVoiceStatus may have already started it if peer_list arrived fast.
@@ -587,41 +569,40 @@ export async function joinVoice(serverID: string, channelID: string, userID: str
 export async function leaveVoice(): Promise<void> {
   if (state === 'disconnected') return
 
-  try {
-    if (rtcClient) {
-      await rtcClient.leave()
-      rtcClient = null
-    } else {
-      await App.LeaveVoice()
-    }
-  } catch (e) {
-    console.error('Failed to leave voice channel:', e)
-  } finally {
-    stopVoicePolling()
-    stopVoiceActivityDetection()
-    stopScreenShare()
-    teardownTranslatedAudioListener()
-    stopTimer()
-    state = 'disconnected'
-    channelId = null
-    channelStartedAt = null
-    speakers = []
-    screenShares = []
-    muted = false
-    deafened = false
-    voiceDiagnostics = {
-      ts: Date.now(),
-      ws_state: WebSocket.CLOSED,
-      reconnect_attempts: 0,
-      muted: false,
-      deafened: false,
-      noise_suppression: noiseSuppression,
-      screen_sharing: false,
-      peers: [],
-      events: [],
-    }
-    previousSpeakerCount = 0
-    lastPoorQualityAlertAt.clear()
+  // Reset UI state immediately for snappy UX — cleanup runs async in background
+  const client = rtcClient
+  rtcClient = null
+  stopVoicePolling()
+  stopVoiceActivityDetection()
+  stopScreenShare()
+  teardownTranslatedAudioListener()
+  stopTimer()
+  state = 'disconnected'
+  channelId = null
+  channelStartedAt = null
+  speakers = []
+  screenShares = []
+  muted = false
+  deafened = false
+  voiceDiagnostics = {
+    ts: Date.now(),
+    ws_state: WebSocket.CLOSED,
+    reconnect_attempts: 0,
+    muted: false,
+    deafened: false,
+    noise_suppression: noiseSuppression,
+    screen_sharing: false,
+    peers: [],
+    events: [],
+  }
+  previousSpeakerCount = 0
+  lastPoorQualityAlertAt.clear()
+
+  // Fire-and-forget the actual RTC/backend cleanup
+  if (client) {
+    client.leave().catch((e) => console.error('Failed to leave voice channel:', e))
+  } else {
+    App.LeaveVoice().catch((e) => console.error('Failed to leave voice channel:', e))
   }
 }
 
@@ -718,10 +699,22 @@ function isLocalUser(speaker: SpeakerData): boolean {
 // Channel participants cache: maps channelID -> participants list
 // This shows who's in voice channels even when the local user is NOT connected.
 let channelParticipants = $state<Record<string, SpeakerData[]>>({})
+let channelStartedAtCache = $state<Record<string, number>>({})
+let spectatorTick = $state(0)
+let spectatorTimer: ReturnType<typeof setInterval> | null = null
 let participantsPolling: ReturnType<typeof setInterval> | null = null
 
 export function getChannelParticipants(channelId: string): SpeakerData[] {
   return channelParticipants[channelId] ?? []
+}
+
+export function getChannelElapsed(channelId: string): string {
+  // Reference spectatorTick so Svelte reacts to timer updates
+  void spectatorTick
+  const started = channelStartedAtCache[channelId]
+  if (!started || started <= 0) return ''
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000))
+  return formatElapsed(seconds)
 }
 
 export async function refreshChannelParticipants(serverID: string, channelIDs: string[]): Promise<void> {
@@ -782,9 +775,34 @@ export async function refreshChannelParticipants(serverID: string, channelIDs: s
     }
 
     channelParticipants = updated
+
+    // Fetch channel_started_at for channels with active participants (P2P mode)
+    if (!inServerMode) {
+      const timestamps: Record<string, number> = {}
+      await Promise.all(
+        channelIDs.map(async (chID) => {
+          if (!updated[chID] || updated[chID].length === 0) return
+          try {
+            const ts = await App.GetVoiceChannelStartedAt(serverID, chID)
+            if (ts > 0) timestamps[chID] = ts
+          } catch { /* ignore */ }
+        }),
+      )
+      channelStartedAtCache = timestamps
+    }
   } catch (e) {
     console.error('Failed to refresh channel participants:', e)
   }
+}
+
+function startSpectatorTimer(): void {
+  if (spectatorTimer) return
+  spectatorTimer = setInterval(() => { spectatorTick++ }, 1000)
+}
+
+function stopSpectatorTimer(): void {
+  if (spectatorTimer) { clearInterval(spectatorTimer); spectatorTimer = null }
+  spectatorTick = 0
 }
 
 export function startParticipantsPolling(serverID: string, channelIDs: string[]): void {
@@ -792,6 +810,7 @@ export function startParticipantsPolling(serverID: string, channelIDs: string[])
   if (channelIDs.length === 0) return
   // Initial fetch
   refreshChannelParticipants(serverID, channelIDs)
+  startSpectatorTimer()
   const intervalMs = isServerMode() ? SERVER_PARTICIPANTS_POLL_MS : P2P_PARTICIPANTS_POLL_MS
   participantsPolling = setInterval(() => {
     refreshChannelParticipants(serverID, channelIDs)
@@ -803,7 +822,9 @@ export function stopParticipantsPolling(): void {
     clearInterval(participantsPolling)
     participantsPolling = null
   }
+  stopSpectatorTimer()
   channelParticipants = {}
+  channelStartedAtCache = {}
 }
 
 export function resetVoice(): void {

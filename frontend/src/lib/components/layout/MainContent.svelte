@@ -20,6 +20,7 @@
     onLoadMore,
     onEdit,
     onDelete,
+    canDeleteOthers = false,
     onFileSelect,
     onDownloadFile,
     onDeleteFile,
@@ -41,6 +42,7 @@
     onLoadMore?: () => void
     onEdit?: (id: string) => void
     onDelete?: (id: string) => void
+    canDeleteOthers?: boolean
     onFileSelect?: (file: { name: string; data: number[] }) => void
     onDownloadFile?: (id: string) => void
     onDeleteFile?: (id: string) => void
@@ -195,6 +197,7 @@
     {onLoadMore}
     {onEdit}
     {onDelete}
+    {canDeleteOthers}
     {onDownloadFile}
     {onDeleteFile}
   />

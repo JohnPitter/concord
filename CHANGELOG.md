@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unread message tracking for text channels** (`chat.svelte.ts`, `chat.ts`, `App.svelte`, `ChannelSidebar.svelte`): text channels now show unread message count badges and bold channel names when there are unread messages. Uses localStorage to persist the last-read message ID per channel. Polls the backend every 5s for unread counts, automatically marks a channel as read when the user opens it, and excludes the active channel from unread display. Supports both P2P mode (Wails binding `GetUnreadCounts`) and server mode (REST endpoint `POST /api/v1/messages/unread`).
 - **Desktop update checker UI** (`frontend/src/lib/services/updater.ts`, `SettingsPanel.svelte`): app now checks GitHub Releases (`/releases/latest`), compares current vs latest version, shows update status in Settings, and provides an **Update now** action opening the release page.
 - **Desktop auto-update installer** (`internal/updater/service.go`, `main.go`, `frontend/src/lib/services/updater.ts`, `frontend/src/lib/components/settings/SettingsPanel.svelte`): on Windows desktop builds, `Update now` now downloads the release asset, verifies digest when available, stages `concord.exe`, applies update after process exit, and relaunches automatically.
 - **Backend auto-update service** (`deployments/docker/docker-compose.prod.yml`): added `watchtower` with label-based updates, rolling restart, and cleanup.

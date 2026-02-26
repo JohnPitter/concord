@@ -532,6 +532,19 @@ func (s *Server) GetServerChannelPeers(serverID string) map[string][]PeerEntry {
 	return result
 }
 
+// GetChannelStartedAt returns the unix millisecond timestamp when the channel
+// became active (first peer joined). Returns 0 if the channel is not active.
+func (s *Server) GetChannelStartedAt(serverID, channelID string) int64 {
+	key := serverID + ":" + channelID
+	s.mu.RLock()
+	t := s.channelStart[key]
+	s.mu.RUnlock()
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
+}
+
 // splitChannelKey splits a "serverID:channelID" key into its parts.
 func splitChannelKey(key string) [2]string {
 	parts := strings.SplitN(key, ":", 2)

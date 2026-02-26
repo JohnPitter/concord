@@ -73,7 +73,11 @@ export function GetServer(arg1:string):Promise<server.Server>;
 
 export function GetTranslationStatus():Promise<translation.Status>;
 
+export function GetUnreadCounts(arg1:Record<string, string>):Promise<Record<string, number>>;
+
 export function GetVersion():Promise<version.Info>;
+
+export function GetVoiceChannelStartedAt(arg1:string,arg2:string):Promise<number>;
 
 export function GetVoiceParticipants(arg1:string,arg2:string):Promise<Array<signaling.PeerEntry>>;
 

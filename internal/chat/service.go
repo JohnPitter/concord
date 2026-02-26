@@ -135,6 +135,12 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, actorID string, 
 	return nil
 }
 
+// GetUnreadCounts returns unread message counts per channel.
+// lastRead maps channel_id → last_read_message_id.
+func (s *Service) GetUnreadCounts(ctx context.Context, lastRead map[string]string) (map[string]int64, error) {
+	return s.repo.GetUnreadCounts(ctx, lastRead)
+}
+
 // SearchMessages performs FTS5 search within a channel.
 func (s *Service) SearchMessages(ctx context.Context, channelID, query string, limit int) ([]*SearchResult, error) {
 	query = strings.TrimSpace(query)

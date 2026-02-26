@@ -258,27 +258,47 @@ export class VoiceRTCClient {
       quality_score: 0,
     })
 
-    try {
-      this.localStream = await this.createLocalStream(opts.inputDeviceId)
-    } catch (e) {
+    // Parallelize mic capture, ICE config fetch, and WebSocket connect
+    const [micResult, iceResult, wsResult] = await Promise.allSettled([
+      this.createLocalStream(opts.inputDeviceId),
+      this.resolveIceServers(opts.baseURL, opts.authToken),
+      this.openWebSocket(this.toSignalingURL(opts.baseURL)),
+    ])
+
+    // Handle mic failure
+    if (micResult.status === 'rejected') {
+      // Close WS if it connected before we bail
+      if (wsResult.status === 'fulfilled') {
+        wsResult.value.close()
+      }
       await this.leave()
-      const detail = e instanceof DOMException ? e.message : String(e)
+      const detail = micResult.reason instanceof DOMException ? micResult.reason.message : String(micResult.reason)
       throw new Error(`Microphone access denied or unavailable: ${detail}`)
     }
-
+    this.localStream = micResult.value
     this.applyMuteState()
     this.initAudioAnalysis()
 
-    try {
-      this.iceServers = await this.resolveIceServers(opts.baseURL, opts.authToken)
-    } catch {
+    // Handle ICE config (non-fatal — falls back to defaults)
+    if (iceResult.status === 'fulfilled') {
+      this.iceServers = iceResult.value
+    } else {
       this.pushDiag('warn', 'ice:config', 'failed to fetch ICE config, using defaults')
       this.iceServers = DEFAULT_ICE_SERVERS
     }
     this.pushDiag('info', 'ice:config', `resolved ${this.iceServers.length} ICE server entries`)
 
+    // Handle WebSocket failure
+    if (wsResult.status === 'rejected') {
+      await this.leave()
+      const detail = wsResult.reason instanceof Error ? wsResult.reason.message : String(wsResult.reason)
+      this.pushDiag('error', 'join:failed', detail)
+      throw new Error(`Failed to connect to voice signaling server: ${detail}`)
+    }
+
+    // Wire up the WebSocket and send join signal
     try {
-      await this.connectWebSocket(opts, localUsername)
+      this.setupWebSocket(wsResult.value, opts, localUsername)
       this.state = 'connected'
       this.startStatsLoop()
       this.emitStatus()
@@ -290,10 +310,8 @@ export class VoiceRTCClient {
     }
   }
 
-  private async connectWebSocket(opts: VoiceJoinOptions, localUsername: string): Promise<void> {
-    const wsURL = this.toSignalingURL(opts.baseURL)
-    this.pushDiag('info', 'ws:connect', wsURL)
-    this.ws = await this.openWebSocket(wsURL)
+  private setupWebSocket(ws: WebSocket, opts: VoiceJoinOptions, localUsername: string): void {
+    this.ws = ws
     this.signalQueue = Promise.resolve()
     this.pushDiag('info', 'ws:open', 'signaling connected')
 
@@ -400,7 +418,8 @@ export class VoiceRTCClient {
         })
       }
 
-      await this.connectWebSocket(opts, localUsername)
+      const ws = await this.openWebSocket(this.toSignalingURL(opts.baseURL))
+      this.setupWebSocket(ws, opts, localUsername)
       this.reconnectAttempts = 0
       this.pushDiag('info', 'ws:reconnect', 'reconnected')
       this.emitStatus()
@@ -1876,7 +1895,7 @@ export class VoiceRTCClient {
   private async resolveIceServers(baseURL: string, authToken?: string): Promise<RTCIceServer[]> {
     const trimmed = baseURL.replace(/\/$/, '')
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4000)
+    const timer = setTimeout(() => controller.abort(), 2000)
 
     try {
       const headers: Record<string, string> = {

@@ -52,6 +52,7 @@
     voiceDiagnostics = null,
     voiceLocalSpeaking = false,
     getChannelParticipants,
+    getChannelElapsed,
     onJoinVoice,
     onLeaveVoice,
     onToggleMute,
@@ -84,6 +85,7 @@
     voiceDiagnostics?: VoiceDiagnosticsSnapshot | null
     voiceLocalSpeaking?: boolean
     getChannelParticipants?: (channelId: string) => SpeakerData[]
+    getChannelElapsed?: (channelId: string) => string
     onJoinVoice?: (channelId: string) => void
     onLeaveVoice?: () => void
     onToggleMute?: () => void
@@ -94,7 +96,7 @@
   } = $props()
 
   const canManageChannels = $derived(
-    currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'moderator'
+    currentUserRole === 'owner' || currentUserRole === 'admin'
   )
 
   function getAvatarForSpeaker(speaker: SpeakerData): string | undefined {
@@ -202,15 +204,17 @@
           <polyline points="6 9 12 15 18 9" />
         </svg>
         <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">{t(trans, 'channel.textChannels')}</span>
-        <button
-          class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
-          onclick={() => { creatingText = true; creatingVoice = false; newChannelName = '' }}
-          aria-label={t(trans, 'channel.createText')}
-        >
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+        {#if canManageChannels}
+          <button
+            class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
+            onclick={() => { creatingText = true; creatingVoice = false; newChannelName = '' }}
+            aria-label={t(trans, 'channel.createText')}
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        {/if}
       </div>
     {#if creatingText}
       <div class="flex gap-1 px-1 mb-1 animate-fade-in-down">
@@ -238,7 +242,9 @@
             class="flex flex-1 items-center gap-1.5 px-2 py-1.5 text-sm cursor-pointer min-w-0
               {channel.id === activeChannelId
                 ? 'text-void-text-primary'
-                : 'text-void-text-secondary hover:text-void-text-primary'}"
+                : channel.unreadCount
+                  ? 'text-void-text-primary hover:text-void-text-primary'
+                  : 'text-void-text-secondary hover:text-void-text-primary'}"
             onclick={() => onSelectChannel(channel.id)}
           >
             <svg class="h-4 w-4 shrink-0 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -247,7 +253,7 @@
               <line x1="10" y1="3" x2="8" y2="21" />
               <line x1="16" y1="3" x2="14" y2="21" />
             </svg>
-            <span class="truncate">{channel.name}</span>
+            <span class="truncate {channel.unreadCount ? 'font-semibold' : ''}">{channel.name}</span>
             {#if channel.unreadCount}
               <span class="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-void-danger px-1 text-[10px] font-bold text-white">
                 {channel.unreadCount}
@@ -275,15 +281,17 @@
           <polyline points="6 9 12 15 18 9" />
         </svg>
         <span class="text-[11px] font-bold uppercase tracking-wide text-void-text-muted flex-1">{t(trans, 'channel.voiceChannels')}</span>
-        <button
-          class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
-          onclick={() => { creatingVoice = true; creatingText = false; newChannelName = '' }}
-          aria-label={t(trans, 'channel.createVoice')}
-        >
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+        {#if canManageChannels}
+          <button
+            class="rounded p-0.5 text-void-text-muted hover:text-void-text-primary transition-colors cursor-pointer"
+            onclick={() => { creatingVoice = true; creatingText = false; newChannelName = '' }}
+            aria-label={t(trans, 'channel.createVoice')}
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        {/if}
       </div>
     {#if creatingVoice}
       <div class="flex gap-1 px-1 mb-1 animate-fade-in-down">
@@ -325,8 +333,12 @@
               <span class="ml-auto text-[11px] font-mono text-void-online tabular-nums">{voiceElapsed}</span>
             {:else}
               {@const spectatorParticipants = getChannelParticipants?.(channel.id) ?? []}
+              {@const spectatorElapsed = getChannelElapsed?.(channel.id) ?? ''}
               {#if spectatorParticipants.length > 0}
                 <span class="ml-auto flex items-center gap-1 text-[11px] text-void-text-muted">
+                  {#if spectatorElapsed}
+                    <span class="font-mono tabular-nums">{spectatorElapsed}</span>
+                  {/if}
                   <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
@@ -373,15 +385,14 @@
                   {/if}
                 </div>
                 <span class="text-xs text-void-text-secondary truncate">{displaySpeakerName}</span>
-                {#if speaker.dominant}
-                  <span class="rounded bg-void-accent/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-void-accent">voice</span>
-                {/if}
                 {#if speaker.screenSharing || (isLocal && voiceScreenSharing)}
                   <span class="rounded bg-void-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white animate-pulse">{t(trans, 'channel.live')}</span>
                 {/if}
-                <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase {qualityStyle(speaker.quality)}">
-                  {qualityLabel(speaker.quality)}
-                </span>
+                {#if speaker.quality && speaker.quality !== 'unknown'}
+                  <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase {qualityStyle(speaker.quality)}">
+                    {qualityLabel(speaker.quality)}
+                  </span>
+                {/if}
                 {#if speaker.deafened}
                   <Tooltip text={t(trans, 'voice.deafened')} position="top">
                     <svg class="h-3 w-3 shrink-0 text-void-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -402,7 +413,7 @@
                     </svg>
                   </Tooltip>
                 {/if}
-                <svg class="ml-auto h-3.5 w-3.5 shrink-0 {(speaker.speaking || (isLocal && voiceLocalSpeaking)) ? 'text-void-online animate-pulse' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
+                <svg class="ml-auto h-3.5 w-3.5 shrink-0 transition-colors duration-300 {(speaker.speaking || (isLocal && voiceLocalSpeaking)) ? 'text-void-online' : 'text-void-text-muted'}" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
                 </svg>
               </div>

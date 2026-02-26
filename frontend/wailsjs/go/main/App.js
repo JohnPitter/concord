@@ -122,8 +122,16 @@ export function GetTranslationStatus() {
   return window['go']['main']['App']['GetTranslationStatus']();
 }
 
+export function GetUnreadCounts(arg1) {
+  return window['go']['main']['App']['GetUnreadCounts'](arg1);
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
+}
+
+export function GetVoiceChannelStartedAt(arg1, arg2) {
+  return window['go']['main']['App']['GetVoiceChannelStartedAt'](arg1, arg2);
 }
 
 export function GetVoiceParticipants(arg1, arg2) {

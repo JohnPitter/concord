@@ -481,6 +481,12 @@ func (a *App) SearchMessages(channelID, query string, limit int) ([]*chat.Search
 	return a.chatService.SearchMessages(a.ctx, channelID, query, limit)
 }
 
+// GetUnreadCounts returns unread message counts per channel.
+// lastRead maps channel_id → last_read_message_id.
+func (a *App) GetUnreadCounts(lastRead map[string]string) (map[string]int64, error) {
+	return a.chatService.GetUnreadCounts(a.ctx, lastRead)
+}
+
 // --- Voice Bindings (P2P mode only) ---
 // In server mode, voice is handled entirely by the browser's VoiceRTCClient
 // connecting to the central signaling server. These Go bindings are only
@@ -602,6 +608,15 @@ func (a *App) GetVoiceParticipants(serverID, channelID string) []signaling.PeerE
 		return []signaling.PeerEntry{}
 	}
 	return peers
+}
+
+// GetVoiceChannelStartedAt returns the unix ms timestamp when the voice channel
+// became active (0 if inactive). Used by spectators to display elapsed time.
+func (a *App) GetVoiceChannelStartedAt(serverID, channelID string) int64 {
+	if a.sigServer == nil {
+		return 0
+	}
+	return a.sigServer.GetChannelStartedAt(serverID, channelID)
 }
 
 // --- Voice Translation Bindings ---

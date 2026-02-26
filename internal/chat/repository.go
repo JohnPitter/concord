@@ -233,6 +233,36 @@ func (r *Repository) Search(ctx context.Context, channelID, query string, limit 
 	return results, rows.Err()
 }
 
+// GetUnreadCounts returns how many messages exist after a given message ID per channel.
+// lastRead maps channel_id → last_read_message_id. Returns channel_id → unread count.
+// Complexity: O(k * log n) where k = number of channels
+func (r *Repository) GetUnreadCounts(ctx context.Context, lastRead map[string]string) (map[string]int64, error) {
+	result := make(map[string]int64, len(lastRead))
+	for channelID, afterMsgID := range lastRead {
+		var count int64
+		var err error
+		if afterMsgID == "" {
+			// Never read — count all messages
+			err = r.db.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM messages WHERE channel_id = ?`, channelID,
+			).Scan(&count)
+		} else {
+			err = r.db.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM messages WHERE channel_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)`,
+				channelID, afterMsgID,
+			).Scan(&count)
+		}
+		if err != nil {
+			r.logger.Warn().Err(err).Str("channel_id", channelID).Msg("failed to get unread count")
+			continue
+		}
+		if count > 0 {
+			result[channelID] = count
+		}
+	}
+	return result, nil
+}
+
 // CountByChannel returns the total message count for a channel.
 // Complexity: O(1) with index
 func (r *Repository) CountByChannel(ctx context.Context, channelID string) (int64, error) {

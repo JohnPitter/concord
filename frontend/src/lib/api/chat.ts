@@ -35,4 +35,10 @@ export const apiChat = {
     apiClient.get<unknown[]>(
       `/api/v1/channels/${encodeURIComponent(channelId)}/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`
     ),
+
+  getUnreadCounts: (lastRead: Record<string, string>) =>
+    apiClient.post<Record<string, number>>(
+      '/api/v1/messages/unread',
+      lastRead,
+    ),
 }

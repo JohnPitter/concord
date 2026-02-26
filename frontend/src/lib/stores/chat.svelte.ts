@@ -30,7 +30,9 @@ export interface SearchResultData extends MessageData {
 }
 
 const MESSAGE_POLL_INTERVAL = 5_000 // 5s polling for new messages
+const UNREAD_POLL_INTERVAL = 5_000 // 5s polling for unread counts
 const WAILS_STORE_TIMEOUT_MS = 10_000
+const LAST_READ_KEY = 'concord:lastReadMessages'
 
 let messages = $state<MessageData[]>([])
 let activeChannelId = $state<string | null>(null)
@@ -42,6 +44,25 @@ let searchQuery = $state('')
 let error = $state<string | null>(null)
 let attachmentsByMessage = $state<Record<string, AttachmentData[]>>({})
 let messagePollTimer: ReturnType<typeof setInterval> | null = null
+
+// --- Unread tracking ---
+let unreadCounts = $state<Record<string, number>>({})
+let unreadPollTimer: ReturnType<typeof setInterval> | null = null
+let trackedChannelIds: string[] = []
+let lastReadMap: Record<string, string> = {}
+
+function loadLastRead(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(LAST_READ_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveLastRead() {
+  try {
+    localStorage.setItem(LAST_READ_KEY, JSON.stringify(lastReadMap))
+  } catch { /* ignore */ }
+}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
   let handle: ReturnType<typeof setTimeout> | null = null
@@ -67,6 +88,7 @@ export function getChat() {
     get searchQuery() { return searchQuery },
     get error() { return error },
     get attachmentsByMessage() { return attachmentsByMessage },
+    get unreadCounts() { return unreadCounts },
   }
 }
 
@@ -102,6 +124,9 @@ export async function loadMessages(channelID: string): Promise<void> {
   } finally {
     loading = false
   }
+
+  // Mark channel as read now that the user is viewing it
+  markChannelAsRead(channelID)
 
   // Start polling for new messages
   startMessagePolling(channelID)
@@ -307,6 +332,12 @@ async function pollNewMessages(channelID: string) {
       const fresh = reversed.filter(m => !existingIds.has(m.id))
       if (fresh.length > 0) {
         messages = [...messages, ...fresh]
+        // User is viewing this channel — keep lastRead up to date
+        const newest = fresh[fresh.length - 1]
+        if (newest) {
+          lastReadMap[channelID] = newest.id
+          saveLastRead()
+        }
       }
     }
   } catch {
@@ -328,6 +359,7 @@ export function stopMessagePolling() {
 
 export function resetChat(): void {
   stopMessagePolling()
+  stopUnreadPolling()
   messages = []
   activeChannelId = null
   hasMore = true
@@ -335,4 +367,68 @@ export function resetChat(): void {
   searchQuery = ''
   error = null
   attachmentsByMessage = {}
+}
+
+// --- Unread Polling ---
+
+export function markChannelAsRead(channelId: string): void {
+  const lastMsg = activeChannelId === channelId
+    ? messages[messages.length - 1]
+    : null
+  if (lastMsg) {
+    lastReadMap[channelId] = lastMsg.id
+  }
+  // Clear unread count immediately for responsiveness
+  if (unreadCounts[channelId]) {
+    const updated = { ...unreadCounts }
+    delete updated[channelId]
+    unreadCounts = updated
+  }
+  saveLastRead()
+}
+
+async function pollUnreadCounts(): Promise<void> {
+  if (trackedChannelIds.length === 0) return
+  try {
+    await ensureValidToken()
+    // Build the map of channelId → lastReadMessageId
+    const req: Record<string, string> = {}
+    for (const chId of trackedChannelIds) {
+      req[chId] = lastReadMap[chId] ?? ''
+    }
+    let result: Record<string, number>
+    if (isServerMode()) {
+      result = await apiChat.getUnreadCounts(req) as Record<string, number>
+    } else {
+      result = await withTimeout(
+        App.GetUnreadCounts(req),
+        WAILS_STORE_TIMEOUT_MS,
+        'GetUnreadCounts timeout',
+      ) as unknown as Record<string, number>
+    }
+    // Don't show unread for the active channel (user is viewing it)
+    if (activeChannelId && result[activeChannelId]) {
+      delete result[activeChannelId]
+    }
+    unreadCounts = result ?? {}
+  } catch {
+    // Silently ignore polling errors
+  }
+}
+
+export function startUnreadPolling(channelIds: string[]): void {
+  stopUnreadPolling()
+  trackedChannelIds = channelIds
+  lastReadMap = loadLastRead()
+  // Initial fetch
+  void pollUnreadCounts()
+  unreadPollTimer = setInterval(() => pollUnreadCounts(), UNREAD_POLL_INTERVAL)
+}
+
+export function stopUnreadPolling(): void {
+  if (unreadPollTimer) {
+    clearInterval(unreadPollTimer)
+    unreadPollTimer = null
+  }
+  trackedChannelIds = []
 }
