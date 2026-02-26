@@ -184,6 +184,11 @@ info "Starting production stack..."
 cd "$COMPOSE_DIR"
 docker compose $COMPOSE_FILES up -d
 success "Compose services started"
+
+# Restart nginx to force DNS re-resolution of upstream containers
+info "Restarting nginx for fresh DNS resolution..."
+docker restart docker-nginx-1 >/dev/null 2>&1
+success "Nginx restarted"
 echo ""
 
 # Step 3: Ensure Cloudflare tunnel is running
