@@ -783,12 +783,18 @@ export class VoiceRTCClient {
   // ---------------------------------------------------------------------------
 
   private async onDescription(fromPeerID: string, type: 'offer' | 'answer', payload: unknown): Promise<void> {
+    // Debug: log payload structure to diagnose parse failures
+    const payloadKeys = payload && typeof payload === 'object' ? Object.keys(payload as object).join(',') : typeof payload
     const sdp = this.extractSDP(payload)
     if (!sdp) {
-      console.warn(`[voice] Empty SDP in ${type} from ${fromPeerID}`)
+      console.warn(`[voice] Empty SDP in ${type} from ${fromPeerID}, payloadKeys=${payloadKeys}`)
+      this.sendSignal({
+        type: 'peer_state', server_id: this.serverID, channel_id: this.channelID,
+        payload: { peer_id: this.selfPeerID, debug: `${type}:EMPTY_SDP:keys=${payloadKeys}`, muted: this.muted, deafened: this.deafened, screen_sharing: false },
+      })
       return
     }
-    console.info(`[voice] ${type} from ${fromPeerID}, sdp=${sdp.length}B`)
+    console.info(`[voice] ${type} from ${fromPeerID}, sdp=${sdp.length}B, payloadKeys=${payloadKeys}`)
 
     // Ensure we have metadata for this peer
     if (!this.participants.has(fromPeerID)) {
@@ -1789,7 +1795,10 @@ export class VoiceRTCClient {
   }
 
   private extractSDP(payload: unknown): string {
-    return this.safeString((payload as { sdp?: unknown } | undefined)?.sdp)
+    const raw = (payload as { sdp?: unknown } | undefined)?.sdp
+    // Do NOT trim SDP — whitespace is significant in SDP format (RFC 4566).
+    // safeString().trim() could strip trailing \r\n which some parsers require.
+    return typeof raw === 'string' ? raw : ''
   }
 
   private extractICE(payload: unknown): RTCIceCandidateInit | null {
