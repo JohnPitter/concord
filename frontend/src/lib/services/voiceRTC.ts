@@ -806,6 +806,11 @@ export class VoiceRTCClient {
     const role = type === 'offer' ? 'responder' : 'initiator'
     const peer = this.ensurePeerConnection(fromPeerID, role)
     const pc = peer.pc
+
+    // Log raw SDP prefix for debugging parse failures
+    const sdpHead = sdp.substring(0, 80).replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    this.pushDiag('info', `sdp:raw:${type}`, `len=${sdp.length} head=[${sdpHead}]`)
+
     const description: RTCSessionDescriptionInit = { type, sdp }
 
     // Send debug breadcrumb via signaling so server logs show progress
@@ -824,7 +829,7 @@ export class VoiceRTCClient {
         // No collision possible — responders never send offers.
         const sigState = pc.signalingState
         console.info(`[voice] Accepting offer from ${fromPeerID}, signalingState=${sigState}, role=${peer.role}`)
-        dbg(`accept:sigState=${sigState}:role=${peer.role}`)
+        dbg(`accept:sigState=${sigState}:role=${peer.role}:sdpLen=${sdp.length}:head=${sdp.substring(0, 40).replace(/\r/g, '').replace(/\n/g, '|')}`)
 
         // If we're somehow in have-local-offer (shouldn't happen with role separation),
         // rollback gracefully before accepting the remote offer.
